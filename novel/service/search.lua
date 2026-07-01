@@ -1,4 +1,5 @@
 local BookList = require("novel.service.booklist")
+local Cache = require("novel.storage.cache")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 local Url = require("novel.net.url")
@@ -56,6 +57,52 @@ local function responseSummary(response)
         bytes = #(response.body or ""),
         redirects = response.redirects or {},
     }
+end
+
+local function cacheKey(source, spec, keyword, options)
+    return Cache.makeKey("search", {
+        source = source.bookSourceUrl,
+        search = source.searchUrl,
+        keyword = keyword or "",
+        page = options.page or 1,
+        method = spec.method,
+        url = spec.url,
+        url_no_query = spec.url_no_query,
+        body = spec.body,
+        fields = spec.fields,
+        headers = spec.headers,
+        rule = source.ruleSearch,
+    })
+end
+
+local function cacheInstance(options)
+    if options.cache == false then
+        return nil
+    end
+    return options.cache or Cache:new()
+end
+
+local function cachedResult(cache, key, options)
+    if not cache then
+        return nil
+    end
+
+    local value, meta = cache:get("search", key, options)
+    if not value then
+        return nil
+    end
+    value.cached = true
+    value.cache = meta
+    value.debug = value.debug or {}
+    table.insert(value.debug, 1, {
+        event = "cache_hit",
+        data = {
+            kind = "search",
+            key = key,
+            stored_at = meta.stored_at,
+        },
+    })
+    return value
 end
 
 function Search:new(options)
@@ -134,6 +181,13 @@ function Search:search(source, keyword, options)
         }
     end
 
+    local cache = cacheInstance(options)
+    local key = cacheKey(source, spec, keyword, options)
+    local cached = cachedResult(cache, key, options)
+    if cached then
+        return cached
+    end
+
     local token, wait_ms = self.throttle:acquire(source, source.concurrentRate)
     if not token then
         return {
@@ -185,6 +239,9 @@ function Search:search(source, keyword, options)
     parsed.debug = debug
     parsed.unsupported = unsupported
     parsed.response = responseSummary(response)
+    if parsed.ok and parsed.books and #parsed.books > 0 and cache then
+        cache:set("search", key, parsed, options)
+    end
     return parsed
 end
 

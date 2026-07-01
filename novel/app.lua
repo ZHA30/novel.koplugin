@@ -1,4 +1,5 @@
 local Log = require("novel.support.log")
+local Repo = require("novel.source.repo")
 local Settings = require("novel.storage.settings")
 
 local App = {}
@@ -20,6 +21,7 @@ end
 
 function App:onClose()
     self.closed = true
+    self.source_repo = nil
 end
 
 function App:saveSettings()
@@ -33,6 +35,14 @@ end
 
 function App.deleteStoredSettings()
     Settings.delete()
+    Repo.deleteStorage()
+end
+
+function App:getSourceRepo()
+    if not self.source_repo then
+        self.source_repo = Repo:new()
+    end
+    return self.source_repo
 end
 
 return App

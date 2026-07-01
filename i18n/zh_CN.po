@@ -28,3 +28,15 @@ msgstr "发现功能正在开发中。"
 
 msgid "Sources are under development."
 msgstr "书源功能正在开发中。"
+
+msgid "No book sources imported."
+msgstr "尚未导入书源。"
+
+msgid "Group: "
+msgstr "分组："
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "Unsupported rules are present."
+msgstr "存在暂不支持的规则。"

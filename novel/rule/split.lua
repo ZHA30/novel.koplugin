@@ -310,6 +310,11 @@ function Split.parseSourceRule(rule, options)
                     kind = "js",
                     snippet = "{{" .. part.value .. "}}",
                 })
+                if result.mode == modes.default then
+                    result.mode = modes.regex
+                end
+            elseif part.kind == "get" and result.mode == modes.default then
+                result.mode = modes.regex
             end
         end
     end

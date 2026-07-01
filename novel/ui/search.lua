@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local Detail = require("novel.ui.detail")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
@@ -61,37 +62,6 @@ local function searchableSources(plugin)
     return searchable
 end
 
-local function resultTitle(book)
-    if book.author and book.author ~= "" then
-        return book.name .. " - " .. book.author
-    end
-    return book.name
-end
-
-local function resultDetails(book)
-    local lines = {
-        resultTitle(book),
-    }
-    if book.kind and book.kind ~= "" then
-        table.insert(lines, _("Kind: ") .. book.kind)
-    end
-    if book.latestChapter and book.latestChapter ~= "" then
-        table.insert(lines, _("Latest chapter: ") .. book.latestChapter)
-    end
-    if book.wordCount and book.wordCount ~= "" then
-        table.insert(lines, _("Word count: ") .. book.wordCount)
-    end
-    if book.intro and book.intro ~= "" then
-        table.insert(lines, "")
-        table.insert(lines, book.intro)
-    end
-    if book.bookUrl and book.bookUrl ~= "" then
-        table.insert(lines, "")
-        table.insert(lines, book.bookUrl)
-    end
-    return table.concat(lines, "\n")
-end
-
 local function showError(message)
     UIManager:show(InfoMessage:new{
         text = message,
@@ -103,6 +73,7 @@ function Search.close(plugin)
     closeWidget(plugin, "search_source_menu")
     closeWidget(plugin, "search_input_dialog")
     closeWidget(plugin, "search_results_menu")
+    Detail.close(plugin)
 end
 
 local function showUnsupported(result)
@@ -121,14 +92,12 @@ local function showUnsupported(result)
     })
 end
 
-local function resultActions(book)
+local function resultActions(plugin, source, book)
     return {
         {
             text = _("Details"),
             callback = function()
-                UIManager:show(InfoMessage:new{
-                    text = resultDetails(book),
-                })
+                Detail.show(plugin, source, book)
             end,
         },
     }
@@ -172,7 +141,7 @@ local function buildResultItems(plugin, source, keyword, result)
         table.insert(item_table, {
             text = book.name,
             mandatory = book.author ~= "" and book.author or nil,
-            sub_item_table = resultActions(book),
+            sub_item_table = resultActions(plugin, source, book),
         })
     end
     return item_table

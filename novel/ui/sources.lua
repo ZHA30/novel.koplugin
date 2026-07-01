@@ -30,6 +30,13 @@ local function sourceSummary(source)
     return table.concat(lines, "\n")
 end
 
+local function groupTitle(group)
+    if group.name and group.name ~= "" then
+        return group.name
+    end
+    return _("Ungrouped")
+end
+
 local function closeDialog(plugin, key)
     if plugin[key] then
         local dialog = plugin[key]
@@ -203,7 +210,20 @@ local function sourceActions(plugin, source)
     }
 end
 
-local function buildItems(plugin, sources)
+local function buildSourceItems(plugin, sources)
+    local item_table = {}
+    for source_index = 1, #sources do
+        local source = sources[source_index]
+        table.insert(item_table, {
+            text = sourceTitle(source),
+            mandatory = source.enabled == false and _("Disabled") or nil,
+            sub_item_table = sourceActions(plugin, source),
+        })
+    end
+    return item_table
+end
+
+local function buildItems(plugin, sources, groups)
     local item_table = {
         {
             text = _("Import sources"),
@@ -241,13 +261,12 @@ local function buildItems(plugin, sources)
         return item_table
     end
 
-    for source_index = 1, #sources do
-        local source = sources[source_index]
+    for group_index = 1, #groups do
+        local group = groups[group_index]
         table.insert(item_table, {
-            source_index = source_index,
-            text = sourceTitle(source),
-            mandatory = source.enabled == false and _("Disabled") or nil,
-            sub_item_table = sourceActions(plugin, source),
+            text = groupTitle(group),
+            mandatory = tostring(#group.sources),
+            sub_item_table = buildSourceItems(plugin, group.sources),
         })
     end
 
@@ -264,6 +283,7 @@ function Sources.show(plugin)
 
     local repo = plugin.app:getSourceRepo()
     local sources = repo:list()
+    local groups = repo:listGroups()
 
     if plugin.sources_menu then
         UIManager:close(plugin.sources_menu)
@@ -273,7 +293,7 @@ function Sources.show(plugin)
     local sources_menu
     sources_menu = Menu:new{
         title = _("Sources") .. " (" .. tostring(#sources) .. ")",
-        item_table = buildItems(plugin, sources),
+        item_table = buildItems(plugin, sources, groups),
         covers_fullscreen = true,
         is_borderless = true,
         is_popout = false,

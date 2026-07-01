@@ -53,6 +53,35 @@ function Repo:groups()
     return groups
 end
 
+function Repo:listGroups()
+    local groups, group_index = {}, {}
+    for _, source in ipairs(self:list()) do
+        local group_name = source.bookSourceGroup or ""
+        local position = group_index[group_name]
+        if not position then
+            position = #groups + 1
+            group_index[group_name] = position
+            groups[position] = {
+                name = group_name,
+                sources = {},
+            }
+        end
+        table.insert(groups[position].sources, source)
+    end
+
+    table.sort(groups, function(left, right)
+        if left.name == "" then
+            return false
+        end
+        if right.name == "" then
+            return true
+        end
+        return left.name < right.name
+    end)
+
+    return groups
+end
+
 function Repo:importJSON(json)
     local imported, errors = Importer.fromJSON(json)
     if not imported then

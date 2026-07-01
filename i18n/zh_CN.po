@@ -41,6 +41,9 @@ msgstr "已禁用"
 msgid "Unsupported rules are present."
 msgstr "存在暂不支持的规则。"
 
+msgid "Ungrouped"
+msgstr "未分组"
+
 msgid "Imported sources: "
 msgstr "已导入书源："
 

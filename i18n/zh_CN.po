@@ -10,3 +10,21 @@ msgstr "在 KOReader 中阅读在线小说。"
 
 msgid "Novel online search is under development."
 msgstr "在线小说搜索功能正在开发中。"
+
+msgid "Bookshelf"
+msgstr "书架"
+
+msgid "Discover"
+msgstr "发现"
+
+msgid "Sources"
+msgstr "书源"
+
+msgid "Bookshelf is under development."
+msgstr "书架功能正在开发中。"
+
+msgid "Discover is under development."
+msgstr "发现功能正在开发中。"
+
+msgid "Sources are under development."
+msgstr "书源功能正在开发中。"

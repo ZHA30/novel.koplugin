@@ -1,0 +1,19 @@
+# macOS metadata
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# Editor and local workspace files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+docs/
+
+# Lua/build artifacts
+*.luac
+*.so
+*.dylib
+*.dll

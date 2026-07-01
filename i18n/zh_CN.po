@@ -119,6 +119,27 @@ msgstr "移除"
 msgid "Resume"
 msgstr "继续阅读"
 
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Refreshing... (tap to cancel)"
+msgstr "正在刷新……（点击取消）"
+
+msgid "Refresh canceled."
+msgstr "刷新已取消。"
+
+msgid "Refresh failed: "
+msgstr "刷新失败："
+
+msgid "Refresh failed."
+msgstr "刷新失败。"
+
+msgid "Book refreshed."
+msgstr "书籍已刷新。"
+
+msgid "Chapters: "
+msgstr "章节数："
+
 msgid "Chapters"
 msgstr "目录"
 

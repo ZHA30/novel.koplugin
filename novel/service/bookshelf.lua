@@ -77,6 +77,48 @@ local function normalizeRecord(record)
     return record
 end
 
+local function preserveProgress(book, record)
+    record = record or {}
+    local old_book = record.book or {}
+    book.durChapterTitle = old_book.durChapterTitle or book.durChapterTitle
+    book.durChapterIndex = old_book.durChapterIndex or book.durChapterIndex
+    book.durChapterPos = old_book.durChapterPos or book.durChapterPos
+    book.durChapterTime = old_book.durChapterTime or book.durChapterTime
+    return book
+end
+
+local function chapterAt(chapters, position)
+    if type(chapters) ~= "table" then
+        return nil
+    end
+    return chapters[tonumber(position) or 1]
+end
+
+local function mergeResultLists(left, right)
+    local merged = {}
+    for index = 1, #(left or {}) do
+        table.insert(merged, left[index])
+    end
+    for index = 1, #(right or {}) do
+        table.insert(merged, right[index])
+    end
+    return merged
+end
+
+local function serviceError(stage, result)
+    result = result or {}
+    return {
+        ok = false,
+        stage = stage,
+        error = result.error or {
+            kind = stage,
+            message = stage .. " failed",
+        },
+        debug = result.debug or {},
+        unsupported = result.unsupported or {},
+    }
+end
+
 function Bookshelf:new()
     return setmetatable({
         settings = LuaSettings:open(Bookshelf.path),
@@ -132,7 +174,7 @@ function Bookshelf:add(source, book)
             record.source = clone(source)
             record.source_url = sourceUrl(source)
             record.source_name = sourceName(source)
-            record.book = normalized
+            record.book = preserveProgress(normalized, record)
             record.updated_time = timestamp
             self:saveAll(records)
             return record
@@ -168,6 +210,46 @@ function Bookshelf:remove(source, book)
         self:saveAll(records)
     end
     return removed
+end
+
+function Bookshelf:applyRefresh(source, book, refresh)
+    if not refresh or not refresh.ok or type(refresh.book) ~= "table" then
+        return nil, "invalid refresh result"
+    end
+
+    local key = bookKey(source, book)
+    local records = self:list()
+    for record_index = 1, #records do
+        local record = records[record_index]
+        if record.key == key then
+            local timestamp = now()
+            local updated_book = preserveProgress(normalizeBook(source, refresh.book), record)
+            local current = record.current
+            if current and current.chapter_position then
+                local chapter = chapterAt(refresh.chapters, current.chapter_position)
+                if chapter then
+                    current = clone(current)
+                    current.chapter = chapter
+                    current.updated_time = timestamp
+                    updated_book.durChapterTitle = chapter.title or updated_book.durChapterTitle
+                    updated_book.durChapterIndex = math.max((tonumber(current.chapter_position) or 1) - 1, 0)
+                    updated_book.durChapterPos = tonumber(current.chapter_pos) or 0
+                    updated_book.durChapterTime = timestamp
+                end
+            end
+            record.source = clone(source)
+            record.source_url = sourceUrl(source)
+            record.source_name = sourceName(source)
+            record.book = updated_book
+            record.current = current
+            record.updated_time = timestamp
+            record.last_refresh_time = timestamp
+            record.last_refresh_count = #(refresh.chapters or {})
+            self:saveAll(records)
+            return record
+        end
+    end
+    return nil, "book is not in bookshelf"
 end
 
 function Bookshelf:updateProgress(source, book, chapter, position, chapter_pos)
@@ -212,6 +294,63 @@ end
 function Bookshelf.deleteStorage()
     os.remove(Bookshelf.path)
     os.remove(Bookshelf.path .. ".old")
+end
+
+function Bookshelf.fetchRefresh(source, book, options)
+    options = options or {}
+    local BookInfo = options.bookinfo or require("novel.service.bookinfo")
+    local Toc = options.toc or require("novel.service.toc")
+
+    local detail = BookInfo.run(source, book, {
+        refresh = true,
+        use_info_html = false,
+        timeout = options.timeout,
+        total_timeout = options.total_timeout,
+        max_redirects = options.max_redirects,
+    })
+    if not detail or not detail.ok then
+        return serviceError("detail", detail)
+    end
+
+    local toc = Toc.run(source, detail.book, {
+        refresh = true,
+        use_toc_html = false,
+        timeout = options.timeout,
+        total_timeout = options.total_timeout,
+        max_redirects = options.max_redirects,
+        max_pages = options.max_pages,
+    })
+    if not toc or not toc.ok then
+        return serviceError("toc", toc)
+    end
+
+    return {
+        ok = true,
+        book = toc.book or detail.book,
+        chapters = toc.chapters or {},
+        debug = mergeResultLists(detail.debug, toc.debug),
+        unsupported = mergeResultLists(detail.unsupported, toc.unsupported),
+        detail = detail.response,
+        toc = toc.pages,
+    }
+end
+
+function Bookshelf:refresh(source, book, options)
+    local result = Bookshelf.fetchRefresh(source, book, options)
+    if not result.ok then
+        return result
+    end
+    local record, err = self:applyRefresh(source, book, result)
+    if not record then
+        result.ok = false
+        result.error = {
+            kind = "bookshelf",
+            message = err,
+        }
+        return result
+    end
+    result.record = record
+    return result
 end
 
 return Bookshelf

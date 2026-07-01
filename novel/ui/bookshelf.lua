@@ -3,7 +3,9 @@ local ConfirmBox = require("ui/widget/confirmbox")
 local Detail = require("novel.ui.detail")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
+local NetworkMgr = require("ui/network/manager")
 local Toc = require("novel.ui.toc")
+local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
 local Bookshelf = {}
@@ -22,11 +24,22 @@ local function showMessage(message)
     })
 end
 
+local function invalidate(plugin)
+    plugin.bookshelf_refresh_request_id = (plugin.bookshelf_refresh_request_id or 0) + 1
+end
+
 local function bookTitle(book)
     if book and book.name and book.name ~= "" then
         return book.name
     end
     return book and book.bookUrl or _("Book")
+end
+
+local function errorText(result, fallback)
+    if not result or not result.error then
+        return fallback
+    end
+    return result.error.message or result.error.kind or fallback
 end
 
 local function findCurrentSource(plugin, record)
@@ -111,12 +124,62 @@ local function resumeRecord(plugin, record)
     Toc.showContent(plugin, source, record.book, chapters, chapter_position)
 end
 
+local function refreshRecord(plugin, record)
+    if not plugin.app then
+        showMessage(_("Novel is not ready."))
+        return
+    end
+    local source = findCurrentSource(plugin, record)
+    if NetworkMgr:willRerunWhenOnline(function()
+        refreshRecord(plugin, record)
+    end) then
+        return
+    end
+
+    invalidate(plugin)
+    local request_id = plugin.bookshelf_refresh_request_id
+
+    Trapper:wrap(function()
+        local completed, result = Trapper:dismissableRunInSubprocess(function()
+            local BookshelfService = require("novel.service.bookshelf")
+            return BookshelfService.fetchRefresh(source, record.book)
+        end, _("Refreshing... (tap to cancel)"))
+
+        if not plugin.app or plugin.bookshelf_refresh_request_id ~= request_id then
+            return
+        end
+        if not completed then
+            showMessage(_("Refresh canceled."))
+            return
+        end
+        if not result or not result.ok then
+            showMessage(_("Refresh failed: ") .. tostring(errorText(result, _("Refresh failed."))))
+            return
+        end
+
+        local updated_record, err = plugin.app:getBookshelfService()
+            :applyRefresh(source, record.book, result)
+        if not updated_record then
+            showMessage(_("Refresh failed: ") .. tostring(err))
+            return
+        end
+        showMessage(_("Book refreshed.") .. "\n" .. _("Chapters: ") .. tostring(#(result.chapters or {})))
+        Bookshelf.show(plugin)
+    end)
+end
+
 local function recordActions(plugin, record)
     return {
         {
             text = _("Resume"),
             callback = function()
                 resumeRecord(plugin, record)
+            end,
+        },
+        {
+            text = _("Refresh"),
+            callback = function()
+                refreshRecord(plugin, record)
             end,
         },
         {
@@ -169,6 +232,7 @@ local function buildItems(plugin, records)
 end
 
 function Bookshelf.close(plugin)
+    invalidate(plugin)
     closeWidget(plugin, "bookshelf_confirm_dialog")
     closeWidget(plugin, "bookshelf_menu")
 end

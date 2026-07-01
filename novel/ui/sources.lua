@@ -3,6 +3,7 @@ local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
+local SourceCheck = require("novel.ui.sourcecheck")
 local UIManager = require("ui/uimanager")
 
 local Sources = {}
@@ -249,6 +250,15 @@ local function buildItems(plugin, sources, groups)
             end,
             callback = function()
                 Sources.showExportDialog(plugin)
+            end,
+        },
+        {
+            text = _("Check sources"),
+            select_enabled_func = function()
+                return SourceCheck.hasSources(plugin)
+            end,
+            callback = function()
+                SourceCheck.show(plugin)
             end,
         },
         {

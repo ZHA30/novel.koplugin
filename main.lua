@@ -43,6 +43,17 @@ function Novel:onCloseWidget()
         self.sources_confirm_dialog = nil
         UIManager:close(sources_confirm_dialog)
     end
+    if self.sources_check_input_dialog then
+        local sources_check_input_dialog = self.sources_check_input_dialog
+        self.sources_check_input_dialog = nil
+        UIManager:close(sources_check_input_dialog)
+    end
+    if self.sources_check_results_menu then
+        local sources_check_results_menu = self.sources_check_results_menu
+        self.sources_check_results_menu = nil
+        UIManager:close(sources_check_results_menu)
+    end
+    self.sources_check_request_id = (self.sources_check_request_id or 0) + 1
     Bookshelf.close(self)
     Discover.close(self)
     if self.app then

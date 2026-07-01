@@ -1,4 +1,5 @@
 local _ = dofile((debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "i18n/po.lua")
+local App = require("novel.app")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
 local UIManager = require("ui/uimanager")
@@ -6,10 +7,32 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 
 local Novel = WidgetContainer:extend{
     name = "novel",
+    settings_key = "novel",
 }
 
 function Novel:init()
-    self.ui.menu:registerToMainMenu(self)
+    self.app = App:new{ plugin = self }
+    self.app:init()
+
+    if self.ui and self.ui.menu then
+        self.ui.menu:registerToMainMenu(self)
+    end
+end
+
+function Novel:onCloseWidget()
+    if self.novel_menu then
+        local novel_menu = self.novel_menu
+        self.novel_menu = nil
+        UIManager:close(novel_menu)
+    end
+    if self.app then
+        self.app:onClose()
+        self.app = nil
+    end
+end
+
+function Novel.deletePluginSettings()
+    App.deleteStoredSettings()
 end
 
 function Novel:addToMainMenu(menu_items)

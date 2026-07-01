@@ -1,9 +1,9 @@
 local _ = dofile((debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "i18n/po.lua")
 local App = require("novel.app")
 local Bookshelf = require("novel.ui.bookshelf")
+local Discover = require("novel.ui.discover")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
-local Search = require("novel.ui.search")
 local Sources = require("novel.ui.sources")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -44,7 +44,7 @@ function Novel:onCloseWidget()
         UIManager:close(sources_confirm_dialog)
     end
     Bookshelf.close(self)
-    Search.close(self)
+    Discover.close(self)
     if self.app then
         self.app:onClose()
         self.app = nil
@@ -84,7 +84,7 @@ function Novel:onShowNovelMenu()
             {
                 text = _("Discover"),
                 callback = function()
-                    Search.show(self)
+                    Discover.show(self)
                 end,
             },
             {

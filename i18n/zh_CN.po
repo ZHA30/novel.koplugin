@@ -172,3 +172,21 @@ msgstr "已加入书架。"
 
 msgid "Add to bookshelf failed: "
 msgstr "加入书架失败："
+
+msgid "Next page"
+msgstr "下一页"
+
+msgid "Discover failed."
+msgstr "发现失败。"
+
+msgid "Discover failed: "
+msgstr "发现失败："
+
+msgid "Loading discovery... (tap to cancel)"
+msgstr "正在加载发现……（点击取消）"
+
+msgid "Discover canceled."
+msgstr "发现已取消。"
+
+msgid "No discoverable sources."
+msgstr "没有可用的发现书源。"

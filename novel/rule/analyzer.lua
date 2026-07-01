@@ -14,6 +14,12 @@ local function isList(value)
     return #value > 0
 end
 
+local function isJsonContent(value)
+    return type(value) == "table"
+        and type(value.select) ~= "function"
+        and type(value.gettext) ~= "function"
+end
+
 local function asString(value)
     if value == nil then
         return ""
@@ -186,7 +192,7 @@ end
 function Analyzer:evaluate(rule_text, content, mode)
     local rules = Split.splitSourceRules(rule_text, {
         all_in_one = mode == "elements",
-        content_is_json = type(content or self.content) == "table",
+        content_is_json = isJsonContent(content or self.content),
     })
     local result = content or self.content
     if not result or #rules == 0 then

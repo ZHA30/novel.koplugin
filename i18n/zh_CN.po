@@ -40,3 +40,60 @@ msgstr "已禁用"
 
 msgid "Unsupported rules are present."
 msgstr "存在暂不支持的规则。"
+
+msgid "Imported sources: "
+msgstr "已导入书源："
+
+msgid "Import errors: "
+msgstr "导入错误："
+
+msgid "Import sources"
+msgstr "导入书源"
+
+msgid "Path to JSON file"
+msgstr "JSON 文件路径"
+
+msgid "Enter a local JSON book source file path."
+msgstr "输入本地 JSON 书源文件路径。"
+
+msgid "Import"
+msgstr "导入"
+
+msgid "Export sources"
+msgstr "导出书源"
+
+msgid "Enter the export file path."
+msgstr "输入导出文件路径。"
+
+msgid "Export"
+msgstr "导出"
+
+msgid "Exported sources to: "
+msgstr "书源已导出到："
+
+msgid "Export failed: "
+msgstr "导出失败："
+
+msgid "Delete all imported book sources?"
+msgstr "删除所有已导入的书源？"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete book source?"
+msgstr "删除这个书源？"
+
+msgid "Details"
+msgstr "详情"
+
+msgid "Disable"
+msgstr "禁用"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Delete all sources"
+msgstr "删除全部书源"
+
+msgid "Novel is not ready."
+msgstr "Novel 尚未就绪。"

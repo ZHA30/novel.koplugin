@@ -31,6 +31,16 @@ function Novel:onCloseWidget()
         self.sources_menu = nil
         UIManager:close(sources_menu)
     end
+    if self.sources_input_dialog then
+        local sources_input_dialog = self.sources_input_dialog
+        self.sources_input_dialog = nil
+        UIManager:close(sources_input_dialog)
+    end
+    if self.sources_confirm_dialog then
+        local sources_confirm_dialog = self.sources_confirm_dialog
+        self.sources_confirm_dialog = nil
+        UIManager:close(sources_confirm_dialog)
+    end
     if self.app then
         self.app:onClose()
         self.app = nil

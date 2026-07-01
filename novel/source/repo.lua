@@ -1,9 +1,11 @@
 local DataStorage = require("datastorage")
 local Importer = require("novel.source.importer")
 local LuaSettings = require("luasettings")
+local rapidjson = require("rapidjson")
 
 local Repo = {
     path = DataStorage:getSettingsDir() .. "/novel_sources.lua",
+    export_path = DataStorage:getSettingsDir() .. "/novel_sources_export.json",
 }
 Repo.__index = Repo
 
@@ -87,6 +89,37 @@ function Repo:importJSON(json)
     }
 end
 
+function Repo:importFile(path)
+    local file, err = io.open(path, "rb")
+    if not file then
+        return {
+            imported = 0,
+            errors = {
+                { error = err or "failed to open file" },
+            },
+        }
+    end
+
+    local content = file:read("*a")
+    file:close()
+    return self:importJSON(content)
+end
+
+function Repo:exportJSON()
+    return rapidjson.encode(self:list(), { pretty = true })
+end
+
+function Repo:exportFile(path)
+    local content = self:exportJSON()
+    local file, err = io.open(path, "wb")
+    if not file then
+        return nil, err or "failed to open file"
+    end
+    file:write(content)
+    file:close()
+    return true
+end
+
 function Repo:setEnabled(book_source_url, enabled)
     local sources = self:list()
     local changed = false
@@ -101,6 +134,26 @@ function Repo:setEnabled(book_source_url, enabled)
         self:saveAll(sources)
     end
     return changed
+end
+
+function Repo:remove(book_source_url)
+    local sources = self:list()
+    local removed = false
+    for index = #sources, 1, -1 do
+        if sources[index].bookSourceUrl == book_source_url then
+            table.remove(sources, index)
+            removed = true
+            break
+        end
+    end
+    if removed then
+        self:saveAll(sources)
+    end
+    return removed
+end
+
+function Repo:clear()
+    self:saveAll({})
 end
 
 function Repo.deleteStorage()

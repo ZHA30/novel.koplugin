@@ -165,6 +165,22 @@ function Repo:setEnabled(book_source_url, enabled)
     return changed
 end
 
+function Repo:setEnabledExplore(book_source_url, enabled)
+    local sources = self:list()
+    local changed = false
+    for _, source in ipairs(sources) do
+        if source.bookSourceUrl == book_source_url then
+            source.enabledExplore = enabled == true
+            changed = true
+            break
+        end
+    end
+    if changed then
+        self:saveAll(sources)
+    end
+    return changed
+end
+
 function Repo:remove(book_source_url)
     local sources = self:list()
     local removed = false

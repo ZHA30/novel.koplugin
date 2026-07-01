@@ -24,6 +24,9 @@ local function sourceSummary(source)
     if source.enabled == false then
         table.insert(lines, _("Disabled"))
     end
+    if source.enabledExplore == false then
+        table.insert(lines, _("Discover disabled"))
+    end
     if source.support_status and #source.support_status > 0 then
         table.insert(lines, _("Unsupported rules are present."))
     end
@@ -185,6 +188,7 @@ end
 local function sourceActions(plugin, source)
     local repo = plugin.app:getSourceRepo()
     local enabled = source.enabled ~= false
+    local enabled_explore = source.enabledExplore ~= false
     return {
         {
             text = _("Details"),
@@ -198,6 +202,13 @@ local function sourceActions(plugin, source)
             text = enabled and _("Disable") or _("Enable"),
             callback = function()
                 repo:setEnabled(source.bookSourceUrl, not enabled)
+                refresh(plugin)
+            end,
+        },
+        {
+            text = enabled_explore and _("Disable Discover") or _("Enable Discover"),
+            callback = function()
+                repo:setEnabledExplore(source.bookSourceUrl, not enabled_explore)
                 refresh(plugin)
             end,
         },

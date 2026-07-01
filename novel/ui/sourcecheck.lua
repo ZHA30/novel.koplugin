@@ -50,6 +50,23 @@ local function searchableSources(plugin)
     return searchable
 end
 
+local function sourceTitle(source)
+    if source and source.bookSourceName and source.bookSourceName ~= "" then
+        return source.bookSourceName
+    end
+    return source and source.bookSourceUrl or ""
+end
+
+local function refreshSources(plugin)
+    if not plugin.sources_menu then
+        return
+    end
+    local ok, Sources = pcall(require, "novel.ui.sources")
+    if ok and Sources and Sources.show then
+        Sources.show(plugin)
+    end
+end
+
 local function statusLabel(status)
     if status == "ok" then
         return _("OK")
@@ -155,6 +172,10 @@ function SourceCheck.hasSources(plugin)
     return plugin.app and #searchableSources(plugin) > 0
 end
 
+function SourceCheck.hasSource(source)
+    return isSearchable(source)
+end
+
 function SourceCheck.showResults(plugin, result)
     closeWidget(plugin, "sources_check_results_menu")
 
@@ -185,18 +206,18 @@ function SourceCheck.showResults(plugin, result)
     UIManager:show(results_menu)
 end
 
-function SourceCheck.start(plugin, keyword)
+function SourceCheck.start(plugin, keyword, selected_sources)
     if not plugin.app then
         showMessage(_("Novel is not ready."))
         return
     end
     if NetworkMgr:willRerunWhenOnline(function()
-        SourceCheck.start(plugin, keyword)
+        SourceCheck.start(plugin, keyword, selected_sources)
     end) then
         return
     end
 
-    local sources = searchableSources(plugin)
+    local sources = selected_sources or searchableSources(plugin)
     if #sources == 0 then
         showMessage(_("No enabled searchable sources."))
         return
@@ -223,19 +244,25 @@ function SourceCheck.start(plugin, keyword)
             showMessage(_("Source check canceled."))
             return
         end
+        if result and result.ok and plugin.app then
+            plugin.app:getSourceRepo():saveHealthFromCheck(result)
+            refreshSources(plugin)
+        end
         SourceCheck.showResults(plugin, result)
     end)
 end
 
-function SourceCheck.show(plugin)
+function SourceCheck.show(plugin, source)
     closeWidget(plugin, "sources_check_input_dialog")
 
+    local selected_sources = source and { source } or nil
     local input_dialog
     input_dialog = InputDialog:new{
         title = _("Check sources"),
         input = plugin.sources_check_keyword or "",
         input_hint = _("Keyword"),
-        description = _("Search enabled sources with this keyword."),
+        description = source and sourceTitle(source)
+            or _("Search enabled sources with this keyword."),
         buttons = {{
             {
                 text = _("Cancel"),
@@ -253,7 +280,7 @@ function SourceCheck.show(plugin)
                         return
                     end
                     closeWidget(plugin, "sources_check_input_dialog")
-                    SourceCheck.start(plugin, keyword)
+                    SourceCheck.start(plugin, keyword, selected_sources)
                 end,
             },
         }},

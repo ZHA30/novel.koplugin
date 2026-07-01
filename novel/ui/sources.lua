@@ -15,7 +15,72 @@ local function sourceTitle(source)
     return source.bookSourceUrl
 end
 
-local function sourceSummary(source)
+local function healthLabel(health)
+    if not health then
+        return nil
+    end
+    if health.status == "ok" then
+        return _("OK")
+    end
+    if health.status == "empty" then
+        return _("Empty")
+    end
+    if health.status == "failed" then
+        return _("Failed")
+    end
+    if health.status == "skipped" then
+        return _("Skipped")
+    end
+    return tostring(health.status or "")
+end
+
+local function healthMandatory(health)
+    if not health then
+        return nil
+    end
+    if health.status == "failed" or health.status == "empty" then
+        return healthLabel(health)
+    end
+    return nil
+end
+
+local function formatTime(value)
+    local timestamp = tonumber(value)
+    if not timestamp then
+        return ""
+    end
+    return os.date("%Y-%m-%d %H:%M", timestamp)
+end
+
+local function healthSummary(health)
+    if not health then
+        return _("No source check state.")
+    end
+
+    local lines = {
+        _("Status: ") .. tostring(healthLabel(health) or ""),
+        _("Keyword: ") .. tostring(health.keyword or ""),
+        _("Checked at: ") .. formatTime(health.checked_at),
+        _("Books: ") .. tostring(health.books_count or 0),
+    }
+    if health.error then
+        table.insert(lines, _("Error: ")
+            .. tostring(health.error.kind or "")
+            .. " "
+            .. tostring(health.error.message or ""))
+    end
+    if health.response then
+        table.insert(lines, _("HTTP: ") .. tostring(health.response.status or ""))
+        table.insert(lines, _("Final: ") .. tostring(health.response.final_url or ""))
+        table.insert(lines, _("Bytes: ") .. tostring(health.response.bytes or 0))
+    end
+    if health.unsupported_count and health.unsupported_count > 0 then
+        table.insert(lines, _("Unsupported: ") .. tostring(health.unsupported_count))
+    end
+    return table.concat(lines, "\n")
+end
+
+local function sourceSummary(source, health)
     local lines = {
         source.bookSourceUrl,
     }
@@ -30,6 +95,10 @@ local function sourceSummary(source)
     end
     if source.support_status and #source.support_status > 0 then
         table.insert(lines, _("Unsupported rules are present."))
+    end
+    if health then
+        table.insert(lines, "")
+        table.insert(lines, healthSummary(health))
     end
     return table.concat(lines, "\n")
 end
@@ -190,45 +259,67 @@ local function sourceActions(plugin, source)
     local repo = plugin.app:getSourceRepo()
     local enabled = source.enabled ~= false
     local enabled_explore = source.enabledExplore ~= false
-    return {
+    local health = repo:getHealth(source.bookSourceUrl)
+    local actions = {
         {
             text = _("Details"),
             callback = function()
                 UIManager:show(InfoMessage:new{
-                    text = sourceSummary(source),
+                    text = sourceSummary(source, health),
                 })
             end,
         },
-        {
-            text = enabled and _("Disable") or _("Enable"),
-            callback = function()
-                repo:setEnabled(source.bookSourceUrl, not enabled)
-                refresh(plugin)
-            end,
-        },
-        {
-            text = enabled_explore and _("Disable Discover") or _("Enable Discover"),
-            callback = function()
-                repo:setEnabledExplore(source.bookSourceUrl, not enabled_explore)
-                refresh(plugin)
-            end,
-        },
-        {
-            text = _("Delete"),
-            callback = function()
-                Sources.confirmDeleteSource(plugin, source)
-            end,
-        },
     }
+    if SourceCheck.hasSource(source) then
+        table.insert(actions, {
+            text = _("Retry check"),
+            callback = function()
+                SourceCheck.show(plugin, source)
+            end,
+        })
+    end
+    if health then
+        table.insert(actions, {
+            text = _("Clear check status"),
+            callback = function()
+                repo:clearHealth(source.bookSourceUrl)
+                refresh(plugin)
+            end,
+        })
+    end
+    table.insert(actions, {
+        text = enabled and _("Disable") or _("Enable"),
+        callback = function()
+            repo:setEnabled(source.bookSourceUrl, not enabled)
+            refresh(plugin)
+        end,
+    })
+    table.insert(actions, {
+        text = enabled_explore and _("Disable Discover") or _("Enable Discover"),
+        callback = function()
+            repo:setEnabledExplore(source.bookSourceUrl, not enabled_explore)
+            refresh(plugin)
+        end,
+    })
+    table.insert(actions, {
+        text = _("Delete"),
+        callback = function()
+            Sources.confirmDeleteSource(plugin, source)
+        end,
+    })
+    return actions
 end
 
 local function buildSourceItems(plugin, sources)
+    local repo = plugin.app:getSourceRepo()
     local item_table = {}
     for source_index = 1, #sources do
         local source = sources[source_index]
+        local health = repo:getHealth(source.bookSourceUrl)
         table.insert(item_table, {
             text = sourceTitle(source),
-            mandatory = source.enabled == false and _("Disabled") or nil,
+            mandatory = source.enabled == false and _("Disabled")
+                or healthMandatory(health),
             sub_item_table = sourceActions(plugin, source),
         })
     end

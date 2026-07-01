@@ -13,6 +13,10 @@ local function sourceKey(source)
     return source.bookSourceUrl
 end
 
+local function healthKey(book_source_url)
+    return tostring(book_source_url or "")
+end
+
 local function sortSources(sources)
     table.sort(sources, function(left, right)
         if left.customOrder ~= right.customOrder then
@@ -20,6 +24,43 @@ local function sortSources(sources)
         end
         return (left.bookSourceName or "") < (right.bookSourceName or "")
     end)
+end
+
+local function compactError(error)
+    if type(error) ~= "table" then
+        return nil
+    end
+    return {
+        kind = error.kind or "unknown",
+        message = error.message or tostring(error.kind or ""),
+    }
+end
+
+local function compactResponse(response)
+    if type(response) ~= "table" then
+        return nil
+    end
+    return {
+        request_url = response.request_url,
+        final_url = response.final_url or response.url,
+        status = response.status,
+        bytes = response.bytes,
+    }
+end
+
+local function compactHealth(item, keyword, checked_at)
+    return {
+        source = item.source or "",
+        source_url = item.source_url or "",
+        status = item.status or "unknown",
+        ok = item.ok == true,
+        books_count = item.books_count or 0,
+        keyword = keyword or "",
+        checked_at = checked_at,
+        error = compactError(item.error),
+        response = compactResponse(item.response),
+        unsupported_count = #(item.unsupported or {}),
+    }
 end
 
 function Repo:new()
@@ -32,6 +73,57 @@ function Repo:list()
     local sources = self.settings:readSetting("sources") or {}
     sortSources(sources)
     return sources
+end
+
+function Repo:getHealth(book_source_url)
+    local health = self.settings:readSetting("source_health") or {}
+    return health[healthKey(book_source_url)]
+end
+
+function Repo:listHealth()
+    return self.settings:readSetting("source_health") or {}
+end
+
+function Repo:saveHealthFromCheck(result)
+    if type(result) ~= "table" or type(result.results) ~= "table" then
+        return 0
+    end
+
+    local health = self:listHealth()
+    local checked_at = os.time()
+    local saved = 0
+    for index = 1, #result.results do
+        local item = result.results[index]
+        local key = healthKey(item.source_url)
+        if key ~= "" then
+            health[key] = compactHealth(item, result.keyword, checked_at)
+            saved = saved + 1
+        end
+    end
+
+    if saved > 0 then
+        self.settings:saveSetting("source_health", health)
+        self.settings:flush()
+    end
+    return saved
+end
+
+function Repo:clearHealth(book_source_url)
+    if book_source_url == nil then
+        self.settings:saveSetting("source_health", {})
+        self.settings:flush()
+        return true
+    end
+
+    local health = self:listHealth()
+    local key = healthKey(book_source_url)
+    if health[key] == nil then
+        return false
+    end
+    health[key] = nil
+    self.settings:saveSetting("source_health", health)
+    self.settings:flush()
+    return true
 end
 
 function Repo:saveAll(sources)
@@ -193,12 +285,14 @@ function Repo:remove(book_source_url)
     end
     if removed then
         self:saveAll(sources)
+        self:clearHealth(book_source_url)
     end
     return removed
 end
 
 function Repo:clear()
     self:saveAll({})
+    self:clearHealth()
 end
 
 function Repo.deleteStorage()

@@ -1,3 +1,4 @@
+local BookInfo = require("novel.service.bookinfo")
 local Search = require("novel.service.search")
 
 local SourceDebug = {}
@@ -49,6 +50,16 @@ local function statusFromResult(result)
     return "ok"
 end
 
+local function detailStatusFromResult(result)
+    if not result or not result.ok then
+        return "failed"
+    end
+    if not result.book then
+        return "empty"
+    end
+    return "ok"
+end
+
 local function runSearch(search, source, keyword, options)
     local debug_source = clone(source or {})
     if options.allow_disabled ~= false then
@@ -60,6 +71,19 @@ local function runSearch(search, source, keyword, options)
         total_timeout = options.total_timeout,
         max_redirects = options.max_redirects,
         no_cache = true,
+    })
+end
+
+local function runDetail(bookinfo, source, book, options)
+    local debug_source = clone(source or {})
+    if options.allow_disabled ~= false then
+        debug_source.enabled = true
+    end
+    return bookinfo.run(debug_source, book, {
+        timeout = options.timeout,
+        total_timeout = options.total_timeout,
+        max_redirects = options.max_redirects,
+        use_info_html = options.use_info_html == true,
     })
 end
 
@@ -105,6 +129,41 @@ function SourceDebug.run(source, keyword, options)
         result_ok = result and result.ok == true,
         books = result and result.books or {},
         books_count = result and result.books and #result.books or 0,
+        error = compactError(result and result.error),
+        response = result and result.response or nil,
+        debug = result and result.debug or {},
+        unsupported = result and result.unsupported or {},
+    }
+end
+
+function SourceDebug.detail(source, book, options)
+    options = options or {}
+    local bookinfo = options.bookinfo or BookInfo
+    local ok, result = pcall(runDetail, bookinfo, source, book, options)
+    if not ok then
+        result = {
+            ok = false,
+            book = nil,
+            debug = {},
+            unsupported = {},
+            error = {
+                kind = "exception",
+                message = tostring(result),
+            },
+        }
+    end
+
+    local status = detailStatusFromResult(result)
+    return {
+        ok = true,
+        stage = "detail",
+        source = sourceName(source),
+        source_url = sourceUrl(source),
+        source_enabled = source and source.enabled ~= false,
+        keyword = book and (book.name or book.bookUrl) or "",
+        status = status,
+        result_ok = result and result.ok == true,
+        book = result and result.book or book,
         error = compactError(result and result.error),
         response = result and result.response or nil,
         debug = result and result.debug or {},

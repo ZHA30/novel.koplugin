@@ -4,6 +4,7 @@ local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
 local SourceCheck = require("novel.ui.sourcecheck")
+local SourceDebug = require("novel.ui.sourcedebug")
 local UIManager = require("ui/uimanager")
 
 local Sources = {}
@@ -275,6 +276,14 @@ local function sourceActions(plugin, source)
             text = _("Retry check"),
             callback = function()
                 SourceCheck.show(plugin, source)
+            end,
+        })
+    end
+    if SourceDebug.hasSource(source) then
+        table.insert(actions, {
+            text = _("Debug search"),
+            callback = function()
+                SourceDebug.show(plugin, source)
             end,
         })
     end

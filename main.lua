@@ -4,6 +4,7 @@ local Bookshelf = require("novel.ui.bookshelf")
 local Discover = require("novel.ui.discover")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
+local SourceDebug = require("novel.ui.sourcedebug")
 local Sources = require("novel.ui.sources")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -54,6 +55,7 @@ function Novel:onCloseWidget()
         UIManager:close(sources_check_results_menu)
     end
     self.sources_check_request_id = (self.sources_check_request_id or 0) + 1
+    SourceDebug.close(self)
     Bookshelf.close(self)
     Discover.close(self)
     if self.app then

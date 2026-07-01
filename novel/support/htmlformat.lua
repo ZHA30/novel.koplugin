@@ -44,8 +44,7 @@ function HtmlFormat.text(value)
     value = value:gsub("<[^>]+>", "")
     value = value:gsub("&([^;]+);", decodeEntity)
     value = value:gsub("[ \t\r\f\v]+", " ")
-    value = value:gsub(" *\n+ *", "\n")
-    value = value:gsub("\n+", "\n")
+    value = value:gsub("[ \t]*\n[ \t]*", "\n")
     return trim(value)
 end
 

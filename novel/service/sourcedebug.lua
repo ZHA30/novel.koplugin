@@ -59,6 +59,7 @@ local function runSearch(search, source, keyword, options)
         timeout = options.timeout,
         total_timeout = options.total_timeout,
         max_redirects = options.max_redirects,
+        no_cache = true,
     })
 end
 

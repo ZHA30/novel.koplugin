@@ -160,6 +160,7 @@ function SourceCheck.run(sources, options)
                 page = 1,
                 timeout = timeout_seconds,
                 total_timeout = timeout_seconds,
+                no_cache = true,
             })
             item = checkedSource(source, result)
             summary.checked = summary.checked + 1

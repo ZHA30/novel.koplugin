@@ -24,8 +24,12 @@ local function showMessage(message)
     })
 end
 
-local function invalidate(plugin)
+local function invalidateRefresh(plugin)
     plugin.bookshelf_refresh_request_id = (plugin.bookshelf_refresh_request_id or 0) + 1
+end
+
+local function invalidateSwitch(plugin)
+    plugin.bookshelf_switch_request_id = (plugin.bookshelf_switch_request_id or 0) + 1
 end
 
 local function bookTitle(book)
@@ -40,6 +44,13 @@ local function errorText(result, fallback)
         return fallback
     end
     return result.error.message or result.error.kind or fallback
+end
+
+local function sourceTitle(source)
+    if source and source.bookSourceName and source.bookSourceName ~= "" then
+        return source.bookSourceName
+    end
+    return source and source.bookSourceUrl or ""
 end
 
 local function findCurrentSource(plugin, record)
@@ -61,6 +72,8 @@ local function recordSubtitle(record)
     end
     if record.current and record.current.chapter and record.current.chapter.title then
         table.insert(parts, record.current.chapter.title)
+    elseif record.current and record.current.chapter_title then
+        table.insert(parts, record.current.chapter_title)
     elseif record.book and record.book.latestChapterTitle and record.book.latestChapterTitle ~= "" then
         table.insert(parts, record.book.latestChapterTitle)
     end
@@ -80,12 +93,156 @@ local function showBookInfo(record)
     end
     if record.current and record.current.chapter and record.current.chapter.title then
         table.insert(lines, _("Current chapter: ") .. record.current.chapter.title)
+    elseif record.current and record.current.chapter_title then
+        table.insert(lines, _("Current chapter: ") .. record.current.chapter_title)
     end
     if book.bookUrl and book.bookUrl ~= "" then
         table.insert(lines, "")
         table.insert(lines, book.bookUrl)
     end
     showMessage(table.concat(lines, "\n"))
+end
+
+local function switchSummary(result)
+    return table.concat({
+        _("Keyword: ") .. tostring(result.keyword or ""),
+        _("Candidates: ") .. tostring(#(result.candidates or {})),
+        _("Checked: ") .. tostring(result.checked or 0),
+        _("Skipped: ") .. tostring(result.skipped or 0),
+        _("Failed: ") .. tostring(result.failed or 0),
+    }, "\n")
+end
+
+local function closeSwitchResults(plugin)
+    closeWidget(plugin, "bookshelf_switch_confirm_dialog")
+    closeWidget(plugin, "bookshelf_switch_results_menu")
+end
+
+local function applySwitch(plugin, record, candidate)
+    closeWidget(plugin, "bookshelf_switch_confirm_dialog")
+    local confirm_dialog
+    confirm_dialog = ConfirmBox:new{
+        text = _("Switch this book to source?")
+            .. "\n\n" .. sourceTitle(candidate.source),
+        ok_text = _("Switch"),
+        ok_callback = function()
+            if plugin.bookshelf_switch_confirm_dialog == confirm_dialog then
+                plugin.bookshelf_switch_confirm_dialog = nil
+            end
+            if not plugin.app then
+                showMessage(_("Novel is not ready."))
+                return
+            end
+            local updated_record, err = plugin.app:getBookshelfService()
+                :applySwitch(record, candidate.source, candidate.book)
+            if not updated_record then
+                showMessage(_("Switch failed: ") .. tostring(err))
+                return
+            end
+            closeSwitchResults(plugin)
+            showMessage(_("Source switched."))
+            Bookshelf.show(plugin)
+        end,
+        cancel_callback = function()
+            if plugin.bookshelf_switch_confirm_dialog == confirm_dialog then
+                plugin.bookshelf_switch_confirm_dialog = nil
+            end
+        end,
+    }
+    plugin.bookshelf_switch_confirm_dialog = confirm_dialog
+    UIManager:show(confirm_dialog)
+end
+
+local function candidateSubtitle(candidate)
+    local parts = {}
+    if candidate.book and candidate.book.author and candidate.book.author ~= "" then
+        table.insert(parts, candidate.book.author)
+    end
+    if candidate.source_name and candidate.source_name ~= "" then
+        table.insert(parts, candidate.source_name)
+    end
+    if candidate.reason and candidate.reason ~= "" then
+        table.insert(parts, candidate.reason)
+    end
+    return table.concat(parts, " / ")
+end
+
+local function candidateActions(plugin, record, candidate)
+    return {
+        {
+            text = _("Apply switch"),
+            callback = function()
+                applySwitch(plugin, record, candidate)
+            end,
+        },
+        {
+            text = _("Details"),
+            callback = function()
+                Detail.show(plugin, candidate.source, candidate.book)
+            end,
+        },
+    }
+end
+
+local function switchResultItems(plugin, record, result)
+    local item_table = {
+        {
+            text = _("Summary"),
+            mandatory = tostring(#(result.candidates or {})),
+            callback = function()
+                showMessage(switchSummary(result))
+            end,
+            separator = true,
+        },
+    }
+
+    if not result.candidates or #result.candidates == 0 then
+        table.insert(item_table, {
+            text = _("No matching books."),
+            select_enabled = false,
+            dim = true,
+        })
+        return item_table
+    end
+
+    for candidate_index = 1, #result.candidates do
+        local candidate = result.candidates[candidate_index]
+        local subtitle = candidateSubtitle(candidate)
+        table.insert(item_table, {
+            text = bookTitle(candidate.book),
+            mandatory = subtitle ~= "" and subtitle or nil,
+            sub_item_table = candidateActions(plugin, record, candidate),
+        })
+    end
+    return item_table
+end
+
+local function showSwitchResults(plugin, record, result)
+    closeWidget(plugin, "bookshelf_switch_results_menu")
+
+    if not result or not result.ok then
+        showMessage(_("Switch failed: ")
+            .. tostring(errorText(result, _("Switch failed."))))
+        return
+    end
+
+    local results_menu
+    results_menu = Menu:new{
+        title = _("Switch source"),
+        item_table = switchResultItems(plugin, record, result),
+        covers_fullscreen = true,
+        is_borderless = true,
+        is_popout = false,
+        title_bar_fm_style = true,
+        close_callback = function()
+            UIManager:close(results_menu)
+            if plugin.bookshelf_switch_results_menu == results_menu then
+                plugin.bookshelf_switch_results_menu = nil
+            end
+        end,
+    }
+    plugin.bookshelf_switch_results_menu = results_menu
+    UIManager:show(results_menu)
 end
 
 local function confirmRemove(plugin, record)
@@ -136,7 +293,7 @@ local function refreshRecord(plugin, record)
         return
     end
 
-    invalidate(plugin)
+    invalidateRefresh(plugin)
     local request_id = plugin.bookshelf_refresh_request_id
 
     Trapper:wrap(function()
@@ -168,6 +325,40 @@ local function refreshRecord(plugin, record)
     end)
 end
 
+local function switchRecord(plugin, record)
+    if not plugin.app then
+        showMessage(_("Novel is not ready."))
+        return
+    end
+    if NetworkMgr:willRerunWhenOnline(function()
+        switchRecord(plugin, record)
+    end) then
+        return
+    end
+
+    local sources = plugin.app:getSourceRepo():list()
+    invalidateSwitch(plugin)
+    local request_id = plugin.bookshelf_switch_request_id
+
+    Trapper:wrap(function()
+        local completed, result = Trapper:dismissableRunInSubprocess(function()
+            local SwitchService = require("novel.service.switch")
+            return SwitchService.find(record, sources, {
+                timeout = 5000,
+            })
+        end, _("Searching sources... (tap to cancel)"))
+
+        if not plugin.app or plugin.bookshelf_switch_request_id ~= request_id then
+            return
+        end
+        if not completed then
+            showMessage(_("Source switch canceled."))
+            return
+        end
+        showSwitchResults(plugin, record, result)
+    end)
+end
+
 local function recordActions(plugin, record)
     return {
         {
@@ -180,6 +371,12 @@ local function recordActions(plugin, record)
             text = _("Refresh"),
             callback = function()
                 refreshRecord(plugin, record)
+            end,
+        },
+        {
+            text = _("Switch source"),
+            callback = function()
+                switchRecord(plugin, record)
             end,
         },
         {
@@ -232,8 +429,10 @@ local function buildItems(plugin, records)
 end
 
 function Bookshelf.close(plugin)
-    invalidate(plugin)
+    invalidateRefresh(plugin)
+    invalidateSwitch(plugin)
     closeWidget(plugin, "bookshelf_confirm_dialog")
+    closeSwitchResults(plugin)
     closeWidget(plugin, "bookshelf_menu")
 end
 

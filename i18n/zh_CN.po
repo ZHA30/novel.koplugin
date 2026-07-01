@@ -100,3 +100,54 @@ msgstr "删除全部书源"
 
 msgid "Novel is not ready."
 msgstr "Novel 尚未就绪。"
+
+msgid "Book"
+msgstr "书籍"
+
+msgid "Source: "
+msgstr "书源："
+
+msgid "Current chapter: "
+msgstr "当前章节："
+
+msgid "Remove book from bookshelf?"
+msgstr "从书架移除这本书？"
+
+msgid "Remove"
+msgstr "移除"
+
+msgid "Resume"
+msgstr "继续阅读"
+
+msgid "Chapters"
+msgstr "目录"
+
+msgid "Book info"
+msgstr "书籍信息"
+
+msgid "Remove from bookshelf"
+msgstr "从书架移除"
+
+msgid "Update bookshelf info"
+msgstr "更新书架信息"
+
+msgid "Bookshelf info updated."
+msgstr "书架信息已更新。"
+
+msgid "Update bookshelf failed: "
+msgstr "更新书架失败："
+
+msgid "No books in bookshelf."
+msgstr "书架中没有书。"
+
+msgid "Add to bookshelf"
+msgstr "加入书架"
+
+msgid "Removed from bookshelf."
+msgstr "已从书架移除。"
+
+msgid "Added to bookshelf."
+msgstr "已加入书架。"
+
+msgid "Add to bookshelf failed: "
+msgstr "加入书架失败："

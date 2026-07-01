@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local BookshelfService = require("novel.service.bookshelf")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
@@ -103,6 +104,9 @@ local function unsupportedText(result)
 end
 
 local function buildItems(plugin, source, book, result)
+    local bookshelf = plugin.app and plugin.app:getBookshelfService()
+        or BookshelfService:new()
+    local in_bookshelf = bookshelf:has(source, book)
     local item_table = {
         {
             text = _("Book info"),
@@ -117,6 +121,44 @@ local function buildItems(plugin, source, book, result)
             end,
         },
     }
+
+    if in_bookshelf then
+        table.insert(item_table, {
+            text = _("Update bookshelf info"),
+            callback = function()
+                local updated_record, err = bookshelf:add(source, book)
+                UIManager:show(InfoMessage:new{
+                    text = updated_record
+                        and _("Bookshelf info updated.")
+                        or (_("Update bookshelf failed: ") .. tostring(err)),
+                })
+                Detail.showLoaded(plugin, source, result)
+            end,
+        })
+        table.insert(item_table, {
+            text = _("Remove from bookshelf"),
+            callback = function()
+                bookshelf:remove(source, book)
+                UIManager:show(InfoMessage:new{
+                    text = _("Removed from bookshelf."),
+                })
+                Detail.showLoaded(plugin, source, result)
+            end,
+        })
+    else
+        table.insert(item_table, {
+            text = _("Add to bookshelf"),
+            callback = function()
+                local added_record, err = bookshelf:add(source, book)
+                UIManager:show(InfoMessage:new{
+                    text = added_record
+                        and _("Added to bookshelf.")
+                        or (_("Add to bookshelf failed: ") .. tostring(err)),
+                })
+                Detail.showLoaded(plugin, source, result)
+            end,
+        })
+    end
 
     if result.unsupported and #result.unsupported > 0 then
         table.insert(item_table, {

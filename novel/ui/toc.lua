@@ -105,6 +105,9 @@ function Toc.showContent(plugin, source, book, chapters, position)
             showError(_("Chapter loading canceled."))
             return
         end
+        if result and result.ok and plugin.app then
+            plugin.app:getBookshelfService():updateProgress(source, book, chapter, position, 0)
+        end
         showContentViewer(plugin, chapter, result)
     end)
 end

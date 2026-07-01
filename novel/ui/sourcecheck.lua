@@ -1,6 +1,7 @@
 local _ = require("novel.i18n")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
+local Log = require("novel.support.log")
 local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
@@ -88,38 +89,21 @@ local function checkDetails(item)
             .. " "
             .. tostring(item.error.message or ""))
     end
-    if item.response then
-        table.insert(lines, _("Request: ") .. tostring(item.response.request_url or ""))
-        table.insert(lines, _("Final: ") .. tostring(item.response.final_url or ""))
-        table.insert(lines, _("HTTP: ") .. tostring(item.response.status or ""))
-        table.insert(lines, _("Bytes: ") .. tostring(item.response.bytes or 0))
-    end
-    if item.unsupported and #item.unsupported > 0 then
-        table.insert(lines, _("Unsupported: ") .. tostring(#item.unsupported))
-    end
-    if item.debug and #item.debug > 0 then
-        table.insert(lines, _("Debug events: ") .. tostring(#item.debug))
-        local limit = math.min(#item.debug, 8)
-        for debug_index = 1, limit do
-            local event = item.debug[debug_index]
-            table.insert(lines, tostring(event.event or ""))
-        end
+
+    local diagnostics = Log.formatDiagnostic(item, {
+        response_title = _("Response"),
+        debug_title = _("Debug events"),
+        unsupported_title = _("Unsupported"),
+    })
+    if diagnostics ~= "" then
+        table.insert(lines, "")
+        table.insert(lines, diagnostics)
     end
     return table.concat(lines, "\n")
 end
 
 local function showUnsupported(items)
-    local lines = {}
-    for item_index = 1, #(items or {}) do
-        local item = items[item_index]
-        table.insert(lines, table.concat({
-            item.source or "",
-            item.field or "",
-            item.kind or "",
-            item.snippet or "",
-        }, "\n"))
-    end
-    showMessage(table.concat(lines, "\n\n"))
+    showMessage(Log.formatUnsupported(items))
 end
 
 local function checkActions(item)

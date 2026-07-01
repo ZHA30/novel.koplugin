@@ -2,6 +2,7 @@ local _ = dofile((debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "i18
 local App = require("novel.app")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
+local Search = require("novel.ui.search")
 local Sources = require("novel.ui.sources")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
@@ -41,6 +42,7 @@ function Novel:onCloseWidget()
         self.sources_confirm_dialog = nil
         UIManager:close(sources_confirm_dialog)
     end
+    Search.close(self)
     if self.app then
         self.app:onClose()
         self.app = nil
@@ -80,7 +82,7 @@ function Novel:onShowNovelMenu()
             {
                 text = _("Discover"),
                 callback = function()
-                    Novel.showUnderDevelopment(_("Discover is under development."))
+                    Search.show(self)
                 end,
             },
             {

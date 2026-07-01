@@ -1,4 +1,5 @@
 local Analyzer = require("novel.rule.analyzer")
+local Cache = require("novel.storage.cache")
 local HtmlFormat = require("novel.support.htmlformat")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
@@ -103,6 +104,37 @@ end
 
 local function sameUrl(left, right)
     return left ~= "" and right ~= "" and left == right
+end
+
+local function cacheKey(source, book, chapter, first_url, next_chapter_url, rule, options)
+    return Cache.makeKey("content", {
+        source = source.bookSourceUrl,
+        book = book.bookUrl,
+        chapter = chapter.url,
+        first = first_url,
+        next_chapter = next_chapter_url,
+        rule = rule,
+        max_pages = options.max_pages or DEFAULT_MAX_PAGES,
+    })
+end
+
+local function cachedResult(cache, key, options)
+    local value, meta = cache:get("content", key, options)
+    if not value then
+        return nil
+    end
+    value.cached = true
+    value.cache = meta
+    value.debug = value.debug or {}
+    table.insert(value.debug, 1, {
+        event = "cache_hit",
+        data = {
+            kind = "content",
+            key = key,
+            stored_at = meta.stored_at,
+        },
+    })
+    return value
 end
 
 function Content:new(options)
@@ -284,6 +316,14 @@ function Content:get(source, book, chapter, options)
         and Url.absolute(chapter.baseUrl or book.tocUrl or book.bookUrl,
             options.next_chapter_url)
         or ""
+    local cache = options.cache or Cache:new()
+    local key = cacheKey(source, book, chapter, first_url, next_chapter_url,
+        source.ruleContent, options)
+    local cached = cachedResult(cache, key, options)
+    if cached then
+        return cached
+    end
+
     local queue, queued, visited = {}, {}, {}
     local parts = {}
     enqueue(queue, queued, visited, first_url)
@@ -348,7 +388,7 @@ function Content:get(source, book, chapter, options)
         }
     end
 
-    return {
+    local result = {
         ok = true,
         text = text,
         chapter = chapter,
@@ -357,6 +397,8 @@ function Content:get(source, book, chapter, options)
         unsupported = unsupported,
         pages = pages,
     }
+    cache:set("content", key, result, options)
+    return result
 end
 
 function Content.run(source, book, chapter, options)

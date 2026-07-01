@@ -1,5 +1,6 @@
 local Log = require("novel.support.log")
 local Bookshelf = require("novel.service.bookshelf")
+local Cache = require("novel.storage.cache")
 local Repo = require("novel.source.repo")
 local Settings = require("novel.storage.settings")
 
@@ -39,6 +40,7 @@ function App.deleteStoredSettings()
     Settings.delete()
     Repo.deleteStorage()
     Bookshelf.deleteStorage()
+    Cache.deleteStorage()
 end
 
 function App:getSourceRepo()

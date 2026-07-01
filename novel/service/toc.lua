@@ -1,5 +1,6 @@
 local Analyzer = require("novel.rule.analyzer")
 local Chapter = require("novel.model.chapter")
+local Cache = require("novel.storage.cache")
 local HtmlFormat = require("novel.support.htmlformat")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
@@ -124,6 +125,35 @@ local function listRule(rule)
         value = trim(value:sub(2))
     end
     return value, reverse
+end
+
+local function cacheKey(source, book, toc_url, rule, options)
+    return Cache.makeKey("toc", {
+        source = source.bookSourceUrl,
+        book = book.bookUrl,
+        toc = toc_url,
+        rule = rule,
+        max_pages = options.max_pages or DEFAULT_MAX_PAGES,
+    })
+end
+
+local function cachedResult(cache, key, options)
+    local value, meta = cache:get("toc", key, options)
+    if not value then
+        return nil
+    end
+    value.cached = true
+    value.cache = meta
+    value.debug = value.debug or {}
+    table.insert(value.debug, 1, {
+        event = "cache_hit",
+        data = {
+            kind = "toc",
+            key = key,
+            stored_at = meta.stored_at,
+        },
+    })
+    return value
 end
 
 local function enqueue(queue, queued, visited, url)
@@ -359,6 +389,13 @@ function Toc:get(source, book, options)
         })
     end
 
+    local cache = options.cache or Cache:new()
+    local key = cacheKey(source, book, toc_url, source.ruleToc, options)
+    local cached = cachedResult(cache, key, options)
+    if cached then
+        return cached
+    end
+
     local queue, queued, visited = {}, {}, {}
     enqueue(queue, queued, visited, toc_url)
     local chapters = {}
@@ -428,7 +465,7 @@ function Toc:get(source, book, options)
     end
     book.totalChapterNum = #chapters
 
-    return {
+    local result = {
         ok = true,
         chapters = chapters,
         book = book,
@@ -436,6 +473,8 @@ function Toc:get(source, book, options)
         unsupported = unsupported,
         pages = pages,
     }
+    cache:set("toc", key, result, options)
+    return result
 end
 
 function Toc.run(source, book, options)

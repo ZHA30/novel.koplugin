@@ -344,7 +344,7 @@ local function switchRecord(plugin, record)
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local SwitchService = require("novel.service.switch")
             return SwitchService.find(record, sources, {
-                timeout = 5000,
+                timeout = 5,
             })
         end, _("Searching sources... (tap to cancel)"))
 

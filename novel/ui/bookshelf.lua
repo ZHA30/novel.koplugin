@@ -2,7 +2,7 @@ local _ = require("novel.i18n")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Detail = require("novel.ui.detail")
 local InfoMessage = require("ui/widget/infomessage")
-local Menu = require("ui/widget/menu")
+local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local Toc = require("novel.ui.toc")
 local Trapper = require("ui/trapper")
@@ -235,7 +235,6 @@ local function showSwitchResults(plugin, record, result)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(results_menu)
             if plugin.bookshelf_switch_results_menu == results_menu then
                 plugin.bookshelf_switch_results_menu = nil
             end
@@ -453,7 +452,6 @@ function Bookshelf.show(plugin)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(bookshelf_menu)
             if plugin.bookshelf_menu == bookshelf_menu then
                 plugin.bookshelf_menu = nil
             end

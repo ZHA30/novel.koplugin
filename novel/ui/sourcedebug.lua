@@ -2,7 +2,7 @@ local _ = require("novel.i18n")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local Log = require("novel.support.log")
-local Menu = require("ui/widget/menu")
+local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
@@ -272,7 +272,6 @@ function SourceDebug.showDetailResults(plugin, book, result)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(detail_menu)
             if plugin.sources_debug_detail_menu == detail_menu then
                 plugin.sources_debug_detail_menu = nil
             end
@@ -302,7 +301,6 @@ function SourceDebug.showResults(plugin, source, result)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(results_menu)
             if plugin.sources_debug_results_menu == results_menu then
                 plugin.sources_debug_results_menu = nil
             end

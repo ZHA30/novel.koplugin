@@ -1,6 +1,6 @@
 local _ = require("novel.i18n")
 local InfoMessage = require("ui/widget/infomessage")
-local Menu = require("ui/widget/menu")
+local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local TextViewer = require("ui/widget/textviewer")
 local Trapper = require("ui/trapper")
@@ -168,7 +168,6 @@ function Toc.showList(plugin, source, book, result)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(toc_menu)
             if plugin.toc_menu == toc_menu then
                 plugin.toc_menu = nil
             end

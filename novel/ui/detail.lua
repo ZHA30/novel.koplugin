@@ -1,7 +1,7 @@
 local _ = require("novel.i18n")
 local BookshelfService = require("novel.service.bookshelf")
 local InfoMessage = require("ui/widget/infomessage")
-local Menu = require("ui/widget/menu")
+local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local TextViewer = require("ui/widget/textviewer")
 local Toc = require("novel.ui.toc")
@@ -197,7 +197,6 @@ function Detail.showLoaded(plugin, source, result)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(detail_menu)
             if plugin.detail_menu == detail_menu then
                 plugin.detail_menu = nil
             end

@@ -1,5 +1,5 @@
 local _ = require("novel.i18n")
-local Menu = require("ui/widget/menu")
+local Menu = require("novel.ui.menu")
 local UIManager = require("ui/uimanager")
 
 local Sources = {}
@@ -98,7 +98,6 @@ function Sources.show(plugin)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(sources_menu)
             if plugin.sources_menu == sources_menu then
                 plugin.sources_menu = nil
             end

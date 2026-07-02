@@ -3,7 +3,7 @@ local App = require("novel.app")
 local Bookshelf = require("novel.ui.bookshelf")
 local Discover = require("novel.ui.discover")
 local InfoMessage = require("ui/widget/infomessage")
-local Menu = require("ui/widget/menu")
+local Menu = require("novel.ui.menu")
 local SourceDebug = require("novel.ui.sourcedebug")
 local Sources = require("novel.ui.sources")
 local UIManager = require("ui/uimanager")
@@ -102,7 +102,6 @@ function Novel:onShowNovelMenu()
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(novel_menu)
             if self.novel_menu == novel_menu then
                 self.novel_menu = nil
             end

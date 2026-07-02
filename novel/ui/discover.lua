@@ -1,7 +1,7 @@
 local _ = require("novel.i18n")
 local Detail = require("novel.ui.detail")
 local InfoMessage = require("ui/widget/infomessage")
-local Menu = require("ui/widget/menu")
+local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local rapidjson = require("rapidjson")
 local Trapper = require("ui/trapper")
@@ -316,7 +316,6 @@ function Discover.showResults(plugin, source, group, page, result)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(results_menu)
             if plugin.discover_results_menu == results_menu then
                 plugin.discover_results_menu = nil
             end
@@ -395,7 +394,6 @@ local function buildGroupItems(plugin, groups, unsupported)
             text = sourceTitle(group.source),
             mandatory = group.title,
             callback = function()
-                closeWidget(plugin, "discover_group_menu")
                 Discover.start(plugin, group.source, group, 1)
             end,
         })
@@ -420,7 +418,6 @@ function Discover.show(plugin)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(group_menu)
             if plugin.discover_group_menu == group_menu then
                 plugin.discover_group_menu = nil
             end

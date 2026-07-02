@@ -2,7 +2,7 @@ local _ = require("novel.i18n")
 local Detail = require("novel.ui.detail")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
-local Menu = require("ui/widget/menu")
+local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
@@ -108,7 +108,6 @@ local function buildResultItems(plugin, source, keyword, result)
         {
             text = _("Search again"),
             callback = function()
-                closeWidget(plugin, "search_results_menu")
                 Search.showInput(plugin, source, keyword)
             end,
         },
@@ -167,7 +166,6 @@ function Search.showResults(plugin, source, keyword, result)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(results_menu)
             if plugin.search_results_menu == results_menu then
                 plugin.search_results_menu = nil
             end
@@ -253,7 +251,6 @@ local function buildSourceItems(plugin, sources)
             text = sourceTitle(source),
             mandatory = sourceSubtitle(source) ~= "" and sourceSubtitle(source) or nil,
             callback = function()
-                closeWidget(plugin, "search_source_menu")
                 Search.showInput(plugin, source)
             end,
         })
@@ -287,7 +284,6 @@ function Search.show(plugin)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            UIManager:close(source_menu)
             if plugin.search_source_menu == source_menu then
                 plugin.search_source_menu = nil
             end

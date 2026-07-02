@@ -50,6 +50,12 @@ msgstr "从书架移除这本书？"
 msgid "Remove"
 msgstr "移除"
 
+msgid "Add"
+msgstr "加入"
+
+msgid "Update"
+msgstr "更新"
+
 msgid "Resume"
 msgstr "继续阅读"
 
@@ -112,6 +118,9 @@ msgstr "关闭"
 
 msgid "Unsupported rules"
 msgstr "不支持的规则"
+
+msgid "Rules"
+msgstr "规则"
 
 msgid "Author: "
 msgstr "作者："

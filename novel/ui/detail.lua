@@ -37,36 +37,7 @@ end
 
 local function detailText(book)
     book = book or {}
-    local lines = {
-        bookTitle(book),
-    }
-    if book.author and book.author ~= "" then
-        table.insert(lines, _("Author: ") .. book.author)
-    end
-    if book.kind and book.kind ~= "" then
-        table.insert(lines, _("Kind: ") .. book.kind)
-    end
-    if book.latestChapterTitle and book.latestChapterTitle ~= "" then
-        table.insert(lines, _("Latest chapter: ") .. book.latestChapterTitle)
-    end
-    if book.updateTime and book.updateTime ~= "" then
-        table.insert(lines, _("Update time: ") .. book.updateTime)
-    end
-    if book.wordCount and book.wordCount ~= "" then
-        table.insert(lines, _("Word count: ") .. book.wordCount)
-    end
-    if book.intro and book.intro ~= "" then
-        table.insert(lines, "")
-        table.insert(lines, book.intro)
-    end
-    if book.bookUrl and book.bookUrl ~= "" then
-        table.insert(lines, "")
-        table.insert(lines, book.bookUrl)
-    end
-    if book.tocUrl and book.tocUrl ~= "" then
-        table.insert(lines, book.tocUrl)
-    end
-    return table.concat(lines, "\n")
+    return book.intro or ""
 end
 
 local function unsupportedText(result)
@@ -92,66 +63,62 @@ local function buildButtons(plugin, source, result)
     local bookshelf = plugin.app and plugin.app:getBookshelfService()
         or BookshelfService:new()
     local in_bookshelf = bookshelf:has(source, book)
-    local buttons = {
+    local row = {
         {
-            {
-                text = _("Chapters"),
-                callback = function()
-                    Toc.show(plugin, source, book)
-                end,
-            },
-            {
-                text = in_bookshelf
-                    and _("Update bookshelf info")
-                    or _("Add to bookshelf"),
-                callback = function()
-                    local updated_record, err = bookshelf:add(source, book)
-                    if updated_record then
-                        result.book = updated_record.book or book
-                        Detail.showLoaded(plugin, source, result)
-                        showMessage(in_bookshelf
-                            and _("Bookshelf info updated.")
-                            or _("Added to bookshelf."))
-                    else
-                        showMessage(in_bookshelf
-                            and (_("Update bookshelf failed: ") .. tostring(err))
-                            or (_("Add to bookshelf failed: ") .. tostring(err)))
-                    end
-                end,
-            },
+            text = _("Chapters"),
+            callback = function()
+                Toc.show(plugin, source, book)
+            end,
+        },
+        {
+            text = in_bookshelf and _("Update") or _("Add"),
+            callback = function()
+                local updated_record, err = bookshelf:add(source, book)
+                if updated_record then
+                    result.book = updated_record.book or book
+                    Detail.showLoaded(plugin, source, result)
+                    showMessage(in_bookshelf
+                        and _("Bookshelf info updated.")
+                        or _("Added to bookshelf."))
+                else
+                    showMessage(in_bookshelf
+                        and (_("Update bookshelf failed: ") .. tostring(err))
+                        or (_("Add to bookshelf failed: ") .. tostring(err)))
+                end
+            end,
         },
     }
 
     if in_bookshelf then
-        table.insert(buttons, {{
-            text = _("Remove from bookshelf"),
+        table.insert(row, {
+            text = _("Remove"),
             callback = function()
                 bookshelf:remove(source, book)
                 Detail.showLoaded(plugin, source, result)
                 showMessage(_("Removed from bookshelf."))
             end,
-        }})
+        })
     end
 
     if result.unsupported and #result.unsupported > 0 then
-        table.insert(buttons, {{
-            text = _("Unsupported rules") .. " (" .. tostring(#result.unsupported) .. ")",
+        table.insert(row, {
+            text = _("Rules") .. " (" .. tostring(#result.unsupported) .. ")",
             callback = function()
                 showUnsupported(result)
             end,
-        }})
+        })
     end
 
-    table.insert(buttons, {{
+    table.insert(row, {
         text = _("Close"),
         callback = function()
             if plugin.detail_viewer then
                 plugin.detail_viewer:onClose()
             end
         end,
-    }})
+    })
 
-    return buttons
+    return { row }
 end
 
 local function showDetailViewer(plugin, source, result)

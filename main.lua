@@ -2,11 +2,15 @@ local _ = dofile((debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "i18
 local App = require("novel.app")
 local Bookshelf = require("novel.ui.bookshelf")
 local Discover = require("novel.ui.discover")
+local Icons = require("novel.icons")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("novel.ui.menu")
+local Size = require("ui/size")
 local Sources = require("novel.ui.sources")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+
+local MENU_ICON_WIDTH = Icons.size.menu + Size.padding.default
 
 local Novel = WidgetContainer:extend{
     name = "novel",
@@ -67,18 +71,21 @@ function Novel:onShowNovelMenu()
         item_table = {
             {
                 text = _("Bookshelf"),
+                state = Icons.menuState("bookshelf", MENU_ICON_WIDTH),
                 callback = function()
                     Bookshelf.show(self)
                 end,
             },
             {
                 text = _("Discover"),
+                state = Icons.menuState("discover", MENU_ICON_WIDTH),
                 callback = function()
                     Discover.show(self)
                 end,
             },
             {
                 text = _("Sources"),
+                state = Icons.menuState("sources", MENU_ICON_WIDTH),
                 callback = function()
                     Sources.show(self)
                 end,
@@ -88,6 +95,7 @@ function Novel:onShowNovelMenu()
         is_borderless = true,
         is_popout = false,
         title_bar_fm_style = true,
+        state_w = MENU_ICON_WIDTH,
         close_callback = function()
             if self.novel_menu == novel_menu then
                 self.novel_menu = nil

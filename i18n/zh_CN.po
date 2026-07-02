@@ -130,3 +130,6 @@ msgstr "发现已取消。"
 
 msgid "No discoverable sources."
 msgstr "没有可用的发现书源。"
+
+msgid "No discover categories."
+msgstr "没有发现分类。"

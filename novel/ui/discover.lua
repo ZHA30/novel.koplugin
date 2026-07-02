@@ -1,10 +1,13 @@
 local _ = require("novel.i18n")
+local Blitbuffer = require("ffi/blitbuffer")
 local Detail = require("novel.ui.detail")
 local DiscoverList = require("novel.ui.discoverlist")
+local Grouping = require("novel.ui.grouping")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local rapidjson = require("rapidjson")
+local Size = require("ui/size")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
@@ -209,6 +212,13 @@ local function resultTitle(group, first_page, last_page)
     return title .. " (" .. tostring(last_page) .. ")"
 end
 
+local function categoryTitle(group)
+    if group.title and group.title ~= "" then
+        return group.title
+    end
+    return group.url or _("Discover")
+end
+
 local function isDiscoverable(source)
     return source.enabled ~= false
         and source.enabledExplore ~= false
@@ -216,23 +226,36 @@ local function isDiscoverable(source)
         and source.exploreUrl ~= ""
 end
 
-local function discoverGroups(plugin)
+local function sourceKey(source)
+    return source.bookSourceUrl or ""
+end
+
+local function sourceCollapsed(plugin, source)
+    return Grouping.collapsed(plugin, "discover_collapsed_sources", sourceKey(source))
+end
+
+local function sourceIcon(plugin, source)
+    return Grouping.icon(sourceCollapsed(plugin, source))
+end
+
+local function discoverSources(plugin)
     local ExploreService = require("novel.service.explore")
     local sources = plugin.app:getSourceRepo():list()
-    local groups, unsupported = {}, {}
+    local source_groups, unsupported = {}, {}
     for source_index = 1, #sources do
         local source = sources[source_index]
         if isDiscoverable(source) then
-            local source_groups, source_unsupported = ExploreService.groups(source)
-            for group_index = 1, #source_groups do
-                table.insert(groups, source_groups[group_index])
-            end
+            local groups, source_unsupported = ExploreService.groups(source)
+            table.insert(source_groups, {
+                source = source,
+                groups = groups,
+            })
             for item_index = 1, #source_unsupported do
                 table.insert(unsupported, source_unsupported[item_index])
             end
         end
     end
-    return groups, unsupported
+    return source_groups, unsupported
 end
 
 local function showUnsupported(items)
@@ -470,7 +493,25 @@ function Discover.start(plugin, source, group, page)
     end)
 end
 
-local function buildGroupItems(plugin, groups, unsupported)
+local function rebuildGroupItems(plugin, source_groups, unsupported)
+    if plugin.discover_group_menu then
+        plugin.discover_group_menu.item_table = Discover.buildGroupItems(plugin, source_groups, unsupported)
+        plugin.discover_group_menu:updateItems(plugin.discover_group_menu.itemnumber, true)
+    end
+end
+
+local function buildCategoryItem(plugin, source, group)
+    return {
+        text_func = function()
+            return categoryTitle(group)
+        end,
+        callback = function()
+            Discover.start(plugin, source, group, 1)
+        end,
+    }
+end
+
+function Discover.buildGroupItems(plugin, source_groups, unsupported)
     local item_table = {}
     if #unsupported > 0 then
         table.insert(item_table, {
@@ -483,7 +524,7 @@ local function buildGroupItems(plugin, groups, unsupported)
         })
     end
 
-    if #groups == 0 then
+    if #source_groups == 0 then
         table.insert(item_table, {
             text = _("No discoverable sources."),
             select_enabled = false,
@@ -492,15 +533,37 @@ local function buildGroupItems(plugin, groups, unsupported)
         return item_table
     end
 
-    for group_index = 1, #groups do
-        local group = groups[group_index]
+    for source_index = 1, #source_groups do
+        local source_group = source_groups[source_index]
+        local source = source_group.source
         table.insert(item_table, {
-            text = sourceTitle(group.source),
-            mandatory = group.title,
+            text_func = function()
+                return sourceTitle(source)
+            end,
+            mandatory_func = function()
+                return tostring(#source_group.groups)
+            end,
+            state = sourceIcon(plugin, source),
+            bold = true,
             callback = function()
-                Discover.start(plugin, group.source, group, 1)
+                Grouping.toggle(plugin, "discover_collapsed_sources", sourceKey(source))
+                rebuildGroupItems(plugin, source_groups, unsupported)
             end,
         })
+        if not sourceCollapsed(plugin, source) then
+            if #source_group.groups == 0 then
+                table.insert(item_table, {
+                    text = _("No discover categories."),
+                    select_enabled = false,
+                    dim = true,
+                })
+            else
+                for group_index = 1, #source_group.groups do
+                    table.insert(item_table, buildCategoryItem(plugin, source,
+                        source_group.groups[group_index]))
+                end
+            end
+        end
     end
     return item_table
 end
@@ -512,15 +575,20 @@ function Discover.show(plugin)
     end
 
     closeWidget(plugin, "discover_group_menu")
-    local groups, unsupported = discoverGroups(plugin)
+    local source_groups, unsupported = discoverSources(plugin)
     local group_menu
     group_menu = Menu:new{
         title = _("Discover"),
-        item_table = buildGroupItems(plugin, groups, unsupported),
+        item_table = Discover.buildGroupItems(plugin, source_groups, unsupported),
         covers_fullscreen = true,
         is_borderless = true,
         is_popout = false,
         title_bar_fm_style = true,
+        state_w = Grouping.state_w,
+        single_line = true,
+        align_baselines = true,
+        items_padding = math.floor(Size.padding.fullscreen / 2),
+        line_color = Blitbuffer.COLOR_BLACK,
         close_callback = function()
             if plugin.discover_group_menu == group_menu then
                 plugin.discover_group_menu = nil

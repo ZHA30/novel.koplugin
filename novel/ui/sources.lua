@@ -1,6 +1,6 @@
 local _ = require("novel.i18n")
 local Blitbuffer = require("ffi/blitbuffer")
-local Icons = require("novel.icons")
+local Grouping = require("novel.ui.grouping")
 local Menu = require("novel.ui.menu")
 local Size = require("ui/size")
 local UIManager = require("ui/uimanager")
@@ -47,18 +47,12 @@ local function groupKey(group)
     return group.name or ""
 end
 
-local function collapsedGroups(plugin)
-    plugin.sources_collapsed_groups = plugin.sources_collapsed_groups or {}
-    return plugin.sources_collapsed_groups
-end
-
 local function groupCollapsed(plugin, group)
-    return collapsedGroups(plugin)[groupKey(group)] == true
+    return Grouping.collapsed(plugin, "sources_collapsed_groups", groupKey(group))
 end
 
 local function groupIcon(plugin, group)
-    local name = groupCollapsed(plugin, group) and "group-collapsed" or "group-expanded"
-    return Icons.menuState(name, Icons.size.menu + Size.padding.default)
+    return Grouping.icon(groupCollapsed(plugin, group))
 end
 
 local function groupText(group)
@@ -129,9 +123,7 @@ function Sources.buildItems(plugin, sources, groups)
             state = groupIcon(plugin, group),
             bold = true,
             callback = function()
-                local collapsed = collapsedGroups(plugin)
-                local key = groupKey(group)
-                collapsed[key] = not collapsed[key] or nil
+                Grouping.toggle(plugin, "sources_collapsed_groups", groupKey(group))
                 rebuildMenuItems(plugin, sources, groups)
             end,
         })
@@ -166,7 +158,7 @@ function Sources.show(plugin)
         is_borderless = true,
         is_popout = false,
         title_bar_fm_style = true,
-        state_w = Icons.size.menu + Size.padding.default,
+        state_w = Grouping.state_w,
         single_line = true,
         align_baselines = true,
         items_padding = math.floor(Size.padding.fullscreen / 2),

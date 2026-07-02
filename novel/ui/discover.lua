@@ -1,7 +1,7 @@
 local _ = require("novel.i18n")
 local Blitbuffer = require("ffi/blitbuffer")
 local Detail = require("novel.ui.detail")
-local DiscoverList = require("novel.ui.discoverlist")
+local BookList = require("novel.ui.booklist")
 local Grouping = require("novel.ui.grouping")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("novel.ui.menu")
@@ -520,7 +520,7 @@ function Discover.showResults(plugin, source, group, page, result)
 
     local no_more_source_pages = not canRequestNextPage(source, group, page)
     local results_menu
-    results_menu = DiscoverList:new{
+    results_menu = BookList:new{
         title = resultTitle(group, page, page),
         item_table = buildResultItems(plugin, source, result),
         covers_fullscreen = true,

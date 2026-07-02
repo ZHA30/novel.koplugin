@@ -1,8 +1,8 @@
 local _ = require("novel.i18n")
+local BookList = require("novel.ui.booklist")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Detail = require("novel.ui.detail")
 local InfoMessage = require("ui/widget/infomessage")
-local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local Toc = require("novel.ui.toc")
 local Trapper = require("ui/trapper")
@@ -65,19 +65,13 @@ local function findCurrentSource(plugin, record)
     return record.source
 end
 
-local function recordSubtitle(record)
-    local parts = {}
-    if record.source_name and record.source_name ~= "" then
-        table.insert(parts, record.source_name)
-    end
+local function recordCurrentChapter(record)
     if record.current and record.current.chapter and record.current.chapter.title then
-        table.insert(parts, record.current.chapter.title)
+        return record.current.chapter.title
     elseif record.current and record.current.chapter_title then
-        table.insert(parts, record.current.chapter_title)
-    elseif record.book and record.book.latestChapterTitle and record.book.latestChapterTitle ~= "" then
-        table.insert(parts, record.book.latestChapterTitle)
+        return record.current.chapter_title
     end
-    return table.concat(parts, " / ")
+    return nil
 end
 
 local function showBookInfo(record)
@@ -153,20 +147,6 @@ local function applySwitch(plugin, record, candidate)
     UIManager:show(confirm_dialog)
 end
 
-local function candidateSubtitle(candidate)
-    local parts = {}
-    if candidate.book and candidate.book.author and candidate.book.author ~= "" then
-        table.insert(parts, candidate.book.author)
-    end
-    if candidate.source_name and candidate.source_name ~= "" then
-        table.insert(parts, candidate.source_name)
-    end
-    if candidate.reason and candidate.reason ~= "" then
-        table.insert(parts, candidate.reason)
-    end
-    return table.concat(parts, " / ")
-end
-
 local function candidateActions(plugin, record, candidate)
     return {
         {
@@ -207,10 +187,11 @@ local function switchResultItems(plugin, record, result)
 
     for candidate_index = 1, #result.candidates do
         local candidate = result.candidates[candidate_index]
-        local subtitle = candidateSubtitle(candidate)
         table.insert(item_table, {
             text = bookTitle(candidate.book),
-            mandatory = subtitle ~= "" and subtitle or nil,
+            book = candidate.book,
+            source_title = candidate.source_name,
+            book_extra_metadata = candidate.reason,
             sub_item_table = candidateActions(plugin, record, candidate),
         })
     end
@@ -227,7 +208,7 @@ local function showSwitchResults(plugin, record, result)
     end
 
     local results_menu
-    results_menu = Menu:new{
+    results_menu = BookList:new{
         title = _("Switch source"),
         item_table = switchResultItems(plugin, record, result),
         covers_fullscreen = true,
@@ -417,10 +398,13 @@ local function buildItems(plugin, records)
     local item_table = {}
     for record_index = 1, #records do
         local record = records[record_index]
-        local subtitle = recordSubtitle(record)
         table.insert(item_table, {
             text = bookTitle(record.book),
-            mandatory = subtitle ~= "" and subtitle or nil,
+            book = record.book,
+            source_title = record.source_name,
+            book_subtitle_parts = {
+                recordCurrentChapter(record),
+            },
             sub_item_table = recordActions(plugin, record),
         })
     end
@@ -444,7 +428,7 @@ function Bookshelf.show(plugin)
     closeWidget(plugin, "bookshelf_menu")
     local records = plugin.app:getBookshelfService():list()
     local bookshelf_menu
-    bookshelf_menu = Menu:new{
+    bookshelf_menu = BookList:new{
         title = _("Bookshelf"),
         item_table = buildItems(plugin, records),
         covers_fullscreen = true,

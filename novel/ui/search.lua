@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local BookList = require("novel.ui.booklist")
 local Detail = require("novel.ui.detail")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
@@ -139,7 +140,8 @@ local function buildResultItems(plugin, source, keyword, result)
         local book = result.books[book_index]
         table.insert(item_table, {
             text = book.name,
-            mandatory = book.author ~= "" and book.author or nil,
+            book = book,
+            source_title = sourceTitle(source),
             sub_item_table = resultActions(plugin, source, book),
         })
     end
@@ -158,7 +160,7 @@ function Search.showResults(plugin, source, keyword, result)
     end
 
     local results_menu
-    results_menu = Menu:new{
+    results_menu = BookList:new{
         title = _("Search") .. ": " .. keyword,
         item_table = buildResultItems(plugin, source, keyword, result),
         covers_fullscreen = true,

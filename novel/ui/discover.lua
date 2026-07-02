@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local Detail = require("novel.ui.detail")
+local DiscoverList = require("novel.ui.discoverlist")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
@@ -244,17 +245,6 @@ function Discover.close(plugin)
     Detail.close(plugin)
 end
 
-local function resultActions(plugin, source, book)
-    return {
-        {
-            text = _("Details"),
-            callback = function()
-                Detail.show(plugin, source, book)
-            end,
-        },
-    }
-end
-
 local function buildResultItems(plugin, source, group, page, result)
     local item_table = {
         {
@@ -291,8 +281,11 @@ local function buildResultItems(plugin, source, group, page, result)
         local book = result.books[book_index]
         table.insert(item_table, {
             text = book.name,
-            mandatory = book.author ~= "" and book.author or nil,
-            sub_item_table = resultActions(plugin, source, book),
+            book = book,
+            source_title = sourceTitle(source),
+            callback = function()
+                Detail.show(plugin, source, book)
+            end,
         })
     end
     return item_table
@@ -308,7 +301,7 @@ function Discover.showResults(plugin, source, group, page, result)
 
     local title = (group.title or _("Discover")) .. " (" .. tostring(page) .. ")"
     local results_menu
-    results_menu = Menu:new{
+    results_menu = DiscoverList:new{
         title = title,
         item_table = buildResultItems(plugin, source, group, page, result),
         covers_fullscreen = true,

@@ -1,5 +1,8 @@
 local _ = require("novel.i18n")
+local Blitbuffer = require("ffi/blitbuffer")
+local Icons = require("novel.icons")
 local Menu = require("novel.ui.menu")
+local Size = require("ui/size")
 local UIManager = require("ui/uimanager")
 
 local Sources = {}
@@ -18,41 +21,90 @@ local function groupTitle(group)
     return _("Ungrouped")
 end
 
-local function refresh(plugin)
-    UIManager:nextTick(function()
-        if plugin.app then
-            Sources.show(plugin)
-        end
-    end)
-end
-
 local function sourceEnabled(source)
     return source.enabled ~= false
 end
 
-local function buildSourceItems(plugin, sources)
-    local repo = plugin.app:getSourceRepo()
-    local item_table = {}
-    for source_index = 1, #sources do
-        local source = sources[source_index]
-        table.insert(item_table, {
-            text = sourceTitle(source),
-            checked_func = function()
-                return sourceEnabled(source)
-            end,
-            callback = function()
-                local enabled = sourceEnabled(source)
-                if repo:setEnabled(source.bookSourceUrl, not enabled) then
-                    source.enabled = not enabled
-                end
-                refresh(plugin)
-            end,
-        })
-    end
-    return item_table
+local function sourceStatus(source)
+    return sourceEnabled(source) and _("Enabled") or _("Disabled")
 end
 
-local function buildItems(plugin, sources, groups)
+local function enabledCount(sources)
+    local count = 0
+    for source_index = 1, #sources do
+        if sourceEnabled(sources[source_index]) then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function groupCount(group)
+    return tostring(enabledCount(group.sources)) .. "/" .. tostring(#group.sources)
+end
+
+local function groupKey(group)
+    return group.name or ""
+end
+
+local function collapsedGroups(plugin)
+    plugin.sources_collapsed_groups = plugin.sources_collapsed_groups or {}
+    return plugin.sources_collapsed_groups
+end
+
+local function groupCollapsed(plugin, group)
+    return collapsedGroups(plugin)[groupKey(group)] == true
+end
+
+local function groupIcon(plugin, group)
+    local name = groupCollapsed(plugin, group) and "group-collapsed" or "group-expanded"
+    return Icons.menuState(name, Icons.size.menu + Size.padding.default)
+end
+
+local function groupText(group)
+    return groupTitle(group)
+end
+
+local function refreshCurrentMenu(plugin)
+    if plugin.sources_menu then
+        plugin.sources_menu:updateItems(plugin.sources_menu.itemnumber, true)
+    end
+end
+
+local function rebuildMenuItems(plugin, sources, groups)
+    if plugin.sources_menu then
+        plugin.sources_menu.item_table = Sources.buildItems(plugin, sources, groups)
+        plugin.sources_menu:updateItems(plugin.sources_menu.itemnumber, true)
+    end
+end
+
+local function buildSourceItem(plugin, repo, source)
+    local item
+    item = {
+        text_func = function()
+            return sourceTitle(source)
+        end,
+        mandatory_func = function()
+            return sourceStatus(source)
+        end,
+        mandatory_dim_func = function()
+            return not sourceEnabled(source)
+        end,
+        dim = not sourceEnabled(source),
+        callback = function()
+            local enabled = sourceEnabled(source)
+            local next_enabled = not enabled
+            if repo:setEnabled(source.bookSourceUrl, next_enabled) then
+                source.enabled = next_enabled
+                item.dim = not next_enabled
+                refreshCurrentMenu(plugin)
+            end
+        end,
+    }
+    return item
+end
+
+function Sources.buildItems(plugin, sources, groups)
     if #sources == 0 then
         return {
             {
@@ -63,14 +115,31 @@ local function buildItems(plugin, sources, groups)
         }
     end
 
+    local repo = plugin.app:getSourceRepo()
     local item_table = {}
     for group_index = 1, #groups do
         local group = groups[group_index]
         table.insert(item_table, {
-            text = groupTitle(group),
-            mandatory = tostring(#group.sources),
-            sub_item_table = buildSourceItems(plugin, group.sources),
+            text_func = function()
+                return groupText(group)
+            end,
+            mandatory_func = function()
+                return groupCount(group)
+            end,
+            state = groupIcon(plugin, group),
+            bold = true,
+            callback = function()
+                local collapsed = collapsedGroups(plugin)
+                local key = groupKey(group)
+                collapsed[key] = not collapsed[key] or nil
+                rebuildMenuItems(plugin, sources, groups)
+            end,
         })
+        if not groupCollapsed(plugin, group) then
+            for source_index = 1, #group.sources do
+                table.insert(item_table, buildSourceItem(plugin, repo, group.sources[source_index]))
+            end
+        end
     end
     return item_table
 end
@@ -92,11 +161,16 @@ function Sources.show(plugin)
     local sources_menu
     sources_menu = Menu:new{
         title = _("Sources") .. " (" .. tostring(#sources) .. ")",
-        item_table = buildItems(plugin, sources, groups),
+        item_table = Sources.buildItems(plugin, sources, groups),
         covers_fullscreen = true,
         is_borderless = true,
         is_popout = false,
         title_bar_fm_style = true,
+        state_w = Icons.size.menu + Size.padding.default,
+        single_line = true,
+        align_baselines = true,
+        items_padding = math.floor(Size.padding.fullscreen / 2),
+        line_color = Blitbuffer.COLOR_BLACK,
         close_callback = function()
             if plugin.sources_menu == sources_menu then
                 plugin.sources_menu = nil

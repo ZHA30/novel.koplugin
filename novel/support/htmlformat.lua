@@ -1,38 +1,9 @@
-local HtmlFormat = {}
+local util = require("util")
 
-local entities = {
-    nbsp = " ",
-    amp = "&",
-    lt = "<",
-    gt = ">",
-    quot = "\"",
-    apos = "'",
-}
+local HtmlFormat = {}
 
 local function trim(value)
     return tostring(value or ""):match("^%s*(.-)%s*$")
-end
-
-local function decodeEntity(entity)
-    local numeric = entity:match("^#(%d+)$")
-    if numeric then
-        local codepoint = tonumber(numeric)
-        if codepoint and codepoint >= 32 and codepoint < 128 then
-            return string.char(codepoint)
-        end
-        return ""
-    end
-
-    local hex = entity:match("^#[xX]([%da-fA-F]+)$")
-    if hex then
-        local codepoint = tonumber(hex, 16)
-        if codepoint and codepoint >= 32 and codepoint < 128 then
-            return string.char(codepoint)
-        end
-        return ""
-    end
-
-    return entities[entity] or "&" .. entity .. ";"
 end
 
 function HtmlFormat.text(value)
@@ -42,7 +13,8 @@ function HtmlFormat.text(value)
     value = value:gsub("</%s*div%s*>", "\n")
     value = value:gsub("</%s*li%s*>", "\n")
     value = value:gsub("<[^>]+>", "")
-    value = value:gsub("&([^;]+);", decodeEntity)
+    value = util.htmlEntitiesToUtf8(value)
+    value = value:gsub("\u{00A0}", " ")
     value = value:gsub("[ \t\r\f\v]+", " ")
     value = value:gsub("[ \t]*\n[ \t]*", "\n")
     return trim(value)

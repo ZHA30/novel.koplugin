@@ -1,4 +1,5 @@
 local Analyzer = require("novel.rule.analyzer")
+local HtmlFormat = require("novel.support.htmlformat")
 
 local BookList = {}
 
@@ -22,14 +23,7 @@ local function sourceKey(source)
 end
 
 local function cleanText(value)
-    value = trim(value)
-    value = value:gsub("<br%s*/?>", "\n")
-    value = value:gsub("</p%s*>", "\n")
-    value = value:gsub("<[^>]+>", "")
-    value = value:gsub("&nbsp;", " ")
-    value = value:gsub("&amp;", "&")
-    value = value:gsub("&lt;", "<")
-    value = value:gsub("&gt;", ">")
+    value = HtmlFormat.text(value)
     value = value:gsub("[ \t\r\n]+", " ")
     return trim(value)
 end

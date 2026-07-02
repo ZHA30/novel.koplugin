@@ -3,6 +3,7 @@ local https = require("ssl.https")
 local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
+local Charset = require("novel.net.charset")
 local Url = require("novel.net.url")
 
 local Request = {}
@@ -59,6 +60,24 @@ local function classifyHttpStatus(code)
     end
 end
 
+local function detectCharset(headers, body, explicit_charset)
+    if explicit_charset and explicit_charset ~= "" then
+        return explicit_charset
+    end
+
+    local content_type = headerValue(headers, "content-type")
+    if content_type then
+        local charset = content_type:match("[Cc][Hh][Aa][Rr][Ss][Ee][Tt]%s*=%s*['\"]?([%w._%-]+)")
+        if charset and charset ~= "" then
+            return charset
+        end
+    end
+
+    if type(body) == "string" and body ~= "" then
+        return body:sub(1, 4096):match("[Cc][Hh][Aa][Rr][Ss][Ee][Tt]%s*=%s*['\"]?([%w._%-]+)")
+    end
+end
+
 local function isRedirect(code)
     return code == 301 or code == 302 or code == 303 or code == 307 or code == 308
 end
@@ -101,6 +120,8 @@ local function buildRequest(spec, url, method)
     if method == "POST" and (body == nil or body == "") then
         body = formBody(spec.fields)
     end
+    local body_charset_error
+    body, body_charset_error = Charset.fromUTF8(body, spec.charset)
 
     if not hasHeader(headers, "Accept-Encoding") then
         headers["Accept-Encoding"] = "identity"
@@ -123,7 +144,7 @@ local function buildRequest(spec, url, method)
     if body and body ~= "" then
         request.source = ltn12.source.string(body)
     end
-    return request, sink
+    return request, sink, body_charset_error
 end
 
 local function rawExecute(spec, url, method)
@@ -142,9 +163,12 @@ local function rawExecute(spec, url, method)
         }
     end
 
-    local request, sink = buildRequest(spec, url, method)
+    local request, sink, body_charset_error = buildRequest(spec, url, method)
     local code, headers, status = socket.skip(1, transport.request(request))
     local body = table.concat(sink)
+    local charset = detectCharset(headers, body, spec.charset)
+    local charset_error
+    body, charset_error = Charset.toUTF8(body, charset)
     local error_kind
     if not headers then
         error_kind = classifyTransportError(code, status)
@@ -159,6 +183,9 @@ local function rawExecute(spec, url, method)
         status_line = status,
         headers = headers or {},
         body = body,
+        charset = charset,
+        charset_error = charset_error,
+        body_charset_error = body_charset_error,
         error = error_kind and {
             kind = error_kind,
             message = tostring(status or code or ""),
@@ -196,6 +223,7 @@ local function normalizedSpec(spec)
         headers = spec.headers or {},
         body = spec.body,
         fields = spec.fields,
+        charset = spec.charset,
         retry = tonumber(spec.retry) or 0,
         timeout = tonumber(spec.timeout),
         total_timeout = tonumber(spec.total_timeout),

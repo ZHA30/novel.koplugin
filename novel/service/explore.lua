@@ -71,6 +71,8 @@ local function responseSummary(response)
         final_url = response.final_url or response.url,
         status = response.status,
         bytes = #(response.body or ""),
+        charset = response.charset,
+        charset_error = response.charset_error,
         redirects = response.redirects or {},
     }
 end

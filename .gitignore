@@ -11,6 +11,7 @@
 *.swo
 *~
 docs/
+/source/
 
 # Lua/build artifacts
 *.luac

@@ -1,10 +1,5 @@
 local _ = require("novel.i18n")
-local ConfirmBox = require("ui/widget/confirmbox")
-local InfoMessage = require("ui/widget/infomessage")
-local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
-local SourceCheck = require("novel.ui.sourcecheck")
-local SourceDebug = require("novel.ui.sourcedebug")
 local UIManager = require("ui/uimanager")
 
 local Sources = {}
@@ -16,107 +11,11 @@ local function sourceTitle(source)
     return source.bookSourceUrl
 end
 
-local function healthLabel(health)
-    if not health then
-        return nil
-    end
-    if health.status == "ok" then
-        return _("OK")
-    end
-    if health.status == "empty" then
-        return _("Empty")
-    end
-    if health.status == "failed" then
-        return _("Failed")
-    end
-    if health.status == "skipped" then
-        return _("Skipped")
-    end
-    return tostring(health.status or "")
-end
-
-local function healthMandatory(health)
-    if not health then
-        return nil
-    end
-    if health.status == "failed" or health.status == "empty" then
-        return healthLabel(health)
-    end
-    return nil
-end
-
-local function formatTime(value)
-    local timestamp = tonumber(value)
-    if not timestamp then
-        return ""
-    end
-    return os.date("%Y-%m-%d %H:%M", timestamp)
-end
-
-local function healthSummary(health)
-    if not health then
-        return _("No source check state.")
-    end
-
-    local lines = {
-        _("Status: ") .. tostring(healthLabel(health) or ""),
-        _("Keyword: ") .. tostring(health.keyword or ""),
-        _("Checked at: ") .. formatTime(health.checked_at),
-        _("Books: ") .. tostring(health.books_count or 0),
-    }
-    if health.error then
-        table.insert(lines, _("Error: ")
-            .. tostring(health.error.kind or "")
-            .. " "
-            .. tostring(health.error.message or ""))
-    end
-    if health.response then
-        table.insert(lines, _("HTTP: ") .. tostring(health.response.status or ""))
-        table.insert(lines, _("Final: ") .. tostring(health.response.final_url or ""))
-        table.insert(lines, _("Bytes: ") .. tostring(health.response.bytes or 0))
-    end
-    if health.unsupported_count and health.unsupported_count > 0 then
-        table.insert(lines, _("Unsupported: ") .. tostring(health.unsupported_count))
-    end
-    return table.concat(lines, "\n")
-end
-
-local function sourceSummary(source, health)
-    local lines = {
-        source.bookSourceUrl,
-    }
-    if source.bookSourceGroup and source.bookSourceGroup ~= "" then
-        table.insert(lines, _("Group: ") .. source.bookSourceGroup)
-    end
-    if source.enabled == false then
-        table.insert(lines, _("Disabled"))
-    end
-    if source.enabledExplore == false then
-        table.insert(lines, _("Discover disabled"))
-    end
-    if source.support_status and #source.support_status > 0 then
-        table.insert(lines, _("Unsupported rules are present."))
-    end
-    if health then
-        table.insert(lines, "")
-        table.insert(lines, healthSummary(health))
-    end
-    return table.concat(lines, "\n")
-end
-
 local function groupTitle(group)
     if group.name and group.name ~= "" then
         return group.name
     end
     return _("Ungrouped")
-end
-
-local function closeDialog(plugin, key)
-    if plugin[key] then
-        local dialog = plugin[key]
-        plugin[key] = nil
-        UIManager:close(dialog)
-    end
 end
 
 local function refresh(plugin)
@@ -127,196 +26,8 @@ local function refresh(plugin)
     end)
 end
 
-local function showImportResult(result)
-    local message = _("Imported sources: ") .. tostring(result.imported)
-    if result.errors and #result.errors > 0 then
-        message = message .. "\n" .. _("Import errors: ") .. tostring(#result.errors)
-    end
-    UIManager:show(InfoMessage:new{
-        text = message,
-    })
-end
-
-function Sources.showImportDialog(plugin)
-    closeDialog(plugin, "sources_input_dialog")
-
-    local input_dialog
-    input_dialog = InputDialog:new{
-        title = _("Import sources"),
-        input = "",
-        input_hint = _("Path to JSON file"),
-        description = _("Enter a local JSON book source file path."),
-        buttons = {{
-            {
-                text = _("Cancel"),
-                id = "close",
-                callback = function()
-                    closeDialog(plugin, "sources_input_dialog")
-                end,
-            },
-            {
-                text = _("Import"),
-                is_enter_default = true,
-                callback = function()
-                    local path = input_dialog:getInputText()
-                    if path == "" then
-                        return
-                    end
-                    closeDialog(plugin, "sources_input_dialog")
-                    local result = plugin.app:getSourceRepo():importFile(path)
-                    showImportResult(result)
-                    refresh(plugin)
-                end,
-            },
-        }},
-    }
-    plugin.sources_input_dialog = input_dialog
-    UIManager:show(input_dialog)
-    input_dialog:onShowKeyboard()
-end
-
-function Sources.showExportDialog(plugin)
-    closeDialog(plugin, "sources_input_dialog")
-
-    local repo = plugin.app:getSourceRepo()
-    local input_dialog
-    input_dialog = InputDialog:new{
-        title = _("Export sources"),
-        input = repo.export_path,
-        input_hint = _("Path to JSON file"),
-        description = _("Enter the export file path."),
-        buttons = {{
-            {
-                text = _("Cancel"),
-                id = "close",
-                callback = function()
-                    closeDialog(plugin, "sources_input_dialog")
-                end,
-            },
-            {
-                text = _("Export"),
-                is_enter_default = true,
-                callback = function()
-                    local path = input_dialog:getInputText()
-                    if path == "" then
-                        return
-                    end
-                    closeDialog(plugin, "sources_input_dialog")
-                    local ok, err = repo:exportFile(path)
-                    UIManager:show(InfoMessage:new{
-                        text = ok and (_("Exported sources to: ") .. path)
-                            or (_("Export failed: ") .. tostring(err)),
-                    })
-                end,
-            },
-        }},
-    }
-    plugin.sources_input_dialog = input_dialog
-    UIManager:show(input_dialog)
-    input_dialog:onShowKeyboard()
-end
-
-function Sources.confirmDeleteAll(plugin)
-    closeDialog(plugin, "sources_confirm_dialog")
-
-    local confirm_dialog
-    confirm_dialog = ConfirmBox:new{
-        text = _("Delete all imported book sources?"),
-        ok_text = _("Delete"),
-        ok_callback = function()
-            closeDialog(plugin, "sources_confirm_dialog")
-            plugin.app:getSourceRepo():clear()
-            refresh(plugin)
-        end,
-        cancel_callback = function()
-            plugin.sources_confirm_dialog = nil
-        end,
-    }
-    plugin.sources_confirm_dialog = confirm_dialog
-    UIManager:show(confirm_dialog)
-end
-
-function Sources.confirmDeleteSource(plugin, source)
-    closeDialog(plugin, "sources_confirm_dialog")
-
-    local confirm_dialog
-    confirm_dialog = ConfirmBox:new{
-        text = _("Delete book source?") .. "\n" .. sourceTitle(source),
-        ok_text = _("Delete"),
-        ok_callback = function()
-            closeDialog(plugin, "sources_confirm_dialog")
-            plugin.app:getSourceRepo():remove(source.bookSourceUrl)
-            refresh(plugin)
-        end,
-        cancel_callback = function()
-            plugin.sources_confirm_dialog = nil
-        end,
-    }
-    plugin.sources_confirm_dialog = confirm_dialog
-    UIManager:show(confirm_dialog)
-end
-
-local function sourceActions(plugin, source)
-    local repo = plugin.app:getSourceRepo()
-    local enabled = source.enabled ~= false
-    local enabled_explore = source.enabledExplore ~= false
-    local health = repo:getHealth(source.bookSourceUrl)
-    local actions = {
-        {
-            text = _("Details"),
-            callback = function()
-                UIManager:show(InfoMessage:new{
-                    text = sourceSummary(source, health),
-                })
-            end,
-        },
-    }
-    if SourceCheck.hasSource(source) then
-        table.insert(actions, {
-            text = _("Retry check"),
-            callback = function()
-                SourceCheck.show(plugin, source)
-            end,
-        })
-    end
-    if SourceDebug.hasSource(source) then
-        table.insert(actions, {
-            text = _("Debug search"),
-            callback = function()
-                SourceDebug.show(plugin, source)
-            end,
-        })
-    end
-    if health then
-        table.insert(actions, {
-            text = _("Clear check status"),
-            callback = function()
-                repo:clearHealth(source.bookSourceUrl)
-                refresh(plugin)
-            end,
-        })
-    end
-    table.insert(actions, {
-        text = enabled and _("Disable") or _("Enable"),
-        callback = function()
-            repo:setEnabled(source.bookSourceUrl, not enabled)
-            refresh(plugin)
-        end,
-    })
-    table.insert(actions, {
-        text = enabled_explore and _("Disable Discover") or _("Enable Discover"),
-        callback = function()
-            repo:setEnabledExplore(source.bookSourceUrl, not enabled_explore)
-            refresh(plugin)
-        end,
-    })
-    table.insert(actions, {
-        text = _("Delete"),
-        callback = function()
-            Sources.confirmDeleteSource(plugin, source)
-        end,
-    })
-    return actions
+local function sourceEnabled(source)
+    return source.enabled ~= false
 end
 
 local function buildSourceItems(plugin, sources)
@@ -324,64 +35,35 @@ local function buildSourceItems(plugin, sources)
     local item_table = {}
     for source_index = 1, #sources do
         local source = sources[source_index]
-        local health = repo:getHealth(source.bookSourceUrl)
         table.insert(item_table, {
             text = sourceTitle(source),
-            mandatory = source.enabled == false and _("Disabled")
-                or healthMandatory(health),
-            sub_item_table = sourceActions(plugin, source),
+            checked_func = function()
+                return sourceEnabled(source)
+            end,
+            callback = function()
+                local enabled = sourceEnabled(source)
+                if repo:setEnabled(source.bookSourceUrl, not enabled) then
+                    source.enabled = not enabled
+                end
+                refresh(plugin)
+            end,
         })
     end
     return item_table
 end
 
 local function buildItems(plugin, sources, groups)
-    local item_table = {
-        {
-            text = _("Import sources"),
-            callback = function()
-                Sources.showImportDialog(plugin)
-            end,
-        },
-        {
-            text = _("Export sources"),
-            select_enabled_func = function()
-                return #plugin.app:getSourceRepo():list() > 0
-            end,
-            callback = function()
-                Sources.showExportDialog(plugin)
-            end,
-        },
-        {
-            text = _("Check sources"),
-            select_enabled_func = function()
-                return SourceCheck.hasSources(plugin)
-            end,
-            callback = function()
-                SourceCheck.show(plugin)
-            end,
-        },
-        {
-            text = _("Delete all sources"),
-            select_enabled_func = function()
-                return #plugin.app:getSourceRepo():list() > 0
-            end,
-            callback = function()
-                Sources.confirmDeleteAll(plugin)
-            end,
-            separator = true,
-        },
-    }
-
     if #sources == 0 then
-        table.insert(item_table, {
-            text = _("No book sources imported."),
-            select_enabled = false,
-            dim = true,
-        })
-        return item_table
+        return {
+            {
+                text = _("No local book source files."),
+                select_enabled = false,
+                dim = true,
+            },
+        }
     end
 
+    local item_table = {}
     for group_index = 1, #groups do
         local group = groups[group_index]
         table.insert(item_table, {
@@ -390,15 +72,11 @@ local function buildItems(plugin, sources, groups)
             sub_item_table = buildSourceItems(plugin, group.sources),
         })
     end
-
     return item_table
 end
 
 function Sources.show(plugin)
     if not plugin.app then
-        UIManager:show(InfoMessage:new{
-            text = _("Novel is not ready."),
-        })
         return
     end
 

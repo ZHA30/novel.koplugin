@@ -3,6 +3,7 @@ local Detail = require("novel.ui.detail")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
+local rapidjson = require("rapidjson")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
@@ -24,6 +25,169 @@ local function showMessage(message)
     UIManager:show(InfoMessage:new{
         text = message,
     })
+end
+
+local function errorText(result)
+    if not result then
+        return _("no result returned")
+    end
+    local error_message = result.error
+        and (result.error.message or result.error.kind)
+        or _("unknown error")
+    local parts = { tostring(error_message) }
+    if result.response then
+        if result.response.status then
+            table.insert(parts, "HTTP " .. tostring(result.response.status))
+        end
+        if result.response.final_url then
+            table.insert(parts, tostring(result.response.final_url))
+        end
+    end
+    return table.concat(parts, "\n")
+end
+
+local function runExplore(source, group, page)
+    local ExploreService = require("novel.service.explore")
+    local ok, result = xpcall(function()
+        return ExploreService.run(source, group, {
+            page = page,
+        })
+    end, debug.traceback)
+    if ok then
+        return result
+    end
+    return {
+        ok = false,
+        books = {},
+        error = {
+            kind = "exception",
+            message = result,
+        },
+    }
+end
+
+local function compactBooks(books)
+    local compact = {}
+    for book_index = 1, #(books or {}) do
+        local book = books[book_index]
+        compact[book_index] = {
+            name = book.name or "",
+            author = book.author or "",
+            intro = book.intro or "",
+            kind = book.kind or "",
+            latestChapter = book.latestChapter or "",
+            latestChapterTitle = book.latestChapterTitle or "",
+            bookUrl = book.bookUrl or "",
+            coverUrl = book.coverUrl or "",
+            wordCount = book.wordCount or "",
+            origin = book.origin or "",
+            originName = book.originName or "",
+            originOrder = book.originOrder or 0,
+            type = book.type or 0,
+        }
+    end
+    return compact
+end
+
+local function compactUnsupported(items)
+    local compact = {}
+    for item_index = 1, #(items or {}) do
+        local item = items[item_index]
+        compact[item_index] = {
+            source = item.source or "",
+            field = item.field or "",
+            kind = item.kind or "",
+            snippet = item.snippet or "",
+        }
+    end
+    return compact
+end
+
+local function compactResponse(response)
+    if type(response) ~= "table" then
+        return nil
+    end
+    return {
+        request_url = response.request_url,
+        final_url = response.final_url,
+        status = response.status,
+        bytes = response.bytes,
+        charset = response.charset,
+        charset_error = response.charset_error,
+    }
+end
+
+local function jsonString(value)
+    value = tostring(value or "")
+    value = value:gsub("\\", "\\\\")
+        :gsub("\"", "\\\"")
+        :gsub("\n", "\\n")
+        :gsub("\r", "\\r")
+        :gsub("\t", "\\t")
+    return "\"" .. value .. "\""
+end
+
+local function errorJSON(kind, message)
+    return '{"ok":false,"books":[],"unsupported":[],"error":{"kind":'
+        .. jsonString(kind) .. ',"message":' .. jsonString(message) .. "}}"
+end
+
+local function compactResult(result)
+    result = result or {}
+    return {
+        ok = result.ok == true,
+        books = compactBooks(result.books),
+        unsupported = compactUnsupported(result.unsupported),
+        error = result.error and {
+            kind = result.error.kind or "unknown",
+            message = result.error.message or tostring(result.error.kind or ""),
+        } or nil,
+        response = compactResponse(result.response),
+        group = result.group and {
+            title = result.group.title,
+            url = result.group.url,
+            page = result.group.page,
+        } or nil,
+    }
+end
+
+local function encodeResult(result)
+    local ok, encoded_or_error = pcall(rapidjson.encode, compactResult(result))
+    if ok and type(encoded_or_error) == "string" then
+        return encoded_or_error
+    end
+    local message = ok and "rapidjson.encode returned nil" or encoded_or_error
+    ok, encoded_or_error = pcall(rapidjson.encode, {
+        ok = false,
+        books = {},
+        unsupported = {},
+        error = {
+            kind = "serialization",
+            message = tostring(message),
+        },
+    })
+    if ok and type(encoded_or_error) == "string" then
+        return encoded_or_error
+    end
+    return errorJSON("serialization", message)
+end
+
+local function decodeResult(encoded)
+    if type(encoded) ~= "string" or encoded == "" then
+        return nil
+    end
+    local ok, decoded = pcall(rapidjson.decode, encoded)
+    if ok and type(decoded) == "table" then
+        return decoded
+    end
+    return {
+        ok = false,
+        books = {},
+        error = {
+            kind = "serialization",
+            message = tostring(decoded),
+        },
+    }
 end
 
 local function sourceTitle(source)
@@ -138,10 +302,7 @@ function Discover.showResults(plugin, source, group, page, result)
     closeWidget(plugin, "discover_results_menu")
 
     if not result or not result.ok then
-        local error_message = result and result.error
-            and (result.error.message or result.error.kind)
-            or _("Discover failed.")
-        showMessage(_("Discover failed: ") .. tostring(error_message))
+        showMessage(_("Discover failed: ") .. errorText(result))
         return
     end
 
@@ -181,12 +342,15 @@ function Discover.start(plugin, source, group, page)
     local request_id = plugin.discover_request_id
 
     Trapper:wrap(function()
-        local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local ExploreService = require("novel.service.explore")
-            return ExploreService.run(source, group, {
-                page = page,
-            })
-        end, _("Loading discovery... (tap to cancel)"))
+        local completed, encoded_result = Trapper:dismissableRunInSubprocess(function()
+            local ok, encoded_or_error = xpcall(function()
+                return encodeResult(runExplore(source, group, page))
+            end, debug.traceback)
+            if ok and type(encoded_or_error) == "string" then
+                return encoded_or_error
+            end
+            return errorJSON("exception", encoded_or_error)
+        end, _("Loading discovery... (tap to cancel)"), true)
 
         if not plugin.app or plugin.discover_request_id ~= request_id then
             return
@@ -194,6 +358,10 @@ function Discover.start(plugin, source, group, page)
         if not completed then
             showMessage(_("Discover canceled."))
             return
+        end
+        local result = decodeResult(encoded_result)
+        if not result then
+            result = runExplore(source, group, page)
         end
         Discover.showResults(plugin, source, group, page, result)
     end)

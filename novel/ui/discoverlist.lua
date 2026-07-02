@@ -26,6 +26,8 @@ local Screen = Device.screen
 
 local ROW_BASE_HEIGHT = 64
 local MIN_PER_PAGE = 4
+local RIGHT_METADATA_MAX_WIDTH_RATIO = 0.36
+local RIGHT_METADATA_MAX_LINES = 4
 local SCALE_BY_SIZE = Screen:scaleBySize(1000000) * (1 / 1000000)
 
 local DiscoverList = {}
@@ -48,11 +50,33 @@ local function clean(value)
     return value:match("^%s*(.-)%s*$") or ""
 end
 
-local function appendText(parts, value)
+local function appendUniqueText(parts, seen, value)
+    value = clean(value)
+    if value ~= "" and not seen[value] then
+        table.insert(parts, value)
+        seen[value] = true
+        return true
+    end
+    return false
+end
+
+local function appendUniqueTextLimit(parts, seen, value, limit)
+    if #parts >= limit then
+        return false
+    end
+    return appendUniqueText(parts, seen, value)
+end
+
+local function appendRightOnlyText(parts, seen, value, limit)
     value = clean(value)
     if value ~= "" then
-        table.insert(parts, value)
+        if #parts < limit and not seen[value] then
+            table.insert(parts, value)
+        end
+        seen[value] = true
+        return true
     end
+    return false
 end
 
 local function lineHeight(face)
@@ -103,27 +127,62 @@ local function bookTitle(entry)
     return title
 end
 
-local function bookMetadata(entry)
-    local book = entry.book or {}
-    local parts = {}
+local function latestChapter(book)
     local latest_chapter = clean(book.latestChapterTitle)
     if latest_chapter == "" then
-        latest_chapter = book.latestChapter
+        latest_chapter = clean(book.latestChapter)
     end
-    appendText(parts, book.kind)
-    appendText(parts, latest_chapter)
-    appendText(parts, book.wordCount)
-    return table.concat(parts, " / ")
+    return latest_chapter
 end
 
-local function bookAuthor(entry)
+local function sourceTitle(entry)
     local book = entry.book or {}
-    return clean(book.author)
+    local title = clean(book.originName)
+    if title == "" then
+        title = clean(entry.source_title)
+    end
+    if title == "" then
+        title = clean(book.origin)
+    end
+    return title
 end
 
-local function bookUpdateTime(entry)
+local function bookAuthor(book)
+    local author = clean(book.author)
+    author = author:gsub("^作者%s*[:：]%s*", "")
+    return clean(author)
+end
+
+local function bookSideMetadata(entry, limit)
     local book = entry.book or {}
-    return clean(book.updateTime)
+    limit = limit or 2
+    local seen = {}
+    local parts = {}
+    local right_only = {
+        book.updateTime,
+        book.wordCount,
+        book.kind,
+        sourceTitle(entry),
+    }
+
+    for field_index = 1, #right_only do
+        appendRightOnlyText(parts, seen, right_only[field_index], limit)
+    end
+    if #parts == 0 then
+        appendUniqueTextLimit(parts, seen, latestChapter(book), limit)
+    end
+
+    return parts, seen
+end
+
+local function bookMetadata(entry, side_seen)
+    local book = entry.book or {}
+    local seen = side_seen or {}
+    local parts = {}
+
+    appendUniqueText(parts, seen, bookAuthor(book))
+    appendUniqueText(parts, seen, latestChapter(book))
+    return table.concat(parts, "\n")
 end
 
 local function nativeListPerPage(available_height)
@@ -251,35 +310,40 @@ end
 function DiscoverListItem:buildBookWidget()
     local dimen = self:rowDimen()
     local fgcolor = self.entry.dim and Blitbuffer.COLOR_DARK_GRAY or nil
+    local metadata_fgcolor = self.entry.dim and Blitbuffer.COLOR_DARK_GRAY
+        or Blitbuffer.COLOR_GRAY_3
     local fontsize_dec_step = math.max(1, math.ceil(self:fontSize(100) * (1 / 100)))
     local fontsize_info = self:fontSize(14, 18)
     local right_face = Font:getFace("cfont", fontsize_info)
-    local author = bookAuthor(self.entry)
-    local update_time = bookUpdateTime(self.entry)
+    local right_line_height = lineHeight(right_face)
+    local side_lines, side_seen = bookSideMetadata(self.entry,
+        math.min(RIGHT_METADATA_MAX_LINES,
+            math.max(2, math.floor(dimen.h / right_line_height))))
 
     local wright
     local wright_width = 0
     local wright_right_padding = 0
-    if author ~= "" or update_time ~= "" then
-        local max_right_width = math.floor(dimen.w * 0.4)
-        wright_width = math.min(max_right_width, math.max(
-            textWidth(author, right_face),
-            textWidth(update_time, right_face)))
+    if #side_lines > 0 then
+        local max_right_width = math.floor(dimen.w * RIGHT_METADATA_MAX_WIDTH_RATIO)
+        for line_index = 1, #side_lines do
+            wright_width = math.max(wright_width,
+                textWidth(side_lines[line_index], right_face))
+        end
+        wright_width = math.min(max_right_width, wright_width)
         wright_width = math.max(wright_width, Screen:scaleBySize(20))
-        local right_line_height = lineHeight(right_face)
         local function rightLine(text)
             return textBox(BD.auto(text), right_face, wright_width, right_line_height, {
                 alignment = "right",
-                fgcolor = fgcolor,
+                fgcolor = metadata_fgcolor,
             })
+        end
+        local right_items = { align = "right" }
+        for line_index = 1, #side_lines do
+            table.insert(right_items, rightLine(side_lines[line_index]))
         end
         wright = CenterContainer:new{
             dimen = Geom:new{ w = wright_width, h = dimen.h },
-            VerticalGroup:new{
-                align = "right",
-                rightLine(author),
-                rightLine(update_time),
-            },
+            VerticalGroup:new(right_items),
         }
         wright_right_padding = Screen:scaleBySize(10)
     end
@@ -290,13 +354,13 @@ function DiscoverListItem:buildBookWidget()
         dimen.w - wmain_left_padding - wmain_right_padding
         - wright_width - wright_right_padding)
     local fontsize_title = self:fontSize(20, 24)
-    local fontsize_subtitle = self:fontSize(18, 22)
+    local fontsize_metadata = self:fontSize(16, 20)
     local title = BD.auto(bookTitle(self.entry))
-    local subtitle = bookMetadata(self.entry)
-    if subtitle ~= "" then
-        subtitle = BD.auto(subtitle)
+    local metadata = bookMetadata(self.entry, side_seen)
+    if metadata ~= "" then
+        metadata = BD.auto(metadata)
     end
-    local wtitle, wsubtitle
+    local wtitle, wmetadata
 
     local buildTitle = function(height)
         if wtitle then
@@ -314,58 +378,64 @@ function DiscoverListItem:buildBookWidget()
             fgcolor = fgcolor,
         }
     end
-    local buildSubtitle = function(height)
-        if wsubtitle then
-            wsubtitle:free(true)
+    local buildMetadata = function(height)
+        if wmetadata then
+            wmetadata:free(true)
         end
-        wsubtitle = TextBoxWidget:new{
-            text = subtitle,
-            face = Font:getFace("cfont", fontsize_subtitle),
+        wmetadata = TextBoxWidget:new{
+            text = metadata,
+            face = Font:getFace("cfont", fontsize_metadata),
             width = wmain_width,
             height = height,
             height_adjust = true,
             height_overflow_show_ellipsis = true,
             alignment = "left",
-            fgcolor = fgcolor,
+            fgcolor = metadata_fgcolor,
         }
     end
 
     while true do
         buildTitle()
         local text_height = wtitle:getSize().h
-        if subtitle ~= "" then
-            buildSubtitle()
-            text_height = text_height + wsubtitle:getSize().h
+        if metadata ~= "" then
+            buildMetadata()
+            text_height = text_height + wmetadata:getSize().h
         end
         if text_height <= dimen.h then
             break
         end
-        if fontsize_title <= 12 or fontsize_subtitle <= 10 then
-            local title_height = math.min(wtitle:getSize().h, dimen.h)
-            if subtitle ~= "" then
-                local subtitle_height = math.min(wsubtitle:getSize().h,
-                    math.max(0, dimen.h - title_height))
-                if title_height + subtitle_height > dimen.h then
-                    title_height = math.max(0, dimen.h - subtitle_height)
+        if fontsize_title <= 12 or fontsize_metadata <= 10 then
+            local title_height = wtitle:getSize().h
+            local title_line_height = wtitle:getLineHeight()
+            local title_min_height = title_line_height
+            local metadata_height = metadata ~= "" and wmetadata:getSize().h or 0
+            local metadata_line_height = metadata ~= "" and wmetadata:getLineHeight() or 0
+            local metadata_min_height = metadata_line_height
+
+            while title_height + metadata_height > dimen.h do
+                if metadata_height > metadata_min_height then
+                    metadata_height = metadata_height - metadata_line_height
+                elseif title_height > title_min_height then
+                    title_height = title_height - title_line_height
+                else
+                    break
                 end
-                if title_height < wtitle:getSize().h then
-                    buildTitle(title_height)
-                end
-                if subtitle_height < wsubtitle:getSize().h then
-                    buildSubtitle(subtitle_height)
-                end
-            elseif title_height < wtitle:getSize().h then
+            end
+            if title_height < wtitle:getSize().h then
                 buildTitle(title_height)
+            end
+            if metadata ~= "" and metadata_height < wmetadata:getSize().h then
+                buildMetadata(metadata_height)
             end
             break
         end
         fontsize_title = fontsize_title - fontsize_dec_step
-        fontsize_subtitle = fontsize_subtitle - fontsize_dec_step
+        fontsize_metadata = fontsize_metadata - fontsize_dec_step
     end
 
     local main_items = { wtitle }
-    if subtitle ~= "" then
-        table.insert(main_items, wsubtitle)
+    if metadata ~= "" then
+        table.insert(main_items, wmetadata)
     end
     local wmain = HorizontalGroup:new{
         HorizontalSpan:new{ width = wmain_left_padding },

@@ -190,6 +190,8 @@ local function parseBook(source, input_book, rule, response, options)
         "ruleBookInfo.lastChapter", rule.lastChapter)
     applyIfPresent(book, "latestChapterTitle", latest_chapter, true)
     book.latestChapter = book.latestChapterTitle
+    applyIfPresent(book, "updateTime", analyzeText(analyzer, unsupported, source,
+        "ruleBookInfo.updateTime", rule.updateTime), true)
 
     applyIfPresent(book, "intro", analyzeText(analyzer, unsupported, source,
         "ruleBookInfo.intro", rule.intro), true)

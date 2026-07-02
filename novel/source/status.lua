@@ -8,6 +8,7 @@ local js_patterns = {
 
 local deferred_fields = {
     loginUrl = "js",
+    loginUi = "ui",
     loginCheckJs = "js",
 }
 

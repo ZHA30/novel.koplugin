@@ -24,11 +24,23 @@ local VerticalSpan = require("ui/widget/verticalspan")
 
 local Screen = Device.screen
 
-local ROW_BASE_HEIGHT = 96
+local ROW_BASE_HEIGHT = 64
 local MIN_PER_PAGE = 4
-local MAX_PER_PAGE = 8
+local SCALE_BY_SIZE = Screen:scaleBySize(1000000) * (1 / 1000000)
 
 local DiscoverList = {}
+local book_info_manager
+
+local function bookInfoManager()
+    if book_info_manager then
+        return book_info_manager
+    end
+    local ok, manager = pcall(require, "bookinfomanager")
+    if ok then
+        book_info_manager = manager
+        return manager
+    end
+end
 
 local function clean(value)
     value = tostring(value or "")
@@ -41,12 +53,6 @@ local function appendText(parts, value)
     if value ~= "" then
         table.insert(parts, value)
     end
-end
-
-local function fontSizeForHeight(row_height, nominal, minimum, maximum)
-    local size = math.floor(nominal * row_height / Screen:scaleBySize(ROW_BASE_HEIGHT))
-    size = math.max(minimum, size)
-    return math.min(maximum, size)
 end
 
 local function lineHeight(face)
@@ -87,9 +93,9 @@ end
 
 local function bookTitle(entry)
     local book = entry.book or {}
-    local title = clean(entry.text)
+    local title = clean(book.name)
     if title == "" then
-        title = clean(book.name)
+        title = clean(entry.text)
     end
     if title == "" then
         title = clean(book.bookUrl)
@@ -100,41 +106,46 @@ end
 local function bookMetadata(entry)
     local book = entry.book or {}
     local parts = {}
-    appendText(parts, book.author)
-    appendText(parts, book.kind)
-    appendText(parts, book.originName)
-    if #parts == 0 then
-        appendText(parts, entry.source_title)
+    local latest_chapter = clean(book.latestChapterTitle)
+    if latest_chapter == "" then
+        latest_chapter = book.latestChapter
     end
+    appendText(parts, book.kind)
+    appendText(parts, latest_chapter)
+    appendText(parts, book.wordCount)
     return table.concat(parts, " / ")
 end
 
-local function bookIntro(entry)
+local function bookAuthor(entry)
     local book = entry.book or {}
-    local intro = clean(book.intro)
-    if intro == "" then
-        intro = clean(book.latestChapterTitle)
-    end
-    if intro == "" then
-        intro = clean(book.latestChapter)
-    end
-    return intro
+    return clean(book.author)
 end
 
-local function bookDetails(entry)
+local function bookUpdateTime(entry)
     local book = entry.book or {}
-    local top = clean(book.wordCount)
-    if top == "" then
-        top = clean(book.kind)
+    return clean(book.updateTime)
+end
+
+local function nativeListPerPage(available_height)
+    local manager = bookInfoManager()
+    if manager then
+        local ok, value = pcall(function()
+            return manager:getSetting("files_per_page")
+        end)
+        value = ok and tonumber(value) or nil
+        if value and value > 0 then
+            return value
+        end
     end
-    local bottom = clean(book.latestChapterTitle)
-    if bottom == "" then
-        bottom = clean(book.latestChapter)
+
+    local calculated = math.floor(available_height / SCALE_BY_SIZE / ROW_BASE_HEIGHT)
+    calculated = math.max(MIN_PER_PAGE, calculated)
+    if manager then
+        pcall(function()
+            manager:saveSetting("files_per_page", calculated)
+        end)
     end
-    if bottom == top then
-        bottom = ""
-    end
-    return top, bottom
+    return calculated
 end
 
 local DiscoverListItem = InputContainer:extend{
@@ -162,6 +173,7 @@ function DiscoverListItem:init()
         },
     }
 
+    self.underline_h = 1
     self._underline_container = UnderlineContainer:new{
         vertical_align = "top",
         padding = 0,
@@ -169,180 +181,232 @@ function DiscoverListItem:init()
             w = self.width,
             h = self.height,
         },
-        linesize = Size.line.thin,
+        linesize = self.underline_h,
     }
     self[1] = self._underline_container
     self:update()
 end
 
-function DiscoverListItem:contentDimen()
-    local pad = Screen:scaleBySize(10)
-    return pad, Geom:new{
-        w = math.max(Screen:scaleBySize(40), self.width - 2 * pad),
-        h = self.height - Size.line.thin,
+function DiscoverListItem:rowDimen()
+    return Geom:new{
+        w = self.width,
+        h = self.height - 2 * self.underline_h,
     }
 end
 
-function DiscoverListItem:buildActionWidget()
-    local pad, content_dimen = self:contentDimen()
-    local fgcolor = self.entry.dim and Blitbuffer.COLOR_DARK_GRAY or nil
-    local font_size = fontSizeForHeight(self.height, 20, 16, 24)
-    local info_size = fontSizeForHeight(self.height, 15, 12, 18)
-    local face = Font:getFace("cfont", font_size)
-    local info_face = Font:getFace("infont", info_size)
-    local mandatory = clean(self.entry.mandatory)
-    local right_width = 0
-    if mandatory ~= "" then
-        right_width = math.min(
-            math.floor(content_dimen.w * 0.3),
-            textWidth(mandatory, info_face) + Screen:scaleBySize(4))
+function DiscoverListItem:fontSize(nominal, maximum)
+    local dimen = self:rowDimen()
+    local font_size = math.floor(nominal * dimen.h * (1 / ROW_BASE_HEIGHT) / SCALE_BY_SIZE)
+    if maximum and font_size >= maximum then
+        return maximum
     end
-    local gap = right_width > 0 and Screen:scaleBySize(10) or 0
-    local text_height = lineHeight(face)
-    local info_height = lineHeight(info_face)
-    local left_width = math.max(Screen:scaleBySize(40), content_dimen.w - right_width - gap)
-    local item_text = textBox(
-        BD.auto(BaseMenu.getMenuText(self.entry)),
-        face,
-        left_width,
-        text_height,
-        {
-            bold = self.entry.bold == true,
-            fgcolor = fgcolor,
-        })
+    return font_size
+end
 
-    local content = OverlapGroup:new{
-        dimen = content_dimen:copy(),
+function DiscoverListItem:buildActionWidget()
+    local dimen = self:rowDimen()
+    local fgcolor = self.entry.dim and Blitbuffer.COLOR_DARK_GRAY or nil
+    local face = Font:getFace("cfont", self:fontSize(20, 24))
+    local info_face = Font:getFace("infont", self:fontSize(14, 18))
+    local mandatory = clean(self.entry.mandatory)
+    local wright = TextWidget:new{
+        text = mandatory,
+        face = info_face,
+        fgcolor = fgcolor,
+    }
+    local pad_width = Screen:scaleBySize(10)
+    local wleft_width = math.max(Screen:scaleBySize(40),
+        dimen.w - wright:getWidth() - 3 * pad_width)
+    local wleft = TextBoxWidget:new{
+        text = BD.auto(BaseMenu.getMenuText(self.entry)),
+        face = face,
+        width = wleft_width,
+        alignment = "left",
+        bold = self.entry.bold == true,
+        height = dimen.h,
+        height_adjust = true,
+        height_overflow_show_ellipsis = true,
+        fgcolor = fgcolor,
+    }
+
+    return OverlapGroup:new{
+        dimen = dimen:copy(),
         LeftContainer:new{
-            dimen = content_dimen:copy(),
-            CenterContainer:new{
-                dimen = Geom:new{ w = left_width, h = content_dimen.h },
-                item_text,
+            dimen = dimen:copy(),
+            HorizontalGroup:new{
+                HorizontalSpan:new{ width = pad_width },
+                wleft,
             },
         },
-    }
-    if mandatory ~= "" then
-        table.insert(content, RightContainer:new{
-            dimen = content_dimen:copy(),
-            CenterContainer:new{
-                dimen = Geom:new{ w = right_width, h = content_dimen.h },
-                textBox(BD.auto(mandatory), info_face, right_width, info_height, {
-                    alignment = "right",
-                    fgcolor = fgcolor,
-                }),
+        RightContainer:new{
+            dimen = dimen:copy(),
+            HorizontalGroup:new{
+                wright,
+                HorizontalSpan:new{ width = pad_width },
             },
-        })
-    end
-
-    return LeftContainer:new{
-        dimen = Geom:new{ w = self.width, h = content_dimen.h },
-        HorizontalGroup:new{
-            HorizontalSpan:new{ width = pad },
-            content,
-            HorizontalSpan:new{ width = pad },
         },
     }
 end
 
 function DiscoverListItem:buildBookWidget()
-    local pad, content_dimen = self:contentDimen()
+    local dimen = self:rowDimen()
     local fgcolor = self.entry.dim and Blitbuffer.COLOR_DARK_GRAY or nil
-    local title_face = Font:getFace("cfont", fontSizeForHeight(self.height, 21, 17, 24))
-    local meta_face = Font:getFace("cfont", fontSizeForHeight(self.height, 15, 12, 18))
-    local detail_face = Font:getFace("cfont", fontSizeForHeight(self.height, 14, 11, 16))
-    local right_face = Font:getFace("infont", fontSizeForHeight(self.height, 13, 11, 16))
-    local top_detail, bottom_detail = bookDetails(self.entry)
-    local right_width = 0
-    if top_detail ~= "" or bottom_detail ~= "" then
-        right_width = math.floor(content_dimen.w * 0.32)
-        local measured = math.max(
-            top_detail ~= "" and textWidth(top_detail, right_face) or 0,
-            bottom_detail ~= "" and textWidth(bottom_detail, right_face) or 0)
-        right_width = math.min(right_width, measured + Screen:scaleBySize(6))
-    end
-    local gap = right_width > 0 and Screen:scaleBySize(12) or 0
-    local main_width = math.max(Screen:scaleBySize(60), content_dimen.w - right_width - gap)
-    local title_height = lineHeight(title_face)
-    local meta_height = lineHeight(meta_face)
-    local detail_height = lineHeight(detail_face)
-    local top_padding = Screen:scaleBySize(5)
-    local metadata = bookMetadata(self.entry)
-    local intro = bookIntro(self.entry)
-    local main_items = {
-        VerticalSpan:new{ width = top_padding },
-        textBox(BD.auto(bookTitle(self.entry)), title_face, main_width, title_height, {
-            bold = true,
-            fgcolor = fgcolor,
-        }),
-    }
-    if metadata ~= "" then
-        table.insert(main_items, textBox(BD.auto(metadata), meta_face, main_width, meta_height, {
-            fgcolor = fgcolor,
-        }))
-    end
-    if intro ~= "" then
-        local used_height = top_padding + title_height + (metadata ~= "" and meta_height or 0)
-        local available_detail_height = math.max(detail_height, content_dimen.h - used_height)
-        table.insert(main_items, textBox(BD.auto(intro), detail_face, main_width,
-            math.min(available_detail_height, detail_height * 2), {
+    local fontsize_dec_step = math.max(1, math.ceil(self:fontSize(100) * (1 / 100)))
+    local fontsize_info = self:fontSize(14, 18)
+    local right_face = Font:getFace("cfont", fontsize_info)
+    local author = bookAuthor(self.entry)
+    local update_time = bookUpdateTime(self.entry)
+
+    local wright
+    local wright_width = 0
+    local wright_right_padding = 0
+    if author ~= "" or update_time ~= "" then
+        local max_right_width = math.floor(dimen.w * 0.4)
+        wright_width = math.min(max_right_width, math.max(
+            textWidth(author, right_face),
+            textWidth(update_time, right_face)))
+        wright_width = math.max(wright_width, Screen:scaleBySize(20))
+        local right_line_height = lineHeight(right_face)
+        local function rightLine(text)
+            return textBox(BD.auto(text), right_face, wright_width, right_line_height, {
+                alignment = "right",
                 fgcolor = fgcolor,
-            }))
+            })
+        end
+        wright = CenterContainer:new{
+            dimen = Geom:new{ w = wright_width, h = dimen.h },
+            VerticalGroup:new{
+                align = "right",
+                rightLine(author),
+                rightLine(update_time),
+            },
+        }
+        wright_right_padding = Screen:scaleBySize(10)
     end
 
-    local content = OverlapGroup:new{
-        dimen = content_dimen:copy(),
+    local wmain_left_padding = Screen:scaleBySize(10)
+    local wmain_right_padding = Screen:scaleBySize(10)
+    local wmain_width = math.max(Screen:scaleBySize(40),
+        dimen.w - wmain_left_padding - wmain_right_padding
+        - wright_width - wright_right_padding)
+    local fontsize_title = self:fontSize(20, 24)
+    local fontsize_subtitle = self:fontSize(18, 22)
+    local title = BD.auto(bookTitle(self.entry))
+    local subtitle = bookMetadata(self.entry)
+    if subtitle ~= "" then
+        subtitle = BD.auto(subtitle)
+    end
+    local wtitle, wsubtitle
+
+    local buildTitle = function(height)
+        if wtitle then
+            wtitle:free(true)
+        end
+        wtitle = TextBoxWidget:new{
+            text = title,
+            face = Font:getFace("cfont", fontsize_title),
+            width = wmain_width,
+            height = height,
+            height_adjust = true,
+            height_overflow_show_ellipsis = true,
+            alignment = "left",
+            bold = true,
+            fgcolor = fgcolor,
+        }
+    end
+    local buildSubtitle = function(height)
+        if wsubtitle then
+            wsubtitle:free(true)
+        end
+        wsubtitle = TextBoxWidget:new{
+            text = subtitle,
+            face = Font:getFace("cfont", fontsize_subtitle),
+            width = wmain_width,
+            height = height,
+            height_adjust = true,
+            height_overflow_show_ellipsis = true,
+            alignment = "left",
+            fgcolor = fgcolor,
+        }
+    end
+
+    while true do
+        buildTitle()
+        local text_height = wtitle:getSize().h
+        if subtitle ~= "" then
+            buildSubtitle()
+            text_height = text_height + wsubtitle:getSize().h
+        end
+        if text_height <= dimen.h then
+            break
+        end
+        if fontsize_title <= 12 or fontsize_subtitle <= 10 then
+            local title_height = math.min(wtitle:getSize().h, dimen.h)
+            if subtitle ~= "" then
+                local subtitle_height = math.min(wsubtitle:getSize().h,
+                    math.max(0, dimen.h - title_height))
+                if title_height + subtitle_height > dimen.h then
+                    title_height = math.max(0, dimen.h - subtitle_height)
+                end
+                if title_height < wtitle:getSize().h then
+                    buildTitle(title_height)
+                end
+                if subtitle_height < wsubtitle:getSize().h then
+                    buildSubtitle(subtitle_height)
+                end
+            elseif title_height < wtitle:getSize().h then
+                buildTitle(title_height)
+            end
+            break
+        end
+        fontsize_title = fontsize_title - fontsize_dec_step
+        fontsize_subtitle = fontsize_subtitle - fontsize_dec_step
+    end
+
+    local main_items = { wtitle }
+    if subtitle ~= "" then
+        table.insert(main_items, wsubtitle)
+    end
+    local wmain = HorizontalGroup:new{
+        HorizontalSpan:new{ width = wmain_left_padding },
         LeftContainer:new{
-            dimen = content_dimen:copy(),
+            dimen = dimen:copy(),
             VerticalGroup:new(main_items),
         },
     }
-
-    if right_width > 0 then
-        local right_items = {
-            align = "right",
-            VerticalSpan:new{ width = top_padding },
-        }
-        if top_detail ~= "" then
-            table.insert(right_items, textBox(BD.auto(top_detail), right_face, right_width,
-                lineHeight(right_face), {
-                    alignment = "right",
-                    fgcolor = fgcolor,
-                }))
-        end
-        if bottom_detail ~= "" then
-            table.insert(right_items, textBox(BD.auto(bottom_detail), right_face, right_width,
-                lineHeight(right_face), {
-                    alignment = "right",
-                    fgcolor = fgcolor,
-                }))
-        end
-        table.insert(content, RightContainer:new{
-            dimen = content_dimen:copy(),
+    local widget = OverlapGroup:new{
+        dimen = dimen:copy(),
+        LeftContainer:new{
+            dimen = dimen:copy(),
+            wmain,
+        },
+    }
+    if wright then
+        table.insert(widget, RightContainer:new{
+            dimen = dimen:copy(),
             HorizontalGroup:new{
-                VerticalGroup:new(right_items),
+                wright,
+                HorizontalSpan:new{ width = wright_right_padding },
             },
         })
     end
-
-    return LeftContainer:new{
-        dimen = Geom:new{ w = self.width, h = content_dimen.h },
-        HorizontalGroup:new{
-            HorizontalSpan:new{ width = pad },
-            content,
-            HorizontalSpan:new{ width = pad },
-        },
-    }
+    return widget
 end
 
 function DiscoverListItem:update()
     if self._underline_container[1] then
         self._underline_container[1]:free()
     end
+    local widget
     if self.entry.book then
-        self._underline_container[1] = self:buildBookWidget()
+        widget = self:buildBookWidget()
     else
-        self._underline_container[1] = self:buildActionWidget()
+        widget = self:buildActionWidget()
     end
+    self._underline_container[1] = VerticalGroup:new{
+        VerticalSpan:new{ width = self.underline_h },
+        widget,
+    }
 end
 
 function DiscoverListItem:onFocus()
@@ -376,10 +440,7 @@ function DiscoverList._recalculateDimen(self)
             + Size.padding.button
     end
     self.available_height = self.inner_dimen.h - top_height - bottom_height - Size.line.thin
-    local base_height = Screen:scaleBySize(ROW_BASE_HEIGHT)
-    self.perpage = self.items_per_page
-        or math.max(MIN_PER_PAGE, math.floor(self.available_height / base_height))
-    self.perpage = math.min(MAX_PER_PAGE, self.perpage)
+    self.perpage = nativeListPerPage(self.available_height)
     self.perpage = math.max(1, self.perpage)
     self.page_num = self:getPageNumber(#self.item_table)
     if self.page > self.page_num then
@@ -454,9 +515,43 @@ function DiscoverList.updateItems(self, select_number, no_recalculate_dimen)
     end)
 end
 
+function DiscoverList.canLoadNextSourcePage(self)
+    return self.load_next_page_callback ~= nil
+        and self.loading_next_page ~= true
+        and self.no_more_source_pages ~= true
+end
+
+function DiscoverList.updatePageInfo(self, select_number)
+    BaseMenu.updatePageInfo(self, select_number)
+    if #self.item_table > 0 and self.page_info_right_chev then
+        self.page_info_right_chev:enableDisable(
+            self.page < self.page_num or self:canLoadNextSourcePage())
+    end
+end
+
+function DiscoverList.onNextPage(self)
+    if self.page < self.page_num then
+        return BaseMenu.onNextPage(self)
+    end
+    if self:canLoadNextSourcePage() then
+        self.loading_next_page = true
+        self:updatePageInfo()
+        local ok = self.load_next_page_callback(self)
+        if ok == false then
+            self.loading_next_page = false
+            self:updatePageInfo()
+        end
+        return true
+    end
+    return true
+end
+
 function DiscoverList.new(_list, args)
     args = args or {}
     args.updateItems = args.updateItems or DiscoverList.updateItems
+    args.updatePageInfo = args.updatePageInfo or DiscoverList.updatePageInfo
+    args.onNextPage = args.onNextPage or DiscoverList.onNextPage
+    args.canLoadNextSourcePage = args.canLoadNextSourcePage or DiscoverList.canLoadNextSourcePage
     args._recalculateDimen = args._recalculateDimen or DiscoverList._recalculateDimen
     args._updateItemsBuildUI = args._updateItemsBuildUI or DiscoverList._updateItemsBuildUI
     return Menu:new(args)

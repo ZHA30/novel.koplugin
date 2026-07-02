@@ -173,13 +173,34 @@ function Content:fetchPage(source, url, options, unsupported)
     return response
 end
 
+local function applySourceRegex(source, rule, body, base_url, redirect_url, unsupported)
+    if isBlank(rule.sourceRegex) then
+        return body
+    end
+    local analyzer = Analyzer:new({
+        content = body,
+        base_url = base_url,
+        redirect_url = redirect_url,
+    })
+    local start_index = #analyzer.unsupported + 1
+    local filtered = analyzer:getString(rule.sourceRegex)
+    copyUnsupported(unsupported, source, "ruleContent.sourceRegex",
+        analyzer.unsupported, start_index)
+    if filtered ~= "" then
+        return filtered
+    end
+    return body
+end
+
 function Content.parsePage(source, book, chapter, rule, response, next_chapter_url)
     local debug, unsupported = {}, {}
     local final_url = response.final_url or response.url or response.request_url
         or chapter.url or ""
     local base_url = response.request_url or final_url
+    local body = applySourceRegex(source, rule, response.body or "",
+        base_url, final_url, unsupported)
     local analyzer = Analyzer:new({
-        content = response.body or "",
+        content = body,
         base_url = base_url,
         redirect_url = final_url,
     })
@@ -295,10 +316,6 @@ function Content:get(source, book, chapter, options)
     if not isBlank(source.ruleContent.webJs) then
         addUnsupported(unsupported, source, "ruleContent.webJs",
             "js", source.ruleContent.webJs)
-    end
-    if not isBlank(source.ruleContent.sourceRegex) then
-        addUnsupported(unsupported, source, "ruleContent.sourceRegex",
-            "regex", source.ruleContent.sourceRegex)
     end
 
     local first_url = initialChapterUrl(source, book, chapter)

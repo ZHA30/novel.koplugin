@@ -78,6 +78,7 @@ local function compactBooks(books)
             kind = book.kind or "",
             latestChapter = book.latestChapter or "",
             latestChapterTitle = book.latestChapterTitle or "",
+            updateTime = book.updateTime or "",
             bookUrl = book.bookUrl or "",
             coverUrl = book.coverUrl or "",
             wordCount = book.wordCount or "",
@@ -198,6 +199,16 @@ local function sourceTitle(source)
     return source.bookSourceUrl
 end
 
+local function resultTitle(group, first_page, last_page)
+    local title = group.title or _("Discover")
+    first_page = tonumber(first_page) or tonumber(last_page) or 1
+    last_page = tonumber(last_page) or first_page
+    if first_page ~= last_page then
+        return title .. " (" .. tostring(first_page) .. "-" .. tostring(last_page) .. ")"
+    end
+    return title .. " (" .. tostring(last_page) .. ")"
+end
+
 local function isDiscoverable(source)
     return source.enabled ~= false
         and source.enabledExplore ~= false
@@ -238,6 +249,31 @@ local function showUnsupported(items)
     showMessage(table.concat(lines, "\n\n"))
 end
 
+local function buildBookItem(plugin, source, book)
+    return {
+        text = book.name,
+        book = book,
+        source_title = sourceTitle(source),
+        callback = function()
+            Detail.show(plugin, source, book)
+        end,
+    }
+end
+
+local function appendBookItems(item_table, plugin, source, books)
+    for book_index = 1, #(books or {}) do
+        table.insert(item_table, buildBookItem(plugin, source, books[book_index]))
+    end
+end
+
+local function removeEmptyMarker(item_table)
+    for item_index = #item_table, 1, -1 do
+        if item_table[item_index].discover_empty_marker then
+            table.remove(item_table, item_index)
+        end
+    end
+end
+
 function Discover.close(plugin)
     invalidate(plugin)
     closeWidget(plugin, "discover_group_menu")
@@ -245,15 +281,8 @@ function Discover.close(plugin)
     Detail.close(plugin)
 end
 
-local function buildResultItems(plugin, source, group, page, result)
-    local item_table = {
-        {
-            text = _("Next page"),
-            callback = function()
-                Discover.start(plugin, source, group, page + 1)
-            end,
-        },
-    }
+local function buildResultItems(plugin, source, result)
+    local item_table = {}
 
     if result.unsupported and #result.unsupported > 0 then
         table.insert(item_table, {
@@ -264,8 +293,6 @@ local function buildResultItems(plugin, source, group, page, result)
             end,
             separator = true,
         })
-    else
-        item_table[1].separator = true
     end
 
     if not result.books or #result.books == 0 then
@@ -273,22 +300,100 @@ local function buildResultItems(plugin, source, group, page, result)
             text = _("No results."),
             select_enabled = false,
             dim = true,
+            discover_empty_marker = true,
         })
         return item_table
     end
 
-    for book_index = 1, #result.books do
-        local book = result.books[book_index]
-        table.insert(item_table, {
-            text = book.name,
-            book = book,
-            source_title = sourceTitle(source),
-            callback = function()
-                Detail.show(plugin, source, book)
-            end,
-        })
-    end
+    appendBookItems(item_table, plugin, source, result.books)
     return item_table
+end
+
+function Discover.loadNextPage(plugin, results_menu)
+    if not plugin.app
+        or not results_menu
+        or plugin.discover_results_menu ~= results_menu
+        or not UIManager:isWidgetShown(results_menu) then
+        if results_menu then
+            results_menu.loading_next_page = false
+        end
+        return false
+    end
+
+    local source = results_menu.discover_source
+    local group = results_menu.discover_group
+    local next_page = (tonumber(results_menu.discover_source_page) or 1) + 1
+    if not source or not group then
+        results_menu.loading_next_page = false
+        results_menu:updatePageInfo()
+        return false
+    end
+
+    if NetworkMgr:willRerunWhenOnline(function()
+        Discover.loadNextPage(plugin, results_menu)
+    end) then
+        results_menu.loading_next_page = false
+        results_menu:updatePageInfo()
+        return false
+    end
+
+    results_menu.loading_next_page = true
+    results_menu:updatePageInfo()
+
+    invalidate(plugin)
+    local request_id = plugin.discover_request_id
+
+    Trapper:wrap(function()
+        local completed, encoded_result = Trapper:dismissableRunInSubprocess(function()
+            local ok, encoded_or_error = xpcall(function()
+                return encodeResult(runExplore(source, group, next_page))
+            end, debug.traceback)
+            if ok and type(encoded_or_error) == "string" then
+                return encoded_or_error
+            end
+            return errorJSON("exception", encoded_or_error)
+        end, _("Loading discovery... (tap to cancel)"), true)
+
+        if not plugin.app
+            or plugin.discover_request_id ~= request_id
+            or plugin.discover_results_menu ~= results_menu
+            or not UIManager:isWidgetShown(results_menu) then
+            return
+        end
+
+        results_menu.loading_next_page = false
+        if not completed then
+            results_menu:updatePageInfo()
+            showMessage(_("Discover canceled."))
+            return
+        end
+
+        local result = decodeResult(encoded_result)
+        if not result then
+            result = runExplore(source, group, next_page)
+        end
+        if not result or not result.ok then
+            results_menu:updatePageInfo()
+            showMessage(_("Discover failed: ") .. errorText(result))
+            return
+        end
+        if not result.books or #result.books == 0 then
+            results_menu.no_more_source_pages = true
+            results_menu:updatePageInfo()
+            showMessage(_("No more results."))
+            return
+        end
+
+        removeEmptyMarker(results_menu.item_table)
+        local first_new_index = #results_menu.item_table + 1
+        appendBookItems(results_menu.item_table, plugin, source, result.books)
+        results_menu.discover_source_page = next_page
+        results_menu:switchItemTable(
+            resultTitle(group, results_menu.discover_first_source_page, next_page),
+            results_menu.item_table,
+            first_new_index)
+    end)
+    return true
 end
 
 function Discover.showResults(plugin, source, group, page, result)
@@ -299,21 +404,27 @@ function Discover.showResults(plugin, source, group, page, result)
         return
     end
 
-    local title = (group.title or _("Discover")) .. " (" .. tostring(page) .. ")"
     local results_menu
     results_menu = DiscoverList:new{
-        title = title,
-        item_table = buildResultItems(plugin, source, group, page, result),
+        title = resultTitle(group, page, page),
+        item_table = buildResultItems(plugin, source, result),
         covers_fullscreen = true,
         is_borderless = true,
         is_popout = false,
         title_bar_fm_style = true,
+        load_next_page_callback = function(menu)
+            return Discover.loadNextPage(plugin, menu)
+        end,
         close_callback = function()
             if plugin.discover_results_menu == results_menu then
                 plugin.discover_results_menu = nil
             end
         end,
     }
+    results_menu.discover_source = source
+    results_menu.discover_group = group
+    results_menu.discover_first_source_page = page
+    results_menu.discover_source_page = page
     plugin.discover_results_menu = results_menu
     UIManager:show(results_menu)
 end

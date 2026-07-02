@@ -136,6 +136,8 @@ local function parseBook(analyzer, unsupported, source, rule, prefix, item, fina
         kind = analyzeList(analyzer, unsupported, source, prefix .. ".kind", rule.kind, item),
         latestChapter = latest_chapter,
         latestChapterTitle = latest_chapter,
+        updateTime = analyzeString(analyzer, unsupported, source,
+            prefix .. ".updateTime", rule.updateTime, item),
         bookUrl = book_url,
         coverUrl = analyzeUrl(analyzer, unsupported, source, prefix .. ".coverUrl", rule.coverUrl, item),
         wordCount = analyzeString(analyzer, unsupported, source, prefix .. ".wordCount", rule.wordCount, item),

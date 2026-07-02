@@ -48,6 +48,9 @@ local function detailText(book)
     if book.latestChapterTitle and book.latestChapterTitle ~= "" then
         table.insert(lines, _("Latest chapter: ") .. book.latestChapterTitle)
     end
+    if book.updateTime and book.updateTime ~= "" then
+        table.insert(lines, _("Update time: ") .. book.updateTime)
+    end
     if book.wordCount and book.wordCount ~= "" then
         table.insert(lines, _("Word count: ") .. book.wordCount)
     end

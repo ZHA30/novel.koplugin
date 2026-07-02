@@ -1,7 +1,6 @@
 local _ = require("novel.i18n")
 local BookshelfService = require("novel.service.bookshelf")
 local InfoMessage = require("ui/widget/infomessage")
-local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local TextViewer = require("ui/widget/textviewer")
 local Toc = require("novel.ui.toc")
@@ -22,13 +21,14 @@ local function invalidate(plugin)
     plugin.detail_request_id = (plugin.detail_request_id or 0) + 1
 end
 
-local function showError(message)
+local function showMessage(message)
     UIManager:show(InfoMessage:new{
         text = message,
     })
 end
 
 local function bookTitle(book)
+    book = book or {}
     if book.name and book.name ~= "" then
         return book.name
     end
@@ -36,6 +36,7 @@ local function bookTitle(book)
 end
 
 local function detailText(book)
+    book = book or {}
     local lines = {
         bookTitle(book),
     }
@@ -68,30 +69,6 @@ local function detailText(book)
     return table.concat(lines, "\n")
 end
 
-function Detail.close(plugin)
-    invalidate(plugin)
-    closeWidget(plugin, "detail_menu")
-    closeWidget(plugin, "detail_viewer")
-    Toc.close(plugin)
-end
-
-local function showDetailViewer(plugin, book)
-    closeWidget(plugin, "detail_viewer")
-    local viewer
-    viewer = TextViewer:new{
-        title = bookTitle(book),
-        text = detailText(book),
-        text_type = "book_info",
-        close_callback = function()
-            if plugin.detail_viewer == viewer then
-                plugin.detail_viewer = nil
-            end
-        end,
-    }
-    plugin.detail_viewer = viewer
-    UIManager:show(viewer)
-end
-
 local function unsupportedText(result)
     local lines = {}
     for item_index = 1, #(result.unsupported or {}) do
@@ -106,76 +83,101 @@ local function unsupportedText(result)
     return table.concat(lines, "\n\n")
 end
 
-local function buildItems(plugin, source, book, result)
+local function showUnsupported(result)
+    showMessage(unsupportedText(result))
+end
+
+local function buildButtons(plugin, source, result)
+    local book = result.book or {}
     local bookshelf = plugin.app and plugin.app:getBookshelfService()
         or BookshelfService:new()
     local in_bookshelf = bookshelf:has(source, book)
-    local item_table = {
+    local buttons = {
         {
-            text = _("Book info"),
-            callback = function()
-                showDetailViewer(plugin, book)
-            end,
-        },
-        {
-            text = _("Chapters"),
-            callback = function()
-                Toc.show(plugin, source, book)
-            end,
+            {
+                text = _("Chapters"),
+                callback = function()
+                    Toc.show(plugin, source, book)
+                end,
+            },
+            {
+                text = in_bookshelf
+                    and _("Update bookshelf info")
+                    or _("Add to bookshelf"),
+                callback = function()
+                    local updated_record, err = bookshelf:add(source, book)
+                    if updated_record then
+                        result.book = updated_record.book or book
+                        Detail.showLoaded(plugin, source, result)
+                        showMessage(in_bookshelf
+                            and _("Bookshelf info updated.")
+                            or _("Added to bookshelf."))
+                    else
+                        showMessage(in_bookshelf
+                            and (_("Update bookshelf failed: ") .. tostring(err))
+                            or (_("Add to bookshelf failed: ") .. tostring(err)))
+                    end
+                end,
+            },
         },
     }
 
     if in_bookshelf then
-        table.insert(item_table, {
-            text = _("Update bookshelf info"),
-            callback = function()
-                local updated_record, err = bookshelf:add(source, book)
-                UIManager:show(InfoMessage:new{
-                    text = updated_record
-                        and _("Bookshelf info updated.")
-                        or (_("Update bookshelf failed: ") .. tostring(err)),
-                })
-                Detail.showLoaded(plugin, source, result)
-            end,
-        })
-        table.insert(item_table, {
+        table.insert(buttons, {{
             text = _("Remove from bookshelf"),
             callback = function()
                 bookshelf:remove(source, book)
-                UIManager:show(InfoMessage:new{
-                    text = _("Removed from bookshelf."),
-                })
                 Detail.showLoaded(plugin, source, result)
+                showMessage(_("Removed from bookshelf."))
             end,
-        })
-    else
-        table.insert(item_table, {
-            text = _("Add to bookshelf"),
-            callback = function()
-                local added_record, err = bookshelf:add(source, book)
-                UIManager:show(InfoMessage:new{
-                    text = added_record
-                        and _("Added to bookshelf.")
-                        or (_("Add to bookshelf failed: ") .. tostring(err)),
-                })
-                Detail.showLoaded(plugin, source, result)
-            end,
-        })
+        }})
     end
 
     if result.unsupported and #result.unsupported > 0 then
-        table.insert(item_table, {
-            text = _("Unsupported rules"),
-            mandatory = tostring(#result.unsupported),
+        table.insert(buttons, {{
+            text = _("Unsupported rules") .. " (" .. tostring(#result.unsupported) .. ")",
             callback = function()
-                UIManager:show(InfoMessage:new{
-                    text = unsupportedText(result),
-                })
+                showUnsupported(result)
             end,
-        })
+        }})
     end
 
-    return item_table
+    table.insert(buttons, {{
+        text = _("Close"),
+        callback = function()
+            if plugin.detail_viewer then
+                plugin.detail_viewer:onClose()
+            end
+        end,
+    }})
+
+    return buttons
+end
+
+local function showDetailViewer(plugin, source, result)
+    local book = result.book or {}
+    closeWidget(plugin, "detail_viewer")
+    local viewer
+    viewer = TextViewer:new{
+        title = bookTitle(book),
+        text = detailText(book),
+        text_type = "book_info",
+        buttons_table = buildButtons(plugin, source, result),
+        close_callback = function()
+            if plugin.detail_viewer == viewer then
+                plugin.detail_viewer = nil
+            end
+        end,
+    }
+    plugin.detail_viewer = viewer
+    UIManager:show(viewer)
+end
+
+function Detail.close(plugin)
+    invalidate(plugin)
+    closeWidget(plugin, "detail_menu")
+    closeWidget(plugin, "detail_viewer")
+    Toc.close(plugin)
 end
 
 function Detail.showLoaded(plugin, source, result)
@@ -186,33 +188,18 @@ function Detail.showLoaded(plugin, source, result)
         local error_message = result and result.error
             and (result.error.message or result.error.kind)
             or _("Detail failed.")
-        showError(_("Detail failed: ") .. tostring(error_message))
+        showMessage(_("Detail failed: ") .. tostring(error_message))
         return
     end
 
-    local book = result.book
-    local detail_menu
-    detail_menu = Menu:new{
-        title = bookTitle(book),
-        item_table = buildItems(plugin, source, book, result),
-        covers_fullscreen = true,
-        is_borderless = true,
-        is_popout = false,
-        title_bar_fm_style = true,
-        close_callback = function()
-            if plugin.detail_menu == detail_menu then
-                plugin.detail_menu = nil
-            end
-        end,
-    }
-    plugin.detail_menu = detail_menu
-    UIManager:show(detail_menu)
+    showDetailViewer(plugin, source, result)
 end
 
 function Detail.show(plugin, source, book)
     if not plugin.app then
         return
     end
+    book = book or {}
     local has_info_html = book.infoHtml ~= nil and book.infoHtml ~= ""
     if not has_info_html and NetworkMgr:willRerunWhenOnline(function()
         Detail.show(plugin, source, book)
@@ -233,7 +220,7 @@ function Detail.show(plugin, source, book)
             return
         end
         if not completed then
-            showError(_("Detail loading canceled."))
+            showMessage(_("Detail loading canceled."))
             return
         end
         Detail.showLoaded(plugin, source, result)

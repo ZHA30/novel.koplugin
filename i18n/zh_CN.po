@@ -107,6 +107,39 @@ msgstr "已加入书架。"
 msgid "Add to bookshelf failed: "
 msgstr "加入书架失败："
 
+msgid "Close"
+msgstr "关闭"
+
+msgid "Unsupported rules"
+msgstr "不支持的规则"
+
+msgid "Author: "
+msgstr "作者："
+
+msgid "Kind: "
+msgstr "分类："
+
+msgid "Latest chapter: "
+msgstr "最新章节："
+
+msgid "Update time: "
+msgstr "更新时间："
+
+msgid "Word count: "
+msgstr "字数："
+
+msgid "Detail failed."
+msgstr "详情加载失败。"
+
+msgid "Detail failed: "
+msgstr "详情加载失败："
+
+msgid "Loading details... (tap to cancel)"
+msgstr "正在加载详情……（点击取消）"
+
+msgid "Detail loading canceled."
+msgstr "详情加载已取消。"
+
 msgid "Next page"
 msgstr "下一页"
 

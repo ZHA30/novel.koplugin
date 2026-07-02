@@ -1,4 +1,5 @@
 local HtmlParser = require("htmlparser")
+local HtmlFormat = require("novel.support.htmlformat")
 local Split = require("novel.rule.split")
 
 local HtmlRule = {}
@@ -46,9 +47,9 @@ local function nodeText(node)
         return nil
     end
     if node.textonly then
-        return trim(node:textonly():gsub("%s+", " "))
+        return trim(HtmlFormat.decodeEntities(node:textonly()):gsub("%s+", " "))
     end
-    return trim(tostring(node))
+    return trim(HtmlFormat.decodeEntities(tostring(node)))
 end
 
 local function nodeHtml(node)
@@ -86,7 +87,7 @@ local function extractNode(node, getter)
 
     local name = attrName(getter) or getter
     if node and node.attributes then
-        return node.attributes[name]
+        return HtmlFormat.attribute(node.attributes[name])
     end
 end
 

@@ -1,4 +1,5 @@
 local HtmlRule = require("novel.rule.html")
+local HtmlFormat = require("novel.support.htmlformat")
 local JsonRule = require("novel.rule.json")
 local Regex = require("novel.rule.regex")
 local Split = require("novel.rule.split")
@@ -222,8 +223,9 @@ end
 function Analyzer:absoluteValues(values)
     local result, seen = {}, {}
     for index = 1, #values do
+        local value = HtmlFormat.attribute(values[index])
         local absolute = Url.absolute(self.redirect_url ~= "" and self.redirect_url or self.base_url,
-            values[index])
+            value)
         if absolute ~= "" and not seen[absolute] then
             seen[absolute] = true
             table.insert(result, absolute)
@@ -245,6 +247,7 @@ function Analyzer:getString(rule_text, content, is_url)
     local result = self:evaluate(rule_text, content, "string")
     local value = asString(result)
     if is_url then
+        value = HtmlFormat.attribute(value)
         if value == "" then
             return self.base_url
         end

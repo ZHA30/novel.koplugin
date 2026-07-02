@@ -10,6 +10,7 @@ local rapidjson = require("rapidjson")
 local Size = require("ui/size")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
+local Url = require("novel.net.url")
 
 local Discover = {}
 
@@ -283,10 +284,47 @@ local function buildBookItem(plugin, source, book)
     }
 end
 
-local function appendBookItems(item_table, plugin, source, books)
-    for book_index = 1, #(books or {}) do
-        table.insert(item_table, buildBookItem(plugin, source, books[book_index]))
+local function bookKey(book)
+    book = book or {}
+    local book_url = tostring(book.bookUrl or "")
+    if book_url ~= "" then
+        return book_url
     end
+    local name = tostring(book.name or "")
+    if name == "" then
+        return nil
+    end
+    return name .. "\n" .. tostring(book.author or "")
+end
+
+local function existingBookKeys(item_table)
+    local keys = {}
+    for item_index = 1, #(item_table or {}) do
+        local item = item_table[item_index]
+        if item.book then
+            local key = bookKey(item.book)
+            if key then
+                keys[key] = true
+            end
+        end
+    end
+    return keys
+end
+
+local function appendBookItems(item_table, plugin, source, books, known_keys)
+    local appended = 0
+    for book_index = 1, #(books or {}) do
+        local book = books[book_index]
+        local key = known_keys and bookKey(book)
+        if not key or not known_keys[key] then
+            table.insert(item_table, buildBookItem(plugin, source, book))
+            appended = appended + 1
+            if known_keys and key then
+                known_keys[key] = true
+            end
+        end
+    end
+    return appended
 end
 
 local function removeEmptyMarker(item_table)
@@ -295,6 +333,44 @@ local function removeEmptyMarker(item_table)
             table.remove(item_table, item_index)
         end
     end
+end
+
+local function sortedFields(fields)
+    local parts = {}
+    if type(fields) ~= "table" then
+        return ""
+    end
+    for key, value in pairs(fields) do
+        table.insert(parts, tostring(key) .. "=" .. tostring(value or ""))
+    end
+    table.sort(parts)
+    return table.concat(parts, "&")
+end
+
+local function requestSignature(source, group, page)
+    if type(source) ~= "table" or type(group) ~= "table" or not group.url then
+        return nil
+    end
+    local spec = Url.parse(group.url, {
+        base_url = source.bookSourceUrl,
+        headers = source.header,
+        page = page,
+    })
+    return table.concat({
+        tostring(spec.method or "GET"),
+        tostring(spec.url or ""),
+        tostring(spec.body or ""),
+        sortedFields(spec.fields),
+    }, "\n")
+end
+
+local function canRequestNextPage(source, group, page)
+    page = tonumber(page) or 1
+    local current_signature = requestSignature(source, group, page)
+    local next_signature = requestSignature(source, group, page + 1)
+    return current_signature ~= nil
+        and next_signature ~= nil
+        and current_signature ~= next_signature
 end
 
 function Discover.close(plugin)
@@ -345,8 +421,15 @@ function Discover.loadNextPage(plugin, results_menu)
 
     local source = results_menu.discover_source
     local group = results_menu.discover_group
-    local next_page = (tonumber(results_menu.discover_source_page) or 1) + 1
+    local current_page = tonumber(results_menu.discover_source_page) or 1
+    local next_page = current_page + 1
     if not source or not group then
+        results_menu.loading_next_page = false
+        results_menu:updatePageInfo()
+        return false
+    end
+    if not canRequestNextPage(source, group, current_page) then
+        results_menu.no_more_source_pages = true
         results_menu.loading_next_page = false
         results_menu:updatePageInfo()
         return false
@@ -409,8 +492,16 @@ function Discover.loadNextPage(plugin, results_menu)
 
         removeEmptyMarker(results_menu.item_table)
         local first_new_index = #results_menu.item_table + 1
-        appendBookItems(results_menu.item_table, plugin, source, result.books)
+        local appended = appendBookItems(results_menu.item_table, plugin, source,
+            result.books, existingBookKeys(results_menu.item_table))
+        if appended == 0 then
+            results_menu.no_more_source_pages = true
+            results_menu:updatePageInfo()
+            showMessage(_("No more results."))
+            return
+        end
         results_menu.discover_source_page = next_page
+        results_menu.no_more_source_pages = not canRequestNextPage(source, group, next_page)
         results_menu:switchItemTable(
             resultTitle(group, results_menu.discover_first_source_page, next_page),
             results_menu.item_table,
@@ -427,6 +518,7 @@ function Discover.showResults(plugin, source, group, page, result)
         return
     end
 
+    local no_more_source_pages = not canRequestNextPage(source, group, page)
     local results_menu
     results_menu = DiscoverList:new{
         title = resultTitle(group, page, page),
@@ -435,6 +527,7 @@ function Discover.showResults(plugin, source, group, page, result)
         is_borderless = true,
         is_popout = false,
         title_bar_fm_style = true,
+        no_more_source_pages = no_more_source_pages,
         load_next_page_callback = function(menu)
             return Discover.loadNextPage(plugin, menu)
         end,

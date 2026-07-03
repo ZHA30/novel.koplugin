@@ -5,8 +5,10 @@ local Discover = require("novel.ui.discover")
 local Icons = require("novel.icons")
 local InfoMessage = require("ui/widget/infomessage")
 local Menu = require("novel.ui.menu")
+local Reader = require("novel.ui.reader")
 local Size = require("ui/size")
 local Sources = require("novel.ui.sources")
+local Toc = require("novel.ui.toc")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 
@@ -20,13 +22,20 @@ local Novel = WidgetContainer:extend{
 function Novel:init()
     self.app = App:new{ plugin = self }
     self.app:init()
+    Reader.init(self)
 
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
     end
 end
 
+function Novel:onCloseDocument()
+    Reader.onCloseDocument(self)
+end
+
 function Novel:onCloseWidget()
+    Reader.close(self)
+    Toc.close(self)
     if self.novel_menu then
         local novel_menu = self.novel_menu
         self.novel_menu = nil
@@ -45,11 +54,20 @@ function Novel:onCloseWidget()
     end
 end
 
+function Novel:onReaderReady()
+    Reader.setup(self)
+end
+
 function Novel.deletePluginSettings()
     App.deleteStoredSettings()
 end
 
+function Novel:stopPlugin()
+    Reader.stopPlugin(self)
+end
+
 function Novel:addToMainMenu(menu_items)
+    Reader.addToMainMenu(self, menu_items)
     menu_items.novel_search = {
         text = _("Novel"),
         sorting_hint = "search",

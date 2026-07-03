@@ -256,9 +256,7 @@ local function resumeRecord(plugin, record)
         return
     end
     local chapter_position = current.chapter_position or 1
-    local chapters = {}
-    chapters[chapter_position] = current.chapter
-    Toc.showContent(plugin, source, record.book, chapters, chapter_position)
+    Toc.resume(plugin, source, record.book, chapter_position)
 end
 
 local function refreshRecord(plugin, record)

@@ -1,63 +1,17 @@
 local BookList = require("novel.service.booklist")
 local Cache = require("novel.storage.cache")
+local Context = require("novel.service.context")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
-local Url = require("novel.net.url")
 
 local Search = {}
 Search.__index = Search
 
-local function trim(value)
-    return tostring(value or ""):match("^%s*(.-)%s*$")
-end
-
-local function isBlank(value)
-    return value == nil or trim(value) == ""
-end
-
-local function sourceName(source)
-    if source and source.bookSourceName and source.bookSourceName ~= "" then
-        return source.bookSourceName
-    end
-    return source and source.bookSourceUrl or ""
-end
-
-local function addDebug(debug, event, data)
-    table.insert(debug, {
-        event = event,
-        data = data,
-    })
-end
-
-local function addError(kind, message, data)
-    return {
-        kind = kind,
-        message = message,
-        data = data,
-    }
-end
-
-local function copyUrlUnsupported(target, source, items)
-    for index = 1, #(items or {}) do
-        local item = items[index]
-        table.insert(target, {
-            source = sourceName(source),
-            field = item.field == "url" and "searchUrl" or item.field,
-            kind = item.kind or "unknown",
-            snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
-    end
-end
-
-local function responseSummary(response)
-    return {
-        request_url = response.request_url,
-        final_url = response.final_url or response.url,
-        status = response.status,
-        bytes = #(response.body or ""),
-        redirects = response.redirects or {},
-    }
-end
+local isBlank = Context.isBlank
+local addDebug = Context.addDebug
+local addError = Context.error
+local copyUrlUnsupported = Context.copyUrlUnsupported
+local responseSummary = Context.responseSummary
 
 local function cacheKey(source, spec, keyword, options)
     return Cache.makeKey("search", {
@@ -154,17 +108,11 @@ function Search:search(source, keyword, options)
         }
     end
 
-    local spec = Url.parse(source.searchUrl, {
-        base_url = source.bookSourceUrl,
-        headers = source.header,
+    local spec = Context.requestSpec(source, source.searchUrl, options, {
         key = keyword or "",
         page = options.page or 1,
     })
-    spec.timeout = options.timeout or spec.timeout
-    spec.total_timeout = options.total_timeout or spec.total_timeout
-        or (tonumber(source.respondTime) and tonumber(source.respondTime) / 1000)
-    spec.max_redirects = options.max_redirects or spec.max_redirects
-    copyUrlUnsupported(unsupported, source, spec.unsupported)
+    copyUrlUnsupported(unsupported, source, spec.unsupported, "searchUrl")
 
     addDebug(debug, "request", {
         url = spec.url,
@@ -188,45 +136,22 @@ function Search:search(source, keyword, options)
         return cached
     end
 
-    local token, wait_ms = self.throttle:acquire(source, source.concurrentRate)
-    if not token then
+    local response, request_err, failed_response = Context.execute(self, source, spec)
+    if not response then
+        if failed_response then
+            addDebug(debug, "response", responseSummary(failed_response))
+        end
         return {
             ok = false,
             books = {},
             debug = debug,
             unsupported = unsupported,
-            error = addError("throttle", "source request is rate limited", {
-                wait_ms = wait_ms,
-            }),
-        }
-    end
-
-    local ok, response = pcall(function()
-        return self.request.execute(spec)
-    end)
-    self.throttle:release(token)
-
-    if not ok then
-        return {
-            ok = false,
-            books = {},
-            debug = debug,
-            unsupported = unsupported,
-            error = addError("request", tostring(response)),
+            error = request_err,
+            response = failed_response and responseSummary(failed_response) or nil,
         }
     end
 
     addDebug(debug, "response", responseSummary(response))
-    if not response.ok then
-        return {
-            ok = false,
-            books = {},
-            debug = debug,
-            unsupported = unsupported,
-            error = response.error or addError("request", "request failed"),
-            response = responseSummary(response),
-        }
-    end
 
     local parsed = BookList.parse(source, source.ruleSearch, "ruleSearch",
         response)

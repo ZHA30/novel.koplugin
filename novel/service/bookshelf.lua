@@ -1,4 +1,5 @@
 local Book = require("novel.model.book")
+local Context = require("novel.service.context")
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
 
@@ -24,15 +25,10 @@ local function clone(value)
 end
 
 local function sourceUrl(source)
-    return source and source.bookSourceUrl or ""
+    return Context.sourceKey(source)
 end
 
-local function sourceName(source)
-    if source and source.bookSourceName and source.bookSourceName ~= "" then
-        return source.bookSourceName
-    end
-    return sourceUrl(source)
-end
+local sourceName = Context.sourceName
 
 local function bookUrl(book)
     return book and book.bookUrl or ""

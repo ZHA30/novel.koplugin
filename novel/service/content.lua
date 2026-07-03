@@ -1,6 +1,8 @@
 local Analyzer = require("novel.rule.analyzer")
 local Cache = require("novel.storage.cache")
-local HtmlFormat = require("novel.support.htmlformat")
+local ContentRule = require("novel.rule.content")
+local Context = require("novel.service.context")
+local Fields = require("novel.service.fields")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 local Url = require("novel.net.url")
@@ -10,97 +12,14 @@ Content.__index = Content
 
 local DEFAULT_MAX_PAGES = 20
 
-local function trim(value)
-    return tostring(value or ""):match("^%s*(.-)%s*$")
-end
-
-local function isBlank(value)
-    return value == nil or trim(value) == ""
-end
-
-local function contentIsHtml(rule)
-    rule = tostring(rule or ""):lower()
-    return rule:match("@%s*html") ~= nil
-        or rule:match("@%s*innerhtml") ~= nil
-        or rule:match("@%s*outerhtml") ~= nil
-end
-
-local function sourceName(source)
-    if source and source.bookSourceName and source.bookSourceName ~= "" then
-        return source.bookSourceName
-    end
-    return source and source.bookSourceUrl or ""
-end
-
-local function addDebug(debug, event, data)
-    table.insert(debug, {
-        event = event,
-        data = data,
-    })
-end
-
-local function addError(kind, message, data)
-    return {
-        kind = kind,
-        message = message,
-        data = data,
-    }
-end
-
-local function responseSummary(response)
-    return {
-        request_url = response.request_url,
-        final_url = response.final_url or response.url,
-        status = response.status,
-        bytes = #(response.body or ""),
-        redirects = response.redirects or {},
-    }
-end
-
-local function copyUnsupported(target, source, field, items, start_index)
-    for index = start_index, #items do
-        local item = items[index]
-        table.insert(target, {
-            source = sourceName(source),
-            field = field or item.field or "rule",
-            kind = item.kind or "unknown",
-            snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
-    end
-end
-
-local function copyUrlUnsupported(target, source, items, field)
-    for index = 1, #(items or {}) do
-        local item = items[index]
-        table.insert(target, {
-            source = sourceName(source),
-            field = item.field == "url" and field or item.field,
-            kind = item.kind or "unknown",
-            snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
-    end
-end
-
-local function addUnsupported(target, source, field, kind, snippet)
-    table.insert(target, {
-        source = sourceName(source),
-        field = field,
-        kind = kind,
-        snippet = tostring(snippet or ""):sub(1, 120),
-    })
-end
-
-local function requestSpec(source, url, options)
-    local spec = Url.parse(url, {
-        base_url = source.bookSourceUrl,
-        headers = source.header,
-    })
-    spec.timeout = options.timeout or spec.timeout
-    spec.total_timeout = options.total_timeout or spec.total_timeout
-        or (tonumber(source.respondTime) and tonumber(source.respondTime) / 1000)
-    spec.max_redirects = options.max_redirects or spec.max_redirects
-    return spec
-end
+local isBlank = Context.isBlank
+local addDebug = Context.addDebug
+local addError = Context.error
+local responseSummary = Context.responseSummary
+local copyUnsupported = Context.copyUnsupported
+local copyUrlUnsupported = Context.copyUrlUnsupported
+local addUnsupported = Context.addUnsupported
+local requestSpec = Context.requestSpec
 
 local function enqueue(queue, queued, visited, url)
     if url and url ~= "" and not visited[url] and not queued[url] then
@@ -159,25 +78,7 @@ function Content:fetchPage(source, url, options, unsupported)
         return nil, addError("url", spec.errors[1].error, spec.errors[1])
     end
 
-    local token, wait_ms = self.throttle:acquire(source, source.concurrentRate)
-    if not token then
-        return nil, addError("throttle", "source request is rate limited", {
-            wait_ms = wait_ms,
-        })
-    end
-
-    local ok, response = pcall(function()
-        return self.request.execute(spec)
-    end)
-    self.throttle:release(token)
-
-    if not ok then
-        return nil, addError("request", tostring(response))
-    end
-    if not response.ok then
-        return nil, response.error or addError("request", "request failed")
-    end
-    return response
+    return Context.execute(self, source, spec)
 end
 
 local function applySourceRegex(source, rule, body, base_url, redirect_url, unsupported)
@@ -218,17 +119,14 @@ function Content.parsePage(source, book, chapter, rule, response, next_chapter_u
     addDebug(debug, "parse_content", {
         rule = rule.content,
     })
-    local start_index = #analyzer.unsupported + 1
-    local raw_content = analyzer:getString(rule.content)
-    copyUnsupported(unsupported, source, "ruleContent.content",
-        analyzer.unsupported, start_index)
-    local is_html = contentIsHtml(rule.content)
-    local text = is_html and HtmlFormat.html(raw_content)
-        or HtmlFormat.text(raw_content)
+    local content_type = ContentRule.typeForRule(rule.content)
+    local raw_content = Fields.raw(analyzer, unsupported, source,
+        "ruleContent.content", rule.content)
+    local text = ContentRule.format(raw_content, content_type)
 
     local next_urls = {}
     if not isBlank(rule.nextContentUrl) then
-        start_index = #analyzer.unsupported + 1
+        local start_index = #analyzer.unsupported + 1
         local values = analyzer:getStringList(rule.nextContentUrl, nil, true)
         copyUnsupported(unsupported, source, "ruleContent.nextContentUrl",
             analyzer.unsupported, start_index)
@@ -244,7 +142,7 @@ function Content.parsePage(source, book, chapter, rule, response, next_chapter_u
 
     return {
         text = text,
-        content_type = is_html and "html" or "text",
+        content_type = content_type,
         next_urls = next_urls,
         debug = debug,
         unsupported = unsupported,
@@ -264,10 +162,7 @@ local function applyReplaceRule(source, rule, text, unsupported, content_type)
     copyUnsupported(unsupported, source, "ruleContent.replaceRegex",
         analyzer.unsupported, start_index)
     if replaced ~= "" then
-        if content_type == "html" then
-            return HtmlFormat.html(replaced)
-        end
-        return HtmlFormat.text(replaced)
+        return ContentRule.format(replaced, content_type)
     end
     return text
 end
@@ -356,8 +251,7 @@ function Content:get(source, book, chapter, options)
 
     local queue, queued, visited = {}, {}, {}
     local parts = {}
-    local content_type = contentIsHtml(source.ruleContent.content) and "html"
-        or "text"
+    local content_type = ContentRule.typeForRule(source.ruleContent.content)
     enqueue(queue, queued, visited, first_url)
     local max_pages = options.max_pages or DEFAULT_MAX_PAGES
 
@@ -407,7 +301,7 @@ function Content:get(source, book, chapter, options)
         })
     end
 
-    local text = table.concat(parts, content_type == "html" and "\n" or "\n\n")
+    local text = ContentRule.join(parts, content_type)
     text = applyReplaceRule(source, source.ruleContent, text, unsupported,
         content_type)
     if text == "" then

@@ -1,6 +1,7 @@
 local Analyzer = require("novel.rule.analyzer")
 local Book = require("novel.model.book")
-local HtmlFormat = require("novel.support.htmlformat")
+local Context = require("novel.service.context")
+local Fields = require("novel.service.fields")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 local Url = require("novel.net.url")
@@ -8,115 +9,14 @@ local Url = require("novel.net.url")
 local BookInfo = {}
 BookInfo.__index = BookInfo
 
-local function trim(value)
-    return tostring(value or ""):match("^%s*(.-)%s*$")
-end
-
-local function isBlank(value)
-    return value == nil or trim(value) == ""
-end
-
-local function sourceName(source)
-    if source and source.bookSourceName and source.bookSourceName ~= "" then
-        return source.bookSourceName
-    end
-    return source and source.bookSourceUrl or ""
-end
-
-local function sourceKey(source)
-    return source and source.bookSourceUrl or ""
-end
-
-local function addDebug(debug, event, data)
-    table.insert(debug, {
-        event = event,
-        data = data,
-    })
-end
-
-local function addError(kind, message, data)
-    return {
-        kind = kind,
-        message = message,
-        data = data,
-    }
-end
-
-local function responseSummary(response)
-    return {
-        request_url = response.request_url,
-        final_url = response.final_url or response.url,
-        status = response.status,
-        bytes = #(response.body or ""),
-        redirects = response.redirects or {},
-    }
-end
-
-local function copyUnsupported(target, source, field, items, start_index)
-    for index = start_index, #items do
-        local item = items[index]
-        table.insert(target, {
-            source = sourceName(source),
-            field = field or item.field or "rule",
-            kind = item.kind or "unknown",
-            snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
-    end
-end
-
-local function copyUrlUnsupported(target, source, items)
-    for index = 1, #(items or {}) do
-        local item = items[index]
-        table.insert(target, {
-            source = sourceName(source),
-            field = item.field == "url" and "bookUrl" or item.field,
-            kind = item.kind or "unknown",
-            snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
-    end
-end
-
-local function analyzeString(analyzer, unsupported, source, field, rule, content)
-    if isBlank(rule) then
-        return ""
-    end
-    local start_index = #analyzer.unsupported + 1
-    local value = analyzer:getString(rule, content)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-    return trim(value)
-end
-
-local function analyzeText(analyzer, unsupported, source, field, rule, content)
-    return HtmlFormat.text(analyzeString(analyzer, unsupported, source, field, rule, content))
-end
-
-local function analyzeUrl(analyzer, unsupported, source, field, rule, content)
-    if isBlank(rule) then
-        return ""
-    end
-    local start_index = #analyzer.unsupported + 1
-    local value = analyzer:getString(rule, content, true)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-    return trim(value)
-end
-
-local function analyzeList(analyzer, unsupported, source, field, rule, content)
-    if isBlank(rule) then
-        return ""
-    end
-    local start_index = #analyzer.unsupported + 1
-    local values = analyzer:getStringList(rule, content)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-
-    local output = {}
-    for index = 1, #values do
-        local value = HtmlFormat.text(values[index])
-        if value ~= "" then
-            table.insert(output, value)
-        end
-    end
-    return table.concat(output, ",")
-end
+local isBlank = Context.isBlank
+local sourceName = Context.sourceName
+local sourceKey = Context.sourceKey
+local addDebug = Context.addDebug
+local addError = Context.error
+local responseSummary = Context.responseSummary
+local copyUnsupported = Context.copyUnsupported
+local copyUrlUnsupported = Context.copyUrlUnsupported
 
 local function applyIfPresent(target, field, value, replace)
     if value ~= "" and (replace or isBlank(target[field])) then
@@ -128,7 +28,7 @@ local function allowsRename(analyzer, unsupported, source, rule, can_rename)
     if not can_rename or isBlank(rule.canReName) then
         return false
     end
-    local value = analyzeText(analyzer, unsupported, source,
+    local value = Fields.text(analyzer, unsupported, source,
         "ruleBookInfo.canReName", rule.canReName)
     if value == "" then
         return false
@@ -177,28 +77,28 @@ local function parseBook(source, input_book, rule, response, options)
 
     local can_rename = allowsRename(analyzer, unsupported, source, rule,
         options.can_rename == true)
-    applyIfPresent(book, "name", analyzeText(analyzer, unsupported, source,
+    applyIfPresent(book, "name", Fields.text(analyzer, unsupported, source,
         "ruleBookInfo.name", rule.name), can_rename)
-    applyIfPresent(book, "author", analyzeText(analyzer, unsupported, source,
+    applyIfPresent(book, "author", Fields.text(analyzer, unsupported, source,
         "ruleBookInfo.author", rule.author), can_rename)
-    applyIfPresent(book, "kind", analyzeList(analyzer, unsupported, source,
+    applyIfPresent(book, "kind", Fields.listText(analyzer, unsupported, source,
         "ruleBookInfo.kind", rule.kind), true)
-    applyIfPresent(book, "wordCount", analyzeText(analyzer, unsupported, source,
+    applyIfPresent(book, "wordCount", Fields.text(analyzer, unsupported, source,
         "ruleBookInfo.wordCount", rule.wordCount), true)
 
-    local latest_chapter = analyzeText(analyzer, unsupported, source,
+    local latest_chapter = Fields.text(analyzer, unsupported, source,
         "ruleBookInfo.lastChapter", rule.lastChapter)
     applyIfPresent(book, "latestChapterTitle", latest_chapter, true)
     book.latestChapter = book.latestChapterTitle
-    applyIfPresent(book, "updateTime", analyzeText(analyzer, unsupported, source,
+    applyIfPresent(book, "updateTime", Fields.text(analyzer, unsupported, source,
         "ruleBookInfo.updateTime", rule.updateTime), true)
 
-    applyIfPresent(book, "intro", analyzeText(analyzer, unsupported, source,
+    applyIfPresent(book, "intro", Fields.text(analyzer, unsupported, source,
         "ruleBookInfo.intro", rule.intro), true)
-    applyIfPresent(book, "coverUrl", analyzeUrl(analyzer, unsupported, source,
+    applyIfPresent(book, "coverUrl", Fields.url(analyzer, unsupported, source,
         "ruleBookInfo.coverUrl", rule.coverUrl), true)
 
-    local toc_url = analyzeUrl(analyzer, unsupported, source,
+    local toc_url = Fields.url(analyzer, unsupported, source,
         "ruleBookInfo.tocUrl", rule.tocUrl)
     if toc_url == "" then
         toc_url = base_url
@@ -288,15 +188,8 @@ function BookInfo:get(source, search_book, options)
         response = syntheticResponse(search_book)
         addDebug(debug, "response", responseSummary(response))
     else
-        local spec = Url.parse(search_book.bookUrl, {
-            base_url = source.bookSourceUrl,
-            headers = source.header,
-        })
-        spec.timeout = options.timeout or spec.timeout
-        spec.total_timeout = options.total_timeout or spec.total_timeout
-            or (tonumber(source.respondTime) and tonumber(source.respondTime) / 1000)
-        spec.max_redirects = options.max_redirects or spec.max_redirects
-        copyUrlUnsupported(unsupported, source, spec.unsupported)
+        local spec = Context.requestSpec(source, search_book.bookUrl, options)
+        copyUrlUnsupported(unsupported, source, spec.unsupported, "bookUrl")
 
         addDebug(debug, "request", {
             url = spec.url,
@@ -313,46 +206,23 @@ function BookInfo:get(source, search_book, options)
             }
         end
 
-        local token, wait_ms = self.throttle:acquire(source, source.concurrentRate)
-        if not token then
+        local request_response, request_err, failed_response = Context.execute(self, source, spec)
+        if not request_response then
+            if failed_response then
+                addDebug(debug, "response", responseSummary(failed_response))
+            end
             return {
                 ok = false,
                 book = nil,
                 debug = debug,
                 unsupported = unsupported,
-                error = addError("throttle", "source request is rate limited", {
-                    wait_ms = wait_ms,
-                }),
-            }
-        end
-
-        local ok, request_response = pcall(function()
-            return self.request.execute(spec)
-        end)
-        self.throttle:release(token)
-
-        if not ok then
-            return {
-                ok = false,
-                book = nil,
-                debug = debug,
-                unsupported = unsupported,
-                error = addError("request", tostring(request_response)),
+                error = request_err,
+                response = failed_response and responseSummary(failed_response) or nil,
             }
         end
 
         response = request_response
         addDebug(debug, "response", responseSummary(response))
-        if not response.ok then
-            return {
-                ok = false,
-                book = nil,
-                debug = debug,
-                unsupported = unsupported,
-                error = response.error or addError("request", "request failed"),
-                response = responseSummary(response),
-            }
-        end
     end
 
     local parsed = parseBook(source, search_book, source.ruleBookInfo,

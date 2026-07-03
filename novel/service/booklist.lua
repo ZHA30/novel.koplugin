@@ -1,107 +1,14 @@
 local Analyzer = require("novel.rule.analyzer")
-local HtmlFormat = require("novel.support.htmlformat")
+local Context = require("novel.service.context")
+local Fields = require("novel.service.fields")
 
 local BookList = {}
 
-local function trim(value)
-    return tostring(value or ""):match("^%s*(.-)%s*$")
-end
-
-local function isBlank(value)
-    return value == nil or trim(value) == ""
-end
-
-local function sourceName(source)
-    if source and source.bookSourceName and source.bookSourceName ~= "" then
-        return source.bookSourceName
-    end
-    return source and source.bookSourceUrl or ""
-end
-
-local function sourceKey(source)
-    return source and source.bookSourceUrl or ""
-end
-
-local function cleanText(value)
-    value = HtmlFormat.text(value)
-    value = value:gsub("[ \t\r\n]+", " ")
-    return trim(value)
-end
-
-local function stringListText(values)
-    local output = {}
-    for index = 1, #(values or {}) do
-        local value = cleanText(values[index])
-        if value ~= "" then
-            table.insert(output, value)
-        end
-    end
-    return table.concat(output, ",")
-end
-
-local function addDebug(debug, event, data)
-    table.insert(debug, {
-        event = event,
-        data = data,
-    })
-end
-
-local function addError(kind, message, data)
-    return {
-        kind = kind,
-        message = message,
-        data = data,
-    }
-end
-
-local function copyUnsupported(target, source, field, items, start_index)
-    for index = start_index, #items do
-        local item = items[index]
-        table.insert(target, {
-            source = sourceName(source),
-            field = field or item.field or "rule",
-            kind = item.kind or "unknown",
-            snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
-    end
-end
-
-local function analyzeString(analyzer, unsupported, source, field, rule, content)
-    if isBlank(rule) then
-        return ""
-    end
-    local start_index = #analyzer.unsupported + 1
-    local value = analyzer:getString(rule, content)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-    return cleanText(value)
-end
-
-local function analyzeUrl(analyzer, unsupported, source, field, rule, content)
-    if isBlank(rule) then
-        return ""
-    end
-    local start_index = #analyzer.unsupported + 1
-    local value = analyzer:getString(rule, content, true)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-    return trim(value)
-end
-
-local function analyzeList(analyzer, unsupported, source, field, rule, content)
-    if isBlank(rule) then
-        return ""
-    end
-    local start_index = #analyzer.unsupported + 1
-    local values = analyzer:getStringList(rule, content)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-    return stringListText(values)
-end
-
-local function analyzeElements(analyzer, unsupported, source, field, rule)
-    local start_index = #analyzer.unsupported + 1
-    local values = analyzer:getElements(rule)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-    return values
-end
+local trim = Context.trim
+local sourceName = Context.sourceName
+local sourceKey = Context.sourceKey
+local addDebug = Context.addDebug
+local addError = Context.error
 
 local function listRule(rule)
     local value = trim(rule and rule.bookList or "")
@@ -116,31 +23,38 @@ local function listRule(rule)
 end
 
 local function parseBook(analyzer, unsupported, source, rule, prefix, item, final_url)
-    local name = analyzeString(analyzer, unsupported, source, prefix .. ".name", rule.name, item)
+    local name = Fields.cleanString(analyzer, unsupported, source,
+        prefix .. ".name", rule.name, item)
     if name == "" then
         return nil
     end
 
-    local book_url = analyzeUrl(analyzer, unsupported, source, prefix .. ".bookUrl", rule.bookUrl, item)
+    local book_url = Fields.url(analyzer, unsupported, source,
+        prefix .. ".bookUrl", rule.bookUrl, item)
     if book_url == "" then
         book_url = final_url
     end
 
-    local latest_chapter = analyzeString(analyzer, unsupported, source,
+    local latest_chapter = Fields.cleanString(analyzer, unsupported, source,
         prefix .. ".lastChapter", rule.lastChapter, item)
 
     return {
         name = name,
-        author = analyzeString(analyzer, unsupported, source, prefix .. ".author", rule.author, item),
-        intro = analyzeString(analyzer, unsupported, source, prefix .. ".intro", rule.intro, item),
-        kind = analyzeList(analyzer, unsupported, source, prefix .. ".kind", rule.kind, item),
+        author = Fields.cleanString(analyzer, unsupported, source,
+            prefix .. ".author", rule.author, item),
+        intro = Fields.cleanString(analyzer, unsupported, source,
+            prefix .. ".intro", rule.intro, item),
+        kind = Fields.listText(analyzer, unsupported, source,
+            prefix .. ".kind", rule.kind, item),
         latestChapter = latest_chapter,
         latestChapterTitle = latest_chapter,
-        updateTime = analyzeString(analyzer, unsupported, source,
+        updateTime = Fields.cleanString(analyzer, unsupported, source,
             prefix .. ".updateTime", rule.updateTime, item),
         bookUrl = book_url,
-        coverUrl = analyzeUrl(analyzer, unsupported, source, prefix .. ".coverUrl", rule.coverUrl, item),
-        wordCount = analyzeString(analyzer, unsupported, source, prefix .. ".wordCount", rule.wordCount, item),
+        coverUrl = Fields.url(analyzer, unsupported, source,
+            prefix .. ".coverUrl", rule.coverUrl, item),
+        wordCount = Fields.cleanString(analyzer, unsupported, source,
+            prefix .. ".wordCount", rule.wordCount, item),
         origin = sourceKey(source),
         originName = sourceName(source),
         originOrder = source.customOrder or 0,
@@ -173,7 +87,7 @@ function BookList.parse(source, rule, prefix, response, options)
     addDebug(debug, options.parse_event or "parse_list", {
         rule = book_list_rule,
     })
-    local items = analyzeElements(analyzer, unsupported, source,
+    local items = Fields.elements(analyzer, unsupported, source,
         prefix .. ".bookList", book_list_rule)
     addDebug(debug, options.size_event or "list_size", {
         count = #items,

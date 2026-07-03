@@ -1,25 +1,19 @@
+local Context = require("novel.service.context")
 local Search = require("novel.service.search")
 
 local Switch = {}
 
-local function trim(value)
-    return tostring(value or ""):match("^%s*(.-)%s*$")
-end
+local trim = Context.trim
 
 local function normalizeText(value)
     return trim(value):lower():gsub("%s+", "")
 end
 
 local function sourceUrl(source)
-    return source and source.bookSourceUrl or ""
+    return Context.sourceKey(source)
 end
 
-local function sourceName(source)
-    if source and source.bookSourceName and source.bookSourceName ~= "" then
-        return source.bookSourceName
-    end
-    return sourceUrl(source)
-end
+local sourceName = Context.sourceName
 
 local function isSearchable(source)
     return type(source) == "table"

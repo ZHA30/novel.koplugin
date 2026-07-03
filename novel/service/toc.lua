@@ -1,7 +1,8 @@
 local Analyzer = require("novel.rule.analyzer")
 local Chapter = require("novel.model.chapter")
 local Cache = require("novel.storage.cache")
-local HtmlFormat = require("novel.support.htmlformat")
+local Context = require("novel.service.context")
+local Fields = require("novel.service.fields")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 local Url = require("novel.net.url")
@@ -11,109 +12,15 @@ Toc.__index = Toc
 
 local DEFAULT_MAX_PAGES = 20
 
-local function trim(value)
-    return tostring(value or ""):match("^%s*(.-)%s*$")
-end
-
-local function isBlank(value)
-    return value == nil or trim(value) == ""
-end
-
-local function sourceName(source)
-    if source and source.bookSourceName and source.bookSourceName ~= "" then
-        return source.bookSourceName
-    end
-    return source and source.bookSourceUrl or ""
-end
-
-local function addDebug(debug, event, data)
-    table.insert(debug, {
-        event = event,
-        data = data,
-    })
-end
-
-local function addError(kind, message, data)
-    return {
-        kind = kind,
-        message = message,
-        data = data,
-    }
-end
-
-local function responseSummary(response)
-    return {
-        request_url = response.request_url,
-        final_url = response.final_url or response.url,
-        status = response.status,
-        bytes = #(response.body or ""),
-        redirects = response.redirects or {},
-    }
-end
-
-local function copyUnsupported(target, source, field, items, start_index)
-    for index = start_index, #items do
-        local item = items[index]
-        table.insert(target, {
-            source = sourceName(source),
-            field = field or item.field or "rule",
-            kind = item.kind or "unknown",
-            snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
-    end
-end
-
-local function copyUrlUnsupported(target, source, items, field)
-    for index = 1, #(items or {}) do
-        local item = items[index]
-        table.insert(target, {
-            source = sourceName(source),
-            field = item.field == "url" and field or item.field,
-            kind = item.kind or "unknown",
-            snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
-    end
-end
-
-local function analyzeString(analyzer, unsupported, source, field, rule, content)
-    if isBlank(rule) then
-        return ""
-    end
-    local start_index = #analyzer.unsupported + 1
-    local value = analyzer:getString(rule, content)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-    return trim(value)
-end
-
-local function analyzeText(analyzer, unsupported, source, field, rule, content)
-    return HtmlFormat.text(analyzeString(analyzer, unsupported, source, field, rule, content))
-end
-
-local function analyzeUrl(analyzer, unsupported, source, field, rule, content)
-    if isBlank(rule) then
-        return ""
-    end
-    local start_index = #analyzer.unsupported + 1
-    local value = analyzer:getString(rule, content, true)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-    return trim(value)
-end
-
-local function analyzeUrlList(analyzer, unsupported, source, field, rule)
-    if isBlank(rule) then
-        return {}
-    end
-    local start_index = #analyzer.unsupported + 1
-    local values = analyzer:getStringList(rule, nil, true)
-    copyUnsupported(unsupported, source, field, analyzer.unsupported, start_index)
-    return values
-end
-
-local function asBoolean(value)
-    value = trim(value):lower()
-    return value == "true" or value == "1" or value == "yes"
-        or value == "y" or value == "on" or value == "vip"
-end
+local trim = Context.trim
+local isBlank = Context.isBlank
+local addDebug = Context.addDebug
+local addError = Context.error
+local responseSummary = Context.responseSummary
+local copyUnsupported = Context.copyUnsupported
+local copyUrlUnsupported = Context.copyUrlUnsupported
+local addUnsupported = Context.addUnsupported
+local requestSpec = Context.requestSpec
 
 local function listRule(rule)
     local value = trim(rule and rule.chapterList or "")
@@ -163,18 +70,6 @@ local function enqueue(queue, queued, visited, url)
     end
 end
 
-local function requestSpec(source, url, options)
-    local spec = Url.parse(url, {
-        base_url = source.bookSourceUrl,
-        headers = source.header,
-    })
-    spec.timeout = options.timeout or spec.timeout
-    spec.total_timeout = options.total_timeout or spec.total_timeout
-        or (tonumber(source.respondTime) and tonumber(source.respondTime) / 1000)
-    spec.max_redirects = options.max_redirects or spec.max_redirects
-    return spec
-end
-
 local function syntheticResponse(book, url)
     return {
         ok = true,
@@ -206,25 +101,7 @@ function Toc:fetchPage(source, book, url, options, unsupported)
         return nil, addError("url", spec.errors[1].error, spec.errors[1])
     end
 
-    local token, wait_ms = self.throttle:acquire(source, source.concurrentRate)
-    if not token then
-        return nil, addError("throttle", "source request is rate limited", {
-            wait_ms = wait_ms,
-        })
-    end
-
-    local ok, response = pcall(function()
-        return self.request.execute(spec)
-    end)
-    self.throttle:release(token)
-
-    if not ok then
-        return nil, addError("request", tostring(response))
-    end
-    if not response.ok then
-        return nil, response.error or addError("request", "request failed")
-    end
-    return response
+    return Context.execute(self, source, spec)
 end
 
 function Toc.parsePage(source, book, rule, list_rule, response, get_next)
@@ -250,7 +127,7 @@ function Toc.parsePage(source, book, rule, list_rule, response, get_next)
     })
 
     if get_next and not isBlank(rule.nextTocUrl) then
-        local values = analyzeUrlList(analyzer, unsupported, source,
+        local values = Fields.urlList(analyzer, unsupported, source,
             "ruleToc.nextTocUrl", rule.nextTocUrl)
         for value_index = 1, #values do
             local next_url = values[value_index]
@@ -263,12 +140,12 @@ function Toc.parsePage(source, book, rule, list_rule, response, get_next)
     for element_index = 1, #elements do
         local element = elements[element_index]
         analyzer:setContent(element)
-        local title = analyzeText(analyzer, unsupported, source,
+        local title = Fields.text(analyzer, unsupported, source,
             "ruleToc.chapterName", rule.chapterName, element)
         if title ~= "" then
-            local is_volume = asBoolean(analyzeText(analyzer, unsupported, source,
+            local is_volume = Fields.boolean(Fields.text(analyzer, unsupported, source,
                 "ruleToc.isVolume", rule.isVolume, element))
-            local chapter_url = analyzeUrl(analyzer, unsupported, source,
+            local chapter_url = Fields.url(analyzer, unsupported, source,
                 "ruleToc.chapterUrl", rule.chapterUrl, element)
             if chapter_url == "" then
                 if is_volume then
@@ -277,7 +154,7 @@ function Toc.parsePage(source, book, rule, list_rule, response, get_next)
                     chapter_url = base_url
                 end
             end
-            local is_vip = asBoolean(analyzeText(analyzer, unsupported, source,
+            local is_vip = Fields.boolean(Fields.text(analyzer, unsupported, source,
                 "ruleToc.isVip", rule.isVip, element))
             table.insert(chapters, Chapter.new{
                 url = chapter_url,
@@ -286,7 +163,7 @@ function Toc.parsePage(source, book, rule, list_rule, response, get_next)
                 isVip = is_vip,
                 baseUrl = final_url,
                 bookUrl = book.bookUrl,
-                tag = analyzeText(analyzer, unsupported, source,
+                tag = Fields.text(analyzer, unsupported, source,
                     "ruleToc.updateTime", rule.updateTime, element),
             })
         end
@@ -381,12 +258,8 @@ function Toc:get(source, book, options)
         }
     end
     if not isBlank(source.ruleToc.preUpdateJs) then
-        table.insert(unsupported, {
-            source = sourceName(source),
-            field = "ruleToc.preUpdateJs",
-            kind = "js",
-            snippet = tostring(source.ruleToc.preUpdateJs):sub(1, 120),
-        })
+        addUnsupported(unsupported, source, "ruleToc.preUpdateJs",
+            "js", source.ruleToc.preUpdateJs)
     end
 
     local cache = options.cache or Cache:new()

@@ -1,11 +1,11 @@
 local _ = require("novel.i18n")
+local ChapterDoc = require("novel.service.chapterdoc")
 local InfoMessage = require("ui/widget/infomessage")
 local Library = require("novel.storage.library")
 local Menu = require("novel.ui.menu")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
-local util = require("util")
 
 local Toc = {}
 
@@ -122,79 +122,6 @@ local function nextOpenableChapter(chapters, position)
         end
     end
     return nil
-end
-
-local function contentRuleIsHtml(rule)
-    rule = tostring(rule or ""):lower()
-    return rule:match("@%s*html") ~= nil
-        or rule:match("@%s*innerhtml") ~= nil
-        or rule:match("@%s*outerhtml") ~= nil
-end
-
-local function manifestContentType(manifest)
-    local rule = manifest and manifest.source and manifest.source.ruleContent
-    return contentRuleIsHtml(rule and rule.content) and "html" or "text"
-end
-
-local function chapterContentIsCurrent(manifest, chapter)
-    local content_type = manifestContentType(manifest)
-    if content_type == "text" then
-        return chapter.content_type == nil or chapter.content_type == "text"
-    end
-    return chapter.content_type == content_type
-end
-
-local function escapeHtml(value)
-    return util.htmlEscape(tostring(value or ""))
-end
-
-local function textBody(text)
-    local paragraphs = {}
-    text = tostring(text or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
-    for raw_line in (text .. "\n"):gmatch("([^\n]*)\n") do
-        local line = raw_line:match("^%s*(.-)%s*$")
-        if line ~= "" then
-            table.insert(paragraphs, "<p>" .. escapeHtml(line) .. "</p>")
-        end
-    end
-    if #paragraphs == 0 then
-        table.insert(paragraphs, "<p></p>")
-    end
-
-    return table.concat(paragraphs, "\n")
-end
-
-local function htmlBody(html)
-    html = tostring(html or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
-    if html:match("^%s*$") then
-        return "<p></p>"
-    end
-    return html
-end
-
-local function htmlDocument(chapter, content, content_type)
-    local body = content_type == "html" and htmlBody(content)
-        or textBody(content)
-
-    return table.concat({
-        "<!doctype html>",
-        "<html>",
-        "<head>",
-        '<meta charset="utf-8"/>',
-        "<title>", escapeHtml(chapter.title), "</title>",
-        "<style>",
-        "body{line-height:1.8;margin:5%;}",
-        "h1{font-size:1.25em;line-height:1.4;margin:0 0 1.2em 0;}",
-        "p{margin:0 0 0.9em 0;}",
-        "img{max-width:100%;height:auto;}",
-        "</style>",
-        "</head>",
-        "<body>",
-        "<h1>", escapeHtml(chapter.title), "</h1>",
-        body,
-        "</body>",
-        "</html>",
-    })
 end
 
 local function jumpAfterOpen(reader_ui, jump)
@@ -381,7 +308,7 @@ function Toc.openChapter(plugin, manifest, position, options)
         return
     end
     if Library.chapterFileExists(manifest, position)
-        and chapterContentIsCurrent(manifest, chapter) then
+        and ChapterDoc.contentIsCurrent(manifest, chapter) then
         openDownloaded(plugin, library, manifest, position, options)
         return
     end
@@ -419,7 +346,7 @@ function Toc.openChapter(plugin, manifest, position, options)
             return
         end
 
-        local html = htmlDocument(chapter, result.text, result.content_type)
+        local html = ChapterDoc.html(chapter, result.text, result.content_type)
         local file, err = library:saveChapter(manifest, position, html, {
             content_type = result.content_type,
         })

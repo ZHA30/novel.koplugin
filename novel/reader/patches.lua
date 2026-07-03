@@ -1,3 +1,4 @@
+local _ = require("novel.i18n")
 local ReaderDocument = require("novel.reader.document")
 
 local Patches = {}
@@ -96,6 +97,27 @@ local function restorePendingFromFileManager(state)
     return false
 end
 
+local function readerTocNovelPlugin(reader_toc)
+    local reader_ui = reader_toc and reader_toc.ui
+    if not reader_ui or not reader_ui.document then
+        return nil
+    end
+    if not ReaderDocument.isNovelPath(reader_ui.document.file) then
+        return nil
+    end
+    return reader_ui.novel
+end
+
+local function showNovelChapters(reader_toc)
+    local plugin = readerTocNovelPlugin(reader_toc)
+    if not plugin or not plugin.app then
+        return false
+    end
+    local Chapters = require("novel.ui.chapters")
+    Chapters.showCurrent(plugin)
+    return true
+end
+
 local function installCorePatches(state)
     local ok_history, ReadHistory = pcall(require, "readhistory")
     if ok_history and ReadHistory then
@@ -164,6 +186,26 @@ local function installCorePatches(state)
                 table.remove(results, 1)
                 restorePendingFromFileManager(state)
                 return unpack(results)
+            end
+        end)
+    end
+
+    local ok_readertoc, ReaderToc = pcall(require, "apps/reader/modules/readertoc")
+    if ok_readertoc and ReaderToc then
+        installPatch("readertoc_get_title", ReaderToc, "getTitle", function(original)
+            return function(reader_toc, ...)
+                if readerTocNovelPlugin(reader_toc) then
+                    return _("Chapters")
+                end
+                return original(reader_toc, ...)
+            end
+        end)
+        installPatch("readertoc_on_show_toc", ReaderToc, "onShowToc", function(original)
+            return function(reader_toc, ...)
+                if showNovelChapters(reader_toc) then
+                    return true
+                end
+                return original(reader_toc, ...)
             end
         end)
     end

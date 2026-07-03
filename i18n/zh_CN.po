@@ -241,3 +241,108 @@ msgstr "目录加载失败："
 
 msgid "No novel chapters for this document."
 msgstr "当前文档没有小说目录。"
+
+msgid "Apply switch"
+msgstr "应用换源"
+
+msgid "Book actions"
+msgstr "书籍操作"
+
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Candidates: "
+msgstr "候选数："
+
+msgid "Chapters failed."
+msgstr "目录加载失败。"
+
+msgid "Chapters failed: "
+msgstr "目录加载失败："
+
+msgid "Checked: "
+msgstr "已检查："
+
+msgid "Failed: "
+msgstr "失败："
+
+msgid "Keyword"
+msgstr "关键词"
+
+msgid "Keyword: "
+msgstr "关键词："
+
+msgid "Name and author match"
+msgstr "书名和作者匹配"
+
+msgid "Name matches"
+msgstr "书名匹配"
+
+msgid "No enabled searchable sources."
+msgstr "没有已启用的可搜索书源。"
+
+msgid "No matching books."
+msgstr "没有匹配书籍。"
+
+msgid "No more results."
+msgstr "没有更多结果。"
+
+msgid "No results."
+msgstr "没有结果。"
+
+msgid "Rate: "
+msgstr "评分："
+
+msgid "Remove from bookshelf failed."
+msgstr "从书架移除失败。"
+
+msgid "Search"
+msgstr "搜索"
+
+msgid "Search again"
+msgstr "重新搜索"
+
+msgid "Search canceled."
+msgstr "搜索已取消。"
+
+msgid "Search failed."
+msgstr "搜索失败。"
+
+msgid "Search failed: "
+msgstr "搜索失败："
+
+msgid "Search source"
+msgstr "搜索书源"
+
+msgid "Searching sources... (tap to cancel)"
+msgstr "正在搜索书源……（点击取消）"
+
+msgid "Searching... (tap to cancel)"
+msgstr "正在搜索……（点击取消）"
+
+msgid "Skipped: "
+msgstr "已跳过："
+
+msgid "Source switch canceled."
+msgstr "换源已取消。"
+
+msgid "Source switched."
+msgstr "书源已切换。"
+
+msgid "Summary"
+msgstr "摘要"
+
+msgid "Switch"
+msgstr "切换"
+
+msgid "Switch failed."
+msgstr "换源失败。"
+
+msgid "Switch failed: "
+msgstr "换源失败："
+
+msgid "Switch source"
+msgstr "切换书源"
+
+msgid "Switch this book to source?"
+msgstr "将这本书切换到该书源？"

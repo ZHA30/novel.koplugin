@@ -1,6 +1,7 @@
 local Runtime = require("novel.catalog.runtime")
 local Search = require("novel.catalog.search")
 local Capability = require("novel.source.capability")
+local MatchReason = require("novel.books.reason")
 
 local BookMatcher = {}
 
@@ -51,9 +52,9 @@ local function matchBook(target, candidate)
         if target_author ~= candidate_author then
             return nil
         end
-        return 100, "name and author"
+        return 100, MatchReason.MATCH_NAME_AUTHOR
     end
-    return 70, "name"
+    return 70, MatchReason.MATCH_NAME
 end
 
 local function addCandidate(candidates, source, book, score, reason)

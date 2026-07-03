@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local MatchReason = require("novel.books.reason")
 local BookMenu = require("novel.widget.bookmenu")
 local ButtonDialog = require("ui/widget/buttondialog")
 local Capability = require("novel.source.capability")
@@ -74,6 +75,15 @@ local function switchSummary(result)
         _("Skipped: ") .. tostring(result.skipped or 0),
         _("Failed: ") .. tostring(result.failed or 0),
     }, "\n")
+end
+
+local function switchReasonText(reason)
+    if reason == MatchReason.MATCH_NAME_AUTHOR then
+        return _("Name and author match")
+    elseif reason == MatchReason.MATCH_NAME then
+        return _("Name matches")
+    end
+    return reason
 end
 
 local function closeSwitchResults(plugin)
@@ -164,7 +174,7 @@ local function switchResultItems(plugin, record, result)
             text = bookTitle(candidate.book),
             book = candidate.book,
             source_title = candidate.source_name,
-            book_extra_metadata = candidate.reason,
+            book_extra_metadata = switchReasonText(candidate.reason),
             sub_item_table = candidateActions(plugin, record, candidate),
         })
     end
@@ -205,11 +215,16 @@ local function confirmRemove(plugin, record)
         text = _("Remove book from bookshelf?"),
         ok_text = _("Remove"),
         ok_callback = function()
-            plugin.app:getBookshelfRecords():remove(record.source, record.book)
+            local removed = plugin.app:getBookshelfRecords():remove(record.source, record.book)
             if plugin.bookshelf_confirm_dialog == confirm_dialog then
                 plugin.bookshelf_confirm_dialog = nil
             end
+            if not removed then
+                Dialog.message(_("Remove from bookshelf failed."))
+                return
+            end
             Bookshelf.show(plugin)
+            Dialog.message(_("Removed from bookshelf."))
         end,
         cancel_callback = function()
             if plugin.bookshelf_confirm_dialog == confirm_dialog then
@@ -378,7 +393,7 @@ local function showActions(plugin, record)
     end
 
     actions_dialog = ButtonDialog:new{
-        title = bookTitle(record.book),
+        title = _("Book actions") .. "\n" .. bookTitle(record.book),
         title_align = "center",
         buttons = {
             {

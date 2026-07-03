@@ -2,6 +2,7 @@ local _ = require("novel.i18n")
 local ReaderDocument = require("novel.reader.document")
 local Navigation = require("novel.reader.navigation")
 local Patches = require("novel.reader.patches")
+local Prefetch = require("novel.reader.prefetch")
 local Manifest = require("novel.books.manifest")
 local UIManager = require("ui/uimanager")
 
@@ -13,6 +14,7 @@ local state = {
 }
 
 function ReaderLifecycle.close(plugin)
+    Prefetch.close(plugin)
     Navigation.close(plugin)
 end
 
@@ -60,7 +62,8 @@ function ReaderLifecycle.init(plugin)
     end
 end
 
-function ReaderLifecycle.stopPlugin()
+function ReaderLifecycle.stopPlugin(plugin)
+    Prefetch.close(plugin)
     Patches.restore()
     state.pending_return = nil
     state.suppress_return_ui = nil
@@ -82,7 +85,13 @@ function ReaderLifecycle.onCloseDocument(plugin)
 end
 
 function ReaderLifecycle.setup(plugin)
-    return Navigation.setup(plugin)
+    local is_novel = Navigation.setup(plugin)
+    if is_novel then
+        Prefetch.setup(plugin)
+    else
+        Prefetch.close(plugin)
+    end
+    return is_novel
 end
 
 function ReaderLifecycle.addToMainMenu(plugin, menu_items)

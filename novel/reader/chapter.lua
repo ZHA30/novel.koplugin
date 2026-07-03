@@ -4,10 +4,36 @@ local ChapterDocument = require("novel.books.document")
 local Dialog = require("novel.widget.dialog")
 local Manifest = require("novel.books.manifest")
 local NetworkMgr = require("ui/network/manager")
+local Prefetch = require("novel.reader.prefetch")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
 local ReaderChapter = {}
+
+local function alreadyAtStart(reader_ui)
+    local paging = reader_ui and reader_ui.paging
+    if paging then
+        if paging.view and paging.view.page_scroll then
+            return false
+        end
+        local current_page = paging.current_page
+            or (reader_ui.document and reader_ui.document:getCurrentPage())
+            or 1
+        return current_page <= 1
+    end
+
+    local rolling = reader_ui and reader_ui.rolling
+    if rolling then
+        if rolling.view and rolling.view.view_mode == "scroll" then
+            return (tonumber(rolling.current_pos) or 0) <= 0
+        end
+        local current_page = tonumber(rolling.current_page)
+            or (reader_ui.document and reader_ui.document:getCurrentPage())
+            or 1
+        return current_page <= 1
+    end
+    return false
+end
 
 local function jumpAfterOpen(reader_ui, jump)
     if not jump then
@@ -15,6 +41,9 @@ local function jumpAfterOpen(reader_ui, jump)
     end
     UIManager:nextTick(function()
         if not reader_ui or not reader_ui.document then
+            return
+        end
+        if jump == "start" and alreadyAtStart(reader_ui) then
             return
         end
         local percent = jump == "end" and 100 or 0
@@ -107,6 +136,7 @@ function ReaderChapter.open(plugin, manifest, position, options)
         openDownloadedChapter(plugin, manifest_store, manifest, position, options)
         return
     end
+    Prefetch.close(plugin)
     if NetworkMgr:willRerunWhenOnline(function()
         ReaderChapter.open(plugin, manifest, position, options)
     end) then

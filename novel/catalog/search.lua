@@ -1,6 +1,6 @@
-local BookList = require("novel.service.booklist")
+local BookList = require("novel.catalog.books")
 local Cache = require("novel.storage.cache")
-local Context = require("novel.service.context")
+local Context = require("novel.catalog.client")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 

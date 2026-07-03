@@ -1,5 +1,5 @@
-local BookList = require("novel.service.booklist")
-local Context = require("novel.service.context")
+local BookList = require("novel.catalog.books")
+local Context = require("novel.catalog.client")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 local rapidjson = require("rapidjson")

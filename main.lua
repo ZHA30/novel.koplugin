@@ -2,13 +2,13 @@ local _ = dofile((debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "i18
 local App = require("novel.app")
 local Bookshelf = require("novel.ui.bookshelf")
 local Discover = require("novel.ui.discover")
+local Dialog = require("novel.widget.dialog")
 local Icons = require("novel.icons")
-local InfoMessage = require("ui/widget/infomessage")
-local Menu = require("novel.ui.menu")
-local Reader = require("novel.ui.reader")
+local Menu = require("novel.widget.menu")
+local Reader = require("novel.reader.integration")
 local Size = require("ui/size")
 local Sources = require("novel.ui.sources")
-local Toc = require("novel.ui.toc")
+local Toc = require("novel.ui.chapters")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 
@@ -125,9 +125,7 @@ function Novel:onShowNovelMenu()
 end
 
 function Novel.showUnderDevelopment(message)
-    UIManager:show(InfoMessage:new{
-        text = message,
-    })
+    Dialog.message(message)
 end
 
 return Novel

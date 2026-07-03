@@ -1,28 +1,15 @@
 local _ = require("novel.i18n")
-local BookList = require("novel.ui.booklist")
+local BookList = require("novel.widget.booklist")
+local Capability = require("novel.source.capability")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Detail = require("novel.ui.detail")
-local InfoMessage = require("ui/widget/infomessage")
+local Dialog = require("novel.widget.dialog")
 local NetworkMgr = require("ui/network/manager")
-local Toc = require("novel.ui.toc")
+local Toc = require("novel.ui.chapters")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
 local Bookshelf = {}
-
-local function closeWidget(plugin, key)
-    if plugin[key] then
-        local widget = plugin[key]
-        plugin[key] = nil
-        UIManager:close(widget)
-    end
-end
-
-local function showMessage(message)
-    UIManager:show(InfoMessage:new{
-        text = message,
-    })
-end
 
 local function invalidateRefresh(plugin)
     plugin.bookshelf_refresh_request_id = (plugin.bookshelf_refresh_request_id or 0) + 1
@@ -39,18 +26,8 @@ local function bookTitle(book)
     return book and book.bookUrl or _("Book")
 end
 
-local function errorText(result, fallback)
-    if not result or not result.error then
-        return fallback
-    end
-    return result.error.message or result.error.kind or fallback
-end
-
 local function sourceTitle(source)
-    if source and source.bookSourceName and source.bookSourceName ~= "" then
-        return source.bookSourceName
-    end
-    return source and source.bookSourceUrl or ""
+    return Capability.title(source)
 end
 
 local function findCurrentSource(plugin, record)
@@ -94,7 +71,7 @@ local function showBookInfo(record)
         table.insert(lines, "")
         table.insert(lines, book.bookUrl)
     end
-    showMessage(table.concat(lines, "\n"))
+    Dialog.message(table.concat(lines, "\n"))
 end
 
 local function switchSummary(result)
@@ -108,12 +85,12 @@ local function switchSummary(result)
 end
 
 local function closeSwitchResults(plugin)
-    closeWidget(plugin, "bookshelf_switch_confirm_dialog")
-    closeWidget(plugin, "bookshelf_switch_results_menu")
+    Dialog.closeWidget(plugin, "bookshelf_switch_confirm_dialog")
+    Dialog.closeWidget(plugin, "bookshelf_switch_results_menu")
 end
 
 local function applySwitch(plugin, record, candidate)
-    closeWidget(plugin, "bookshelf_switch_confirm_dialog")
+    Dialog.closeWidget(plugin, "bookshelf_switch_confirm_dialog")
     local confirm_dialog
     confirm_dialog = ConfirmBox:new{
         text = _("Switch this book to source?")
@@ -124,17 +101,17 @@ local function applySwitch(plugin, record, candidate)
                 plugin.bookshelf_switch_confirm_dialog = nil
             end
             if not plugin.app then
-                showMessage(_("Novel is not ready."))
+                Dialog.message(_("Novel is not ready."))
                 return
             end
             local updated_record, err = plugin.app:getBookshelfService()
                 :applySwitch(record, candidate.source, candidate.book)
             if not updated_record then
-                showMessage(_("Switch failed: ") .. tostring(err))
+                Dialog.message(_("Switch failed: ") .. tostring(err))
                 return
             end
             closeSwitchResults(plugin)
-            showMessage(_("Source switched."))
+            Dialog.message(_("Source switched."))
             Bookshelf.show(plugin)
         end,
         cancel_callback = function()
@@ -170,7 +147,7 @@ local function switchResultItems(plugin, record, result)
             text = _("Summary"),
             mandatory = tostring(#(result.candidates or {})),
             callback = function()
-                showMessage(switchSummary(result))
+                Dialog.message(switchSummary(result))
             end,
             separator = true,
         },
@@ -199,11 +176,11 @@ local function switchResultItems(plugin, record, result)
 end
 
 local function showSwitchResults(plugin, record, result)
-    closeWidget(plugin, "bookshelf_switch_results_menu")
+    Dialog.closeWidget(plugin, "bookshelf_switch_results_menu")
 
     if not result or not result.ok then
-        showMessage(_("Switch failed: ")
-            .. tostring(errorText(result, _("Switch failed."))))
+        Dialog.message(_("Switch failed: ")
+            .. tostring(Dialog.errorText(result, _("Switch failed."))))
         return
     end
 
@@ -226,7 +203,7 @@ local function showSwitchResults(plugin, record, result)
 end
 
 local function confirmRemove(plugin, record)
-    closeWidget(plugin, "bookshelf_confirm_dialog")
+    Dialog.closeWidget(plugin, "bookshelf_confirm_dialog")
     local confirm_dialog
     confirm_dialog = ConfirmBox:new{
         text = _("Remove book from bookshelf?"),
@@ -261,7 +238,7 @@ end
 
 local function refreshRecord(plugin, record)
     if not plugin.app then
-        showMessage(_("Novel is not ready."))
+        Dialog.message(_("Novel is not ready."))
         return
     end
     local source = findCurrentSource(plugin, record)
@@ -276,7 +253,7 @@ local function refreshRecord(plugin, record)
 
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local BookshelfService = require("novel.service.bookshelf")
+            local BookshelfService = require("novel.library.bookshelf")
             return BookshelfService.fetchRefresh(source, record.book)
         end, _("Refreshing... (tap to cancel)"))
 
@@ -284,28 +261,30 @@ local function refreshRecord(plugin, record)
             return
         end
         if not completed then
-            showMessage(_("Refresh canceled."))
+            Dialog.message(_("Refresh canceled."))
             return
         end
         if not result or not result.ok then
-            showMessage(_("Refresh failed: ") .. tostring(errorText(result, _("Refresh failed."))))
+            Dialog.message(_("Refresh failed: ")
+                .. tostring(Dialog.errorText(result, _("Refresh failed."))))
             return
         end
 
         local updated_record, err = plugin.app:getBookshelfService()
             :applyRefresh(source, record.book, result)
         if not updated_record then
-            showMessage(_("Refresh failed: ") .. tostring(err))
+            Dialog.message(_("Refresh failed: ") .. tostring(err))
             return
         end
-        showMessage(_("Book refreshed.") .. "\n" .. _("Chapters: ") .. tostring(#(result.chapters or {})))
+        Dialog.message(_("Book refreshed.") .. "\n"
+            .. _("Chapters: ") .. tostring(#(result.chapters or {})))
         Bookshelf.show(plugin)
     end)
 end
 
 local function switchRecord(plugin, record)
     if not plugin.app then
-        showMessage(_("Novel is not ready."))
+        Dialog.message(_("Novel is not ready."))
         return
     end
     if NetworkMgr:willRerunWhenOnline(function()
@@ -320,7 +299,7 @@ local function switchRecord(plugin, record)
 
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local SwitchService = require("novel.service.switch")
+            local SwitchService = require("novel.library.switch")
             return SwitchService.find(record, sources, {
                 timeout = 5,
             })
@@ -330,7 +309,7 @@ local function switchRecord(plugin, record)
             return
         end
         if not completed then
-            showMessage(_("Source switch canceled."))
+            Dialog.message(_("Source switch canceled."))
             return
         end
         showSwitchResults(plugin, record, result)
@@ -412,18 +391,18 @@ end
 function Bookshelf.close(plugin)
     invalidateRefresh(plugin)
     invalidateSwitch(plugin)
-    closeWidget(plugin, "bookshelf_confirm_dialog")
+    Dialog.closeWidget(plugin, "bookshelf_confirm_dialog")
     closeSwitchResults(plugin)
-    closeWidget(plugin, "bookshelf_menu")
+    Dialog.closeWidget(plugin, "bookshelf_menu")
 end
 
 function Bookshelf.show(plugin)
     if not plugin.app then
-        showMessage(_("Novel is not ready."))
+        Dialog.message(_("Novel is not ready."))
         return
     end
 
-    closeWidget(plugin, "bookshelf_menu")
+    Dialog.closeWidget(plugin, "bookshelf_menu")
     local records = plugin.app:getBookshelfService():list()
     local bookshelf_menu
     bookshelf_menu = BookList:new{

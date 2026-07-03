@@ -1,4 +1,4 @@
-local Context = require("novel.service.context")
+local Context = require("novel.catalog.client")
 local HtmlFormat = require("novel.support.htmlformat")
 
 local Fields = {}

@@ -1,17 +1,15 @@
 local _ = require("novel.i18n")
 local Blitbuffer = require("ffi/blitbuffer")
-local Grouping = require("novel.ui.grouping")
-local Menu = require("novel.ui.menu")
+local Capability = require("novel.source.capability")
+local Grouping = require("novel.widget.grouping")
+local Menu = require("novel.widget.menu")
 local Size = require("ui/size")
 local UIManager = require("ui/uimanager")
 
 local Sources = {}
 
 local function sourceTitle(source)
-    if source.bookSourceName and source.bookSourceName ~= "" then
-        return source.bookSourceName
-    end
-    return source.bookSourceUrl
+    return Capability.title(source)
 end
 
 local function groupTitle(group)

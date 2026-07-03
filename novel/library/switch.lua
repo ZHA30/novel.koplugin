@@ -1,5 +1,6 @@
-local Context = require("novel.service.context")
-local Search = require("novel.service.search")
+local Context = require("novel.catalog.client")
+local Search = require("novel.catalog.search")
+local Capability = require("novel.source.capability")
 
 local Switch = {}
 
@@ -10,18 +11,10 @@ local function normalizeText(value)
 end
 
 local function sourceUrl(source)
-    return Context.sourceKey(source)
+    return Capability.key(source)
 end
 
-local sourceName = Context.sourceName
-
-local function isSearchable(source)
-    return type(source) == "table"
-        and source.enabled ~= false
-        and source.searchUrl ~= nil
-        and source.searchUrl ~= ""
-        and type(source.ruleSearch) == "table"
-end
+local sourceName = Capability.title
 
 local function compactError(error)
     if type(error) ~= "table" then
@@ -116,7 +109,7 @@ function Switch.find(record, sources, options)
         local source = sources[source_index]
         if sourceUrl(source) == current_source_url and not options.include_current then
             skipped = skipped + 1
-        elseif not isSearchable(source) then
+        elseif not Capability.canSearch(source) then
             skipped = skipped + 1
         else
             checked = checked + 1

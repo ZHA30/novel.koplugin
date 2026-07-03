@@ -1,4 +1,4 @@
-local BookSource = require("novel.model.booksource")
+local Capability = require("novel.source.capability")
 local Url = require("novel.net.url")
 
 local Context = {}
@@ -12,17 +12,11 @@ function Context.isBlank(value)
 end
 
 function Context.sourceName(source)
-    if type(source) ~= "table" then
-        return ""
-    end
-    return BookSource.getName(source) or ""
+    return Capability.title(source)
 end
 
 function Context.sourceKey(source)
-    if type(source) ~= "table" then
-        return ""
-    end
-    return BookSource.getKey(source) or ""
+    return Capability.key(source)
 end
 
 function Context.addDebug(debug, event, data)

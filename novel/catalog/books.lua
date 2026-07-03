@@ -1,6 +1,6 @@
 local Analyzer = require("novel.rule.analyzer")
-local Context = require("novel.service.context")
-local Fields = require("novel.service.fields")
+local Context = require("novel.catalog.client")
+local Fields = require("novel.catalog.extract")
 
 local BookList = {}
 

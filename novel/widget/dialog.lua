@@ -1,0 +1,59 @@
+local _ = require("novel.i18n")
+local InfoMessage = require("ui/widget/infomessage")
+local UIManager = require("ui/uimanager")
+
+local Dialog = {}
+
+function Dialog.closeWidget(owner, key)
+    if owner and owner[key] then
+        local widget = owner[key]
+        owner[key] = nil
+        UIManager:close(widget)
+    end
+end
+
+function Dialog.message(message)
+    UIManager:show(InfoMessage:new{
+        text = message,
+    })
+end
+
+function Dialog.errorText(result, fallback)
+    if not result then
+        return fallback or _("no result returned")
+    end
+    local error_message = result.error
+        and (result.error.message or result.error.kind)
+        or fallback
+        or _("unknown error")
+    local parts = { tostring(error_message) }
+    if result.response then
+        if result.response.status then
+            table.insert(parts, "HTTP " .. tostring(result.response.status))
+        end
+        if result.response.final_url then
+            table.insert(parts, tostring(result.response.final_url))
+        end
+    end
+    return table.concat(parts, "\n")
+end
+
+function Dialog.unsupportedText(items)
+    local lines = {}
+    for item_index = 1, #(items or {}) do
+        local item = items[item_index]
+        table.insert(lines, table.concat({
+            item.source or "",
+            item.field or "",
+            item.kind or "",
+            item.snippet or "",
+        }, "\n"))
+    end
+    return table.concat(lines, "\n\n")
+end
+
+function Dialog.showUnsupported(items)
+    Dialog.message(Dialog.unsupportedText(items))
+end
+
+return Dialog

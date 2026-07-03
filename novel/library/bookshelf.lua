@@ -1,5 +1,5 @@
 local Book = require("novel.model.book")
-local Context = require("novel.service.context")
+local Context = require("novel.catalog.client")
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
 
@@ -366,8 +366,8 @@ end
 
 function Bookshelf.fetchRefresh(source, book, options)
     options = options or {}
-    local BookInfo = options.bookinfo or require("novel.service.bookinfo")
-    local Toc = options.toc or require("novel.service.toc")
+    local BookInfo = options.bookinfo or require("novel.catalog.detail")
+    local Toc = options.toc or require("novel.catalog.chapters")
 
     local detail = BookInfo.run(source, book, {
         refresh = true,

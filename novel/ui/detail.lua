@@ -1,30 +1,16 @@
 local _ = require("novel.i18n")
-local BookshelfService = require("novel.service.bookshelf")
-local InfoMessage = require("ui/widget/infomessage")
+local BookshelfService = require("novel.library.bookshelf")
+local Dialog = require("novel.widget.dialog")
 local NetworkMgr = require("ui/network/manager")
 local TextViewer = require("ui/widget/textviewer")
-local Toc = require("novel.ui.toc")
+local Toc = require("novel.ui.chapters")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
 local Detail = {}
 
-local function closeWidget(plugin, key)
-    if plugin[key] then
-        local widget = plugin[key]
-        plugin[key] = nil
-        UIManager:close(widget)
-    end
-end
-
 local function invalidate(plugin)
     plugin.detail_request_id = (plugin.detail_request_id or 0) + 1
-end
-
-local function showMessage(message)
-    UIManager:show(InfoMessage:new{
-        text = message,
-    })
 end
 
 local function bookTitle(book)
@@ -40,22 +26,8 @@ local function detailText(book)
     return book.intro or ""
 end
 
-local function unsupportedText(result)
-    local lines = {}
-    for item_index = 1, #(result.unsupported or {}) do
-        local item = result.unsupported[item_index]
-        table.insert(lines, table.concat({
-            item.source or "",
-            item.field or "",
-            item.kind or "",
-            item.snippet or "",
-        }, "\n"))
-    end
-    return table.concat(lines, "\n\n")
-end
-
 local function showUnsupported(result)
-    showMessage(unsupportedText(result))
+    Dialog.showUnsupported(result and result.unsupported)
 end
 
 local function buildButtons(plugin, source, result)
@@ -77,11 +49,11 @@ local function buildButtons(plugin, source, result)
                 if updated_record then
                     result.book = updated_record.book or book
                     Detail.showLoaded(plugin, source, result)
-                    showMessage(in_bookshelf
+                    Dialog.message(in_bookshelf
                         and _("Bookshelf info updated.")
                         or _("Added to bookshelf."))
                 else
-                    showMessage(in_bookshelf
+                    Dialog.message(in_bookshelf
                         and (_("Update bookshelf failed: ") .. tostring(err))
                         or (_("Add to bookshelf failed: ") .. tostring(err)))
                 end
@@ -95,7 +67,7 @@ local function buildButtons(plugin, source, result)
             callback = function()
                 bookshelf:remove(source, book)
                 Detail.showLoaded(plugin, source, result)
-                showMessage(_("Removed from bookshelf."))
+                Dialog.message(_("Removed from bookshelf."))
             end,
         })
     end
@@ -123,7 +95,7 @@ end
 
 local function showDetailViewer(plugin, source, result)
     local book = result.book or {}
-    closeWidget(plugin, "detail_viewer")
+    Dialog.closeWidget(plugin, "detail_viewer")
     local viewer
     viewer = TextViewer:new{
         title = bookTitle(book),
@@ -142,20 +114,18 @@ end
 
 function Detail.close(plugin)
     invalidate(plugin)
-    closeWidget(plugin, "detail_menu")
-    closeWidget(plugin, "detail_viewer")
+    Dialog.closeWidget(plugin, "detail_menu")
+    Dialog.closeWidget(plugin, "detail_viewer")
     Toc.close(plugin)
 end
 
 function Detail.showLoaded(plugin, source, result)
-    closeWidget(plugin, "detail_menu")
-    closeWidget(plugin, "detail_viewer")
+    Dialog.closeWidget(plugin, "detail_menu")
+    Dialog.closeWidget(plugin, "detail_viewer")
     Toc.close(plugin)
     if not result or not result.ok then
-        local error_message = result and result.error
-            and (result.error.message or result.error.kind)
-            or _("Detail failed.")
-        showMessage(_("Detail failed: ") .. tostring(error_message))
+        Dialog.message(_("Detail failed: ")
+            .. tostring(Dialog.errorText(result, _("Detail failed."))))
         return
     end
 
@@ -179,7 +149,7 @@ function Detail.show(plugin, source, book)
 
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local BookInfoService = require("novel.service.bookinfo")
+            local BookInfoService = require("novel.catalog.detail")
             return BookInfoService.run(source, book)
         end, _("Loading details... (tap to cancel)"))
 
@@ -187,7 +157,7 @@ function Detail.show(plugin, source, book)
             return
         end
         if not completed then
-            showMessage(_("Detail loading canceled."))
+            Dialog.message(_("Detail loading canceled."))
             return
         end
         Detail.showLoaded(plugin, source, result)

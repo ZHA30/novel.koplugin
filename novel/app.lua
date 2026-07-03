@@ -1,7 +1,7 @@
 local Log = require("novel.support.log")
-local Bookshelf = require("novel.service.bookshelf")
+local Bookshelf = require("novel.library.bookshelf")
 local Cache = require("novel.storage.cache")
-local Library = require("novel.storage.library")
+local Library = require("novel.library.store")
 local Repo = require("novel.source.repo")
 local Settings = require("novel.storage.settings")
 

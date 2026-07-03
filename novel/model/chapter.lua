@@ -57,4 +57,20 @@ function Chapter.new(values)
     return chapter
 end
 
+function Chapter.isOpenable(chapter)
+    return chapter and not chapter.isVolume and not chapter.isVip
+end
+
+function Chapter.nextOpenable(chapters, position, step)
+    step = step or 1
+    local target_position = (tonumber(position) or 0) + step
+    while chapters and chapters[target_position] do
+        if Chapter.isOpenable(chapters[target_position]) then
+            return chapters[target_position], target_position
+        end
+        target_position = target_position + step
+    end
+    return nil
+end
+
 return Chapter

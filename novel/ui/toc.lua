@@ -47,6 +47,15 @@ local function errorText(result, fallback)
     return result.error.message or result.error.kind or fallback
 end
 
+local function refreshManifest(library, manifest, source, book)
+    if not manifest or not source then
+        return manifest
+    end
+    local refreshed = library:ensureBook(source, book or manifest.book,
+        manifest.chapters or {})
+    return refreshed or manifest
+end
+
 local function bookTitle(book)
     if book and book.name and book.name ~= "" then
         return book.name
@@ -115,11 +124,31 @@ local function nextOpenableChapter(chapters, position)
     return nil
 end
 
+local function contentRuleIsHtml(rule)
+    rule = tostring(rule or ""):lower()
+    return rule:match("@%s*html") ~= nil
+        or rule:match("@%s*innerhtml") ~= nil
+        or rule:match("@%s*outerhtml") ~= nil
+end
+
+local function manifestContentType(manifest)
+    local rule = manifest and manifest.source and manifest.source.ruleContent
+    return contentRuleIsHtml(rule and rule.content) and "html" or "text"
+end
+
+local function chapterContentIsCurrent(manifest, chapter)
+    local content_type = manifestContentType(manifest)
+    if content_type == "text" then
+        return chapter.content_type == nil or chapter.content_type == "text"
+    end
+    return chapter.content_type == content_type
+end
+
 local function escapeHtml(value)
     return util.htmlEscape(tostring(value or ""))
 end
 
-local function htmlDocument(chapter, text)
+local function textBody(text)
     local paragraphs = {}
     text = tostring(text or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
     for raw_line in (text .. "\n"):gmatch("([^\n]*)\n") do
@@ -132,6 +161,21 @@ local function htmlDocument(chapter, text)
         table.insert(paragraphs, "<p></p>")
     end
 
+    return table.concat(paragraphs, "\n")
+end
+
+local function htmlBody(html)
+    html = tostring(html or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
+    if html:match("^%s*$") then
+        return "<p></p>"
+    end
+    return html
+end
+
+local function htmlDocument(chapter, content, content_type)
+    local body = content_type == "html" and htmlBody(content)
+        or textBody(content)
+
     return table.concat({
         "<!doctype html>",
         "<html>",
@@ -142,11 +186,12 @@ local function htmlDocument(chapter, text)
         "body{line-height:1.8;margin:5%;}",
         "h1{font-size:1.25em;line-height:1.4;margin:0 0 1.2em 0;}",
         "p{margin:0 0 0.9em 0;}",
+        "img{max-width:100%;height:auto;}",
         "</style>",
         "</head>",
         "<body>",
         "<h1>", escapeHtml(chapter.title), "</h1>",
-        table.concat(paragraphs, "\n"),
+        body,
         "</body>",
         "</html>",
     })
@@ -335,7 +380,8 @@ function Toc.openChapter(plugin, manifest, position, options)
         plugin.novel_switching_chapter = nil
         return
     end
-    if Library.chapterFileExists(manifest, position) then
+    if Library.chapterFileExists(manifest, position)
+        and chapterContentIsCurrent(manifest, chapter) then
         openDownloaded(plugin, library, manifest, position, options)
         return
     end
@@ -373,8 +419,10 @@ function Toc.openChapter(plugin, manifest, position, options)
             return
         end
 
-        local html = htmlDocument(chapter, result.text)
-        local file, err = library:saveChapter(manifest, position, html)
+        local html = htmlDocument(chapter, result.text, result.content_type)
+        local file, err = library:saveChapter(manifest, position, html, {
+            content_type = result.content_type,
+        })
         if not file then
             plugin.novel_switching_chapter = nil
             showMessage(_("Save chapter failed: ") .. tostring(err))
@@ -420,7 +468,9 @@ function Toc.show(plugin, source, book, options)
         return
     end
 
-    local existing = Library:new():loadByBook(source, book)
+    local library = Library:new()
+    local existing = refreshManifest(library, library:loadByBook(source, book),
+        source, book)
     if options.local_only and existing then
         Toc.showManifest(plugin, existing, options)
         return
@@ -458,7 +508,9 @@ end
 
 function Toc.resume(plugin, source, book, position)
     position = tonumber(position)
-    local manifest = Library:new():loadByBook(source, book)
+    local library = Library:new()
+    local manifest = refreshManifest(library, library:loadByBook(source, book),
+        source, book)
     if manifest and position and manifest.chapters[position] then
         Toc.openChapter(plugin, manifest, position)
         return

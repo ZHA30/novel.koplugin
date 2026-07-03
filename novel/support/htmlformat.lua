@@ -156,4 +156,13 @@ function HtmlFormat.text(value)
     return trim(value)
 end
 
+function HtmlFormat.html(value)
+    value = tostring(value or "")
+    value = value:gsub("<!%-%-.-%-%->", "")
+    value = value:gsub("<%s*[sS][cC][rR][iI][pP][tT][^>]*>.-</%s*[sS][cC][rR][iI][pP][tT]%s*>", "")
+    value = value:gsub("<%s*[sS][tT][yY][lL][eE][^>]*>.-</%s*[sS][tT][yY][lL][eE]%s*>", "")
+    value = value:gsub("<%s*[nN][oO][sS][cC][rR][iI][pP][tT][^>]*>.-</%s*[nN][oO][sS][cC][rR][iI][pP][tT]%s*>", "")
+    return trim(value)
+end
+
 return HtmlFormat

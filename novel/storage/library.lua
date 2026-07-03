@@ -199,6 +199,7 @@ function Library:ensureBook(source, book, chapters)
             chapter.read = old.read == true
             chapter.read_at = old.read_at
             chapter.last_opened_at = old.last_opened_at
+            chapter.content_type = old.content_type
         end
         chapter.file_path = Library.chapterPath(book_id, chapter)
         chapter.downloaded = util.pathExists(chapter.file_path) or false
@@ -244,7 +245,8 @@ function Library.chapterFileExists(manifest, position)
     return chapter and chapter.file_path and util.pathExists(chapter.file_path) or false
 end
 
-function Library:saveChapter(manifest, position, html)
+function Library:saveChapter(manifest, position, html, options)
+    options = options or {}
     local chapter = manifest and manifest.chapters and manifest.chapters[position]
     if not chapter then
         return nil, "chapter is missing"
@@ -261,6 +263,7 @@ function Library:saveChapter(manifest, position, html)
 
     chapter.downloaded = true
     chapter.downloaded_at = now()
+    chapter.content_type = options.content_type or "text"
     self:save(manifest)
     return chapter.file_path
 end

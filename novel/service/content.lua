@@ -18,6 +18,13 @@ local function isBlank(value)
     return value == nil or trim(value) == ""
 end
 
+local function contentIsHtml(rule)
+    rule = tostring(rule or ""):lower()
+    return rule:match("@%s*html") ~= nil
+        or rule:match("@%s*innerhtml") ~= nil
+        or rule:match("@%s*outerhtml") ~= nil
+end
+
 local function sourceName(source)
     if source and source.bookSourceName and source.bookSourceName ~= "" then
         return source.bookSourceName
@@ -215,7 +222,9 @@ function Content.parsePage(source, book, chapter, rule, response, next_chapter_u
     local raw_content = analyzer:getString(rule.content)
     copyUnsupported(unsupported, source, "ruleContent.content",
         analyzer.unsupported, start_index)
-    local text = HtmlFormat.text(raw_content)
+    local is_html = contentIsHtml(rule.content)
+    local text = is_html and HtmlFormat.html(raw_content)
+        or HtmlFormat.text(raw_content)
 
     local next_urls = {}
     if not isBlank(rule.nextContentUrl) then
@@ -235,6 +244,7 @@ function Content.parsePage(source, book, chapter, rule, response, next_chapter_u
 
     return {
         text = text,
+        content_type = is_html and "html" or "text",
         next_urls = next_urls,
         debug = debug,
         unsupported = unsupported,
@@ -242,7 +252,7 @@ function Content.parsePage(source, book, chapter, rule, response, next_chapter_u
     }
 end
 
-local function applyReplaceRule(source, rule, text, unsupported)
+local function applyReplaceRule(source, rule, text, unsupported, content_type)
     if isBlank(rule.replaceRegex) then
         return text
     end
@@ -254,6 +264,9 @@ local function applyReplaceRule(source, rule, text, unsupported)
     copyUnsupported(unsupported, source, "ruleContent.replaceRegex",
         analyzer.unsupported, start_index)
     if replaced ~= "" then
+        if content_type == "html" then
+            return HtmlFormat.html(replaced)
+        end
         return HtmlFormat.text(replaced)
     end
     return text
@@ -343,6 +356,8 @@ function Content:get(source, book, chapter, options)
 
     local queue, queued, visited = {}, {}, {}
     local parts = {}
+    local content_type = contentIsHtml(source.ruleContent.content) and "html"
+        or "text"
     enqueue(queue, queued, visited, first_url)
     local max_pages = options.max_pages or DEFAULT_MAX_PAGES
 
@@ -392,8 +407,9 @@ function Content:get(source, book, chapter, options)
         })
     end
 
-    local text = table.concat(parts, "\n\n")
-    text = applyReplaceRule(source, source.ruleContent, text, unsupported)
+    local text = table.concat(parts, content_type == "html" and "\n" or "\n\n")
+    text = applyReplaceRule(source, source.ruleContent, text, unsupported,
+        content_type)
     if text == "" then
         return {
             ok = false,
@@ -408,6 +424,7 @@ function Content:get(source, book, chapter, options)
     local result = {
         ok = true,
         text = text,
+        content_type = content_type,
         chapter = chapter,
         book = book,
         debug = debug,

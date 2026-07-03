@@ -1,14 +1,14 @@
 local Analyzer = require("novel.rule.analyzer")
-local Context = require("novel.catalog.client")
-local Fields = require("novel.catalog.extract")
+local Runtime = require("novel.catalog.runtime")
+local Extract = require("novel.catalog.extract")
 
-local BookList = {}
+local Books = {}
 
-local trim = Context.trim
-local sourceName = Context.sourceName
-local sourceKey = Context.sourceKey
-local addDebug = Context.addDebug
-local addError = Context.error
+local trim = Runtime.trim
+local sourceName = Runtime.sourceName
+local sourceKey = Runtime.sourceKey
+local addDebug = Runtime.addDebug
+local addError = Runtime.error
 
 local function listRule(rule)
     local value = trim(rule and rule.bookList or "")
@@ -23,37 +23,37 @@ local function listRule(rule)
 end
 
 local function parseBook(analyzer, unsupported, source, rule, prefix, item, final_url)
-    local name = Fields.cleanString(analyzer, unsupported, source,
+    local name = Extract.cleanString(analyzer, unsupported, source,
         prefix .. ".name", rule.name, item)
     if name == "" then
         return nil
     end
 
-    local book_url = Fields.url(analyzer, unsupported, source,
+    local book_url = Extract.url(analyzer, unsupported, source,
         prefix .. ".bookUrl", rule.bookUrl, item)
     if book_url == "" then
         book_url = final_url
     end
 
-    local latest_chapter = Fields.cleanString(analyzer, unsupported, source,
+    local latest_chapter = Extract.cleanString(analyzer, unsupported, source,
         prefix .. ".lastChapter", rule.lastChapter, item)
 
     return {
         name = name,
-        author = Fields.cleanString(analyzer, unsupported, source,
+        author = Extract.cleanString(analyzer, unsupported, source,
             prefix .. ".author", rule.author, item),
-        intro = Fields.cleanString(analyzer, unsupported, source,
+        intro = Extract.cleanString(analyzer, unsupported, source,
             prefix .. ".intro", rule.intro, item),
-        kind = Fields.listText(analyzer, unsupported, source,
+        kind = Extract.listText(analyzer, unsupported, source,
             prefix .. ".kind", rule.kind, item),
         latestChapter = latest_chapter,
         latestChapterTitle = latest_chapter,
-        updateTime = Fields.cleanString(analyzer, unsupported, source,
+        updateTime = Extract.cleanString(analyzer, unsupported, source,
             prefix .. ".updateTime", rule.updateTime, item),
         bookUrl = book_url,
-        coverUrl = Fields.url(analyzer, unsupported, source,
+        coverUrl = Extract.url(analyzer, unsupported, source,
             prefix .. ".coverUrl", rule.coverUrl, item),
-        wordCount = Fields.cleanString(analyzer, unsupported, source,
+        wordCount = Extract.cleanString(analyzer, unsupported, source,
             prefix .. ".wordCount", rule.wordCount, item),
         origin = sourceKey(source),
         originName = sourceName(source),
@@ -62,7 +62,7 @@ local function parseBook(analyzer, unsupported, source, rule, prefix, item, fina
     }
 end
 
-function BookList.parse(source, rule, prefix, response, options)
+function Books.parse(source, rule, prefix, response, options)
     options = options or {}
     prefix = prefix or "ruleSearch"
     local debug, unsupported, books = {}, {}, {}
@@ -87,7 +87,7 @@ function BookList.parse(source, rule, prefix, response, options)
     addDebug(debug, options.parse_event or "parse_list", {
         rule = book_list_rule,
     })
-    local items = Fields.elements(analyzer, unsupported, source,
+    local items = Extract.elements(analyzer, unsupported, source,
         prefix .. ".bookList", book_list_rule)
     addDebug(debug, options.size_event or "list_size", {
         count = #items,
@@ -119,4 +119,4 @@ function BookList.parse(source, rule, prefix, response, options)
     }
 end
 
-return BookList
+return Books

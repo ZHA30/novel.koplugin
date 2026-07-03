@@ -1,22 +1,22 @@
 local Analyzer = require("novel.rule.analyzer")
 local Book = require("novel.model.book")
-local Context = require("novel.catalog.client")
-local Fields = require("novel.catalog.extract")
+local Runtime = require("novel.catalog.runtime")
+local Extract = require("novel.catalog.extract")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 local Url = require("novel.net.url")
 
-local BookInfo = {}
-BookInfo.__index = BookInfo
+local BookDetail = {}
+BookDetail.__index = BookDetail
 
-local isBlank = Context.isBlank
-local sourceName = Context.sourceName
-local sourceKey = Context.sourceKey
-local addDebug = Context.addDebug
-local addError = Context.error
-local responseSummary = Context.responseSummary
-local copyUnsupported = Context.copyUnsupported
-local copyUrlUnsupported = Context.copyUrlUnsupported
+local isBlank = Runtime.isBlank
+local sourceName = Runtime.sourceName
+local sourceKey = Runtime.sourceKey
+local addDebug = Runtime.addDebug
+local addError = Runtime.error
+local responseSummary = Runtime.responseSummary
+local copyUnsupported = Runtime.copyUnsupported
+local copyUrlUnsupported = Runtime.copyUrlUnsupported
 
 local function applyIfPresent(target, field, value, replace)
     if value ~= "" and (replace or isBlank(target[field])) then
@@ -28,7 +28,7 @@ local function allowsRename(analyzer, unsupported, source, rule, can_rename)
     if not can_rename or isBlank(rule.canReName) then
         return false
     end
-    local value = Fields.text(analyzer, unsupported, source,
+    local value = Extract.text(analyzer, unsupported, source,
         "ruleBookInfo.canReName", rule.canReName)
     if value == "" then
         return false
@@ -77,28 +77,28 @@ local function parseBook(source, input_book, rule, response, options)
 
     local can_rename = allowsRename(analyzer, unsupported, source, rule,
         options.can_rename == true)
-    applyIfPresent(book, "name", Fields.text(analyzer, unsupported, source,
+    applyIfPresent(book, "name", Extract.text(analyzer, unsupported, source,
         "ruleBookInfo.name", rule.name), can_rename)
-    applyIfPresent(book, "author", Fields.text(analyzer, unsupported, source,
+    applyIfPresent(book, "author", Extract.text(analyzer, unsupported, source,
         "ruleBookInfo.author", rule.author), can_rename)
-    applyIfPresent(book, "kind", Fields.listText(analyzer, unsupported, source,
+    applyIfPresent(book, "kind", Extract.listText(analyzer, unsupported, source,
         "ruleBookInfo.kind", rule.kind), true)
-    applyIfPresent(book, "wordCount", Fields.text(analyzer, unsupported, source,
+    applyIfPresent(book, "wordCount", Extract.text(analyzer, unsupported, source,
         "ruleBookInfo.wordCount", rule.wordCount), true)
 
-    local latest_chapter = Fields.text(analyzer, unsupported, source,
+    local latest_chapter = Extract.text(analyzer, unsupported, source,
         "ruleBookInfo.lastChapter", rule.lastChapter)
     applyIfPresent(book, "latestChapterTitle", latest_chapter, true)
     book.latestChapter = book.latestChapterTitle
-    applyIfPresent(book, "updateTime", Fields.text(analyzer, unsupported, source,
+    applyIfPresent(book, "updateTime", Extract.text(analyzer, unsupported, source,
         "ruleBookInfo.updateTime", rule.updateTime), true)
 
-    applyIfPresent(book, "intro", Fields.text(analyzer, unsupported, source,
+    applyIfPresent(book, "intro", Extract.text(analyzer, unsupported, source,
         "ruleBookInfo.intro", rule.intro), true)
-    applyIfPresent(book, "coverUrl", Fields.url(analyzer, unsupported, source,
+    applyIfPresent(book, "coverUrl", Extract.url(analyzer, unsupported, source,
         "ruleBookInfo.coverUrl", rule.coverUrl), true)
 
-    local toc_url = Fields.url(analyzer, unsupported, source,
+    local toc_url = Extract.url(analyzer, unsupported, source,
         "ruleBookInfo.tocUrl", rule.tocUrl)
     if toc_url == "" then
         toc_url = base_url
@@ -134,7 +134,7 @@ local function syntheticResponse(book)
     }
 end
 
-function BookInfo:new(options)
+function BookDetail:new(options)
     options = options or {}
     return setmetatable({
         request = options.request or Request,
@@ -142,7 +142,7 @@ function BookInfo:new(options)
     }, self)
 end
 
-function BookInfo:get(source, search_book, options)
+function BookDetail:get(source, search_book, options)
     options = options or {}
     local debug, unsupported = {}, {}
 
@@ -188,7 +188,7 @@ function BookInfo:get(source, search_book, options)
         response = syntheticResponse(search_book)
         addDebug(debug, "response", responseSummary(response))
     else
-        local spec = Context.requestSpec(source, search_book.bookUrl, options)
+        local spec = Runtime.requestSpec(source, search_book.bookUrl, options)
         copyUrlUnsupported(unsupported, source, spec.unsupported, "bookUrl")
 
         addDebug(debug, "request", {
@@ -206,7 +206,7 @@ function BookInfo:get(source, search_book, options)
             }
         end
 
-        local request_response, request_err, failed_response = Context.execute(self, source, spec)
+        local request_response, request_err, failed_response = Runtime.execute(self, source, spec)
         if not request_response then
             if failed_response then
                 addDebug(debug, "response", responseSummary(failed_response))
@@ -239,8 +239,8 @@ function BookInfo:get(source, search_book, options)
     return parsed
 end
 
-function BookInfo.run(source, book, options)
-    return BookInfo:new(options):get(source, book, options)
+function BookDetail.run(source, book, options)
+    return BookDetail:new(options):get(source, book, options)
 end
 
-return BookInfo
+return BookDetail

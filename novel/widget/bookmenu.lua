@@ -29,7 +29,7 @@ local MIN_PER_PAGE = 4
 local RIGHT_METADATA_MAX_WIDTH_RATIO = 0.36
 local SCALE_BY_SIZE = Screen:scaleBySize(1000000) * (1 / 1000000)
 
-local BookList = {}
+local BookMenu = {}
 local book_info_manager
 
 local function bookInfoManager()
@@ -205,7 +205,7 @@ local function nativeListPerPage(available_height)
     return calculated
 end
 
-local BookListItem = InputContainer:extend{
+local BookMenuItem = InputContainer:extend{
     entry = nil,
     menu = nil,
     dimen = nil,
@@ -214,7 +214,7 @@ local BookListItem = InputContainer:extend{
     _underline_container = nil,
 }
 
-function BookListItem:init()
+function BookMenuItem:init()
     self.ges_events = {
         TapSelect = {
             GestureRange:new{
@@ -244,14 +244,14 @@ function BookListItem:init()
     self:update()
 end
 
-function BookListItem:rowDimen()
+function BookMenuItem:rowDimen()
     return Geom:new{
         w = self.width,
         h = self.height - 2 * self.underline_h,
     }
 end
 
-function BookListItem:fontSize(nominal, maximum)
+function BookMenuItem:fontSize(nominal, maximum)
     local dimen = self:rowDimen()
     local font_size = math.floor(nominal * dimen.h * (1 / ROW_BASE_HEIGHT) / SCALE_BY_SIZE)
     if maximum and font_size >= maximum then
@@ -260,7 +260,7 @@ function BookListItem:fontSize(nominal, maximum)
     return font_size
 end
 
-function BookListItem:buildActionWidget()
+function BookMenuItem:buildActionWidget()
     local dimen = self:rowDimen()
     local fgcolor = self.entry.dim and Blitbuffer.COLOR_DARK_GRAY or nil
     local face = Font:getFace("cfont", self:fontSize(20, 24))
@@ -305,7 +305,7 @@ function BookListItem:buildActionWidget()
     }
 end
 
-function BookListItem:buildBookWidget()
+function BookMenuItem:buildBookWidget()
     local dimen = self:rowDimen()
     local fgcolor = self.entry.dim and Blitbuffer.COLOR_DARK_GRAY or nil
     local metadata_fgcolor = fgcolor
@@ -422,7 +422,7 @@ function BookListItem:buildBookWidget()
     return widget
 end
 
-function BookListItem:update()
+function BookMenuItem:update()
     if self._underline_container[1] then
         self._underline_container[1]:free()
     end
@@ -438,27 +438,27 @@ function BookListItem:update()
     }
 end
 
-function BookListItem:onFocus()
+function BookMenuItem:onFocus()
     self._underline_container.color = Blitbuffer.COLOR_BLACK
     return true
 end
 
-function BookListItem:onUnfocus()
+function BookMenuItem:onUnfocus()
     self._underline_container.color = Blitbuffer.COLOR_WHITE
     return true
 end
 
-function BookListItem:onTapSelect()
+function BookMenuItem:onTapSelect()
     self.menu:onMenuSelect(self.entry)
     return true
 end
 
-function BookListItem:onHoldSelect()
+function BookMenuItem:onHoldSelect()
     self.menu:onMenuHold(self.entry)
     return true
 end
 
-function BookList._recalculateDimen(self)
+function BookMenu._recalculateDimen(self)
     local top_height = 0
     if self.title_bar and not self.no_title then
         top_height = self.title_bar:getHeight()
@@ -485,7 +485,7 @@ function BookList._recalculateDimen(self)
     }
 end
 
-function BookList._updateItemsBuildUI(self)
+function BookMenu._updateItemsBuildUI(self)
     local line_widget = LineWidget:new{
         dimen = Geom:new{ w = self.item_width, h = Size.line.thin },
         background = self.line_color or Blitbuffer.COLOR_DARK_GRAY,
@@ -508,7 +508,7 @@ function BookList._updateItemsBuildUI(self)
             item_shortcut = self.item_shortcuts[idx]
             shortcut_style = (idx < 11 or idx > 20) and "square" or "grey_square"
         end
-        local item = BookListItem:new{
+        local item = BookMenuItem:new{
             idx = index,
             width = self.item_width,
             height = self.item_height,
@@ -525,7 +525,7 @@ function BookList._updateItemsBuildUI(self)
     return select_number
 end
 
-function BookList.updateItems(self, select_number, no_recalculate_dimen)
+function BookMenu.updateItems(self, select_number, no_recalculate_dimen)
     local old_dimen = self.dimen and self.dimen:copy()
     self.layout = {}
     self.item_group:clear()
@@ -544,13 +544,13 @@ function BookList.updateItems(self, select_number, no_recalculate_dimen)
     end)
 end
 
-function BookList.canLoadNextSourcePage(self)
+function BookMenu.canLoadNextSourcePage(self)
     return self.load_next_page_callback ~= nil
         and self.loading_next_page ~= true
         and self.no_more_source_pages ~= true
 end
 
-function BookList.updatePageInfo(self, select_number)
+function BookMenu.updatePageInfo(self, select_number)
     BaseMenu.updatePageInfo(self, select_number)
     if #self.item_table > 0 and self.page_info_right_chev then
         self.page_info_right_chev:enableDisable(
@@ -558,7 +558,7 @@ function BookList.updatePageInfo(self, select_number)
     end
 end
 
-function BookList.onNextPage(self)
+function BookMenu.onNextPage(self)
     if self.page < self.page_num then
         return BaseMenu.onNextPage(self)
     end
@@ -575,15 +575,15 @@ function BookList.onNextPage(self)
     return true
 end
 
-function BookList.new(_list, args)
+function BookMenu.new(_list, args)
     args = args or {}
-    args.updateItems = args.updateItems or BookList.updateItems
-    args.updatePageInfo = args.updatePageInfo or BookList.updatePageInfo
-    args.onNextPage = args.onNextPage or BookList.onNextPage
-    args.canLoadNextSourcePage = args.canLoadNextSourcePage or BookList.canLoadNextSourcePage
-    args._recalculateDimen = args._recalculateDimen or BookList._recalculateDimen
-    args._updateItemsBuildUI = args._updateItemsBuildUI or BookList._updateItemsBuildUI
+    args.updateItems = args.updateItems or BookMenu.updateItems
+    args.updatePageInfo = args.updatePageInfo or BookMenu.updatePageInfo
+    args.onNextPage = args.onNextPage or BookMenu.onNextPage
+    args.canLoadNextSourcePage = args.canLoadNextSourcePage or BookMenu.canLoadNextSourcePage
+    args._recalculateDimen = args._recalculateDimen or BookMenu._recalculateDimen
+    args._updateItemsBuildUI = args._updateItemsBuildUI or BookMenu._updateItemsBuildUI
     return Menu:new(args)
 end
 
-return BookList
+return BookMenu

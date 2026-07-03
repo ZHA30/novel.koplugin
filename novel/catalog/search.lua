@@ -1,17 +1,17 @@
-local BookList = require("novel.catalog.books")
+local Books = require("novel.catalog.books")
 local Cache = require("novel.storage.cache")
-local Context = require("novel.catalog.client")
+local Runtime = require("novel.catalog.runtime")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 
 local Search = {}
 Search.__index = Search
 
-local isBlank = Context.isBlank
-local addDebug = Context.addDebug
-local addError = Context.error
-local copyUrlUnsupported = Context.copyUrlUnsupported
-local responseSummary = Context.responseSummary
+local isBlank = Runtime.isBlank
+local addDebug = Runtime.addDebug
+local addError = Runtime.error
+local copyUrlUnsupported = Runtime.copyUrlUnsupported
+local responseSummary = Runtime.responseSummary
 
 local function cacheKey(source, spec, keyword, options)
     return Cache.makeKey("search", {
@@ -108,7 +108,7 @@ function Search:search(source, keyword, options)
         }
     end
 
-    local spec = Context.requestSpec(source, source.searchUrl, options, {
+    local spec = Runtime.requestSpec(source, source.searchUrl, options, {
         key = keyword or "",
         page = options.page or 1,
     })
@@ -136,7 +136,7 @@ function Search:search(source, keyword, options)
         return cached
     end
 
-    local response, request_err, failed_response = Context.execute(self, source, spec)
+    local response, request_err, failed_response = Runtime.execute(self, source, spec)
     if not response then
         if failed_response then
             addDebug(debug, "response", responseSummary(failed_response))
@@ -153,7 +153,7 @@ function Search:search(source, keyword, options)
 
     addDebug(debug, "response", responseSummary(response))
 
-    local parsed = BookList.parse(source, source.ruleSearch, "ruleSearch",
+    local parsed = Books.parse(source, source.ruleSearch, "ruleSearch",
         response)
     for index = 1, #parsed.debug do
         table.insert(debug, parsed.debug[index])

@@ -1,4 +1,4 @@
-local Context = require("novel.reader.context")
+local ReaderDocument = require("novel.reader.document")
 
 local Patches = {}
 local patches = {}
@@ -9,7 +9,7 @@ local function firstNonNovelHistoryFile(ReadHistory)
     end
     for index = 1, #ReadHistory.hist do
         local item = ReadHistory.hist[index]
-        if item and item.file and not Context.byFile(item.file) then
+        if item and item.file and not ReaderDocument.chapterByFile(item.file) then
             return item.file
         end
     end
@@ -23,7 +23,7 @@ local function cleanLastFileSettings(ReadHistory)
 
     local changed = false
     local lastfile = G_reader_settings:readSetting("lastfile")
-    if Context.byFile(lastfile) then
+    if ReaderDocument.chapterByFile(lastfile) then
         local fallback = firstNonNovelHistoryFile(ReadHistory)
         if fallback then
             G_reader_settings:saveSetting("lastfile", fallback)
@@ -33,7 +33,7 @@ local function cleanLastFileSettings(ReadHistory)
             G_reader_settings:delSetting("lastdir")
         end
         changed = true
-    elseif Context.isNovelPath(G_reader_settings:readSetting("lastdir")) then
+    elseif ReaderDocument.isNovelPath(G_reader_settings:readSetting("lastdir")) then
         G_reader_settings:delSetting("lastdir")
         changed = true
     end
@@ -52,7 +52,7 @@ local function cleanReadHistory(ReadHistory)
     local removed = false
     for index = #ReadHistory.hist, 1, -1 do
         local item = ReadHistory.hist[index]
-        if item and Context.byFile(item.file) then
+        if item and ReaderDocument.chapterByFile(item.file) then
             ReadHistory:removeItem(item, index, true)
             removed = true
         end
@@ -101,7 +101,7 @@ local function installCorePatches(state)
     if ok_history and ReadHistory then
         installPatch("readhistory_add_item", ReadHistory, "addItem", function(original)
             return function(history, file, ...)
-                if Context.byFile(file) then
+                if ReaderDocument.chapterByFile(file) then
                     return
                 end
                 return original(history, file, ...)
@@ -110,7 +110,7 @@ local function installCorePatches(state)
         installPatch("readhistory_update_last_book_time", ReadHistory,
             "updateLastBookTime", function(original)
             return function(history, ...)
-                if Context.byFile(Context.currentReaderFile()) then
+                if ReaderDocument.chapterByFile(ReaderDocument.currentReaderFile()) then
                     return
                 end
                 return original(history, ...)
@@ -124,7 +124,7 @@ local function installCorePatches(state)
         installPatch("readcollection_update_last_book_time", ReadCollection,
             "updateLastBookTime", function(original)
             return function(collection, file, ...)
-                if Context.byFile(file) then
+                if ReaderDocument.chapterByFile(file) then
                     return
                 end
                 return original(collection, file, ...)
@@ -139,7 +139,7 @@ local function installCorePatches(state)
             return function(reader_ui, ...)
                 local previous = state.suppress_return_ui
                 if reader_ui and reader_ui.document
-                    and Context.byFile(reader_ui.document.file) then
+                    and ReaderDocument.chapterByFile(reader_ui.document.file) then
                     state.suppress_return_ui = reader_ui
                 end
                 local results = { pcall(original, reader_ui, ...) }
@@ -154,7 +154,7 @@ local function installCorePatches(state)
         installPatch("readerui_show_file_manager", ReaderUI, "showFileManager",
             function(original)
             return function(reader_ui, file, selected_files)
-                if state.pending_return and Context.byFile(file) then
+                if state.pending_return and ReaderDocument.chapterByFile(file) then
                     file = nil
                 end
                 local results = { pcall(original, reader_ui, file, selected_files) }
@@ -171,7 +171,7 @@ end
 
 local function isCurrentStatsDocumentNovel(statistics)
     local ui = statistics and statistics.ui
-    return ui and ui.document and Context.byFile(ui.document.file) or nil
+    return ui and ui.document and ReaderDocument.chapterByFile(ui.document.file) or nil
 end
 
 function Patches.patchStatisticsInstance(statistics)

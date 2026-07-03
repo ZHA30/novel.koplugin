@@ -1,9 +1,9 @@
 local _ = require("novel.i18n")
-local BookshelfService = require("novel.library.bookshelf")
+local BookshelfRecords = require("novel.books.records")
 local Dialog = require("novel.widget.dialog")
 local NetworkMgr = require("ui/network/manager")
 local TextViewer = require("ui/widget/textviewer")
-local Toc = require("novel.ui.chapters")
+local Chapters = require("novel.ui.chapters")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
@@ -32,14 +32,14 @@ end
 
 local function buildButtons(plugin, source, result)
     local book = result.book or {}
-    local bookshelf = plugin.app and plugin.app:getBookshelfService()
-        or BookshelfService:new()
+    local bookshelf = plugin.app and plugin.app:getBookshelfRecords()
+        or BookshelfRecords:new()
     local in_bookshelf = bookshelf:has(source, book)
     local row = {
         {
             text = _("Chapters"),
             callback = function()
-                Toc.show(plugin, source, book)
+                Chapters.show(plugin, source, book)
             end,
         },
         {
@@ -116,13 +116,13 @@ function Detail.close(plugin)
     invalidate(plugin)
     Dialog.closeWidget(plugin, "detail_menu")
     Dialog.closeWidget(plugin, "detail_viewer")
-    Toc.close(plugin)
+    Chapters.close(plugin)
 end
 
 function Detail.showLoaded(plugin, source, result)
     Dialog.closeWidget(plugin, "detail_menu")
     Dialog.closeWidget(plugin, "detail_viewer")
-    Toc.close(plugin)
+    Chapters.close(plugin)
     if not result or not result.ok then
         Dialog.message(_("Detail failed: ")
             .. tostring(Dialog.errorText(result, _("Detail failed."))))
@@ -149,8 +149,8 @@ function Detail.show(plugin, source, book)
 
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local BookInfoService = require("novel.catalog.detail")
-            return BookInfoService.run(source, book)
+            local BookDetail = require("novel.catalog.detail")
+            return BookDetail.run(source, book)
         end, _("Loading details... (tap to cancel)"))
 
         if not plugin.app or plugin.detail_request_id ~= request_id then

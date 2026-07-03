@@ -1,14 +1,14 @@
 local _ = require("novel.i18n")
 local Chapter = require("novel.model.chapter")
 local Dialog = require("novel.widget.dialog")
-local Library = require("novel.library.store")
+local Manifest = require("novel.books.manifest")
 local Menu = require("novel.widget.menu")
 local NetworkMgr = require("ui/network/manager")
-local Opener = require("novel.reader.opener")
+local ReaderChapter = require("novel.reader.chapter")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
-local Toc = {}
+local Chapters = {}
 
 local FILTER_ALL = "all"
 local FILTER_UNREAD = "unread"
@@ -23,15 +23,15 @@ local FILTERS = {
 }
 
 local function invalidate(plugin)
-    plugin.toc_request_id = (plugin.toc_request_id or 0) + 1
+    plugin.chapters_request_id = (plugin.chapters_request_id or 0) + 1
     plugin.content_request_id = (plugin.content_request_id or 0) + 1
 end
 
-local function refreshManifest(library, manifest, source, book)
+local function refreshManifest(manifest_store, manifest, source, book)
     if not manifest or not source then
         return manifest
     end
-    local refreshed = library:ensureBook(source, book or manifest.book,
+    local refreshed = manifest_store:ensureBook(source, book or manifest.book,
         manifest.chapters or {})
     return refreshed or manifest
 end
@@ -91,9 +91,9 @@ local function matchesFilter(filter, chapter)
     return true
 end
 
-function Toc.close(plugin)
+function Chapters.close(plugin)
     invalidate(plugin)
-    Dialog.closeWidget(plugin, "toc_menu")
+    Dialog.closeWidget(plugin, "chapters_menu")
 end
 
 local function filterMenu(plugin, manifest, current_filter)
@@ -104,9 +104,9 @@ local function filterMenu(plugin, manifest, current_filter)
             text = filterLabel(filter),
             mandatory = filter == current_filter and _("Current") or nil,
             callback = function()
-                plugin.novel_toc_filter = plugin.novel_toc_filter or {}
-                plugin.novel_toc_filter[manifest.book_id] = filter
-                Toc.showManifest(plugin, manifest, { filter = filter })
+                plugin.novel_chapters_filter = plugin.novel_chapters_filter or {}
+                plugin.novel_chapters_filter[manifest.book_id] = filter
+                Chapters.showManifest(plugin, manifest, { filter = filter })
             end,
         })
     end
@@ -127,7 +127,7 @@ local function buildChapterItems(plugin, manifest, filter)
                 select_enabled = Chapter.isOpenable(chapter),
                 dim = not Chapter.isOpenable(chapter),
                 callback = function()
-                    Toc.openChapter(plugin, manifest, position, {
+                    Chapters.openChapter(plugin, manifest, position, {
                         from_reader = plugin.ui and plugin.ui.document ~= nil,
                         jump = "start",
                     })
@@ -154,19 +154,19 @@ local function buildChapterItems(plugin, manifest, filter)
     return item_table
 end
 
-function Toc.showManifest(plugin, manifest, options)
+function Chapters.showManifest(plugin, manifest, options)
     options = options or {}
-    manifest = Library:new():load(manifest.book_id) or manifest
-    Dialog.closeWidget(plugin, "toc_menu")
+    manifest = Manifest:new():load(manifest.book_id) or manifest
+    Dialog.closeWidget(plugin, "chapters_menu")
 
-    plugin.novel_toc_filter = plugin.novel_toc_filter or {}
+    plugin.novel_chapters_filter = plugin.novel_chapters_filter or {}
     local filter = options.filter
-        or plugin.novel_toc_filter[manifest.book_id]
+        or plugin.novel_chapters_filter[manifest.book_id]
         or FILTER_ALL
-    plugin.novel_toc_filter[manifest.book_id] = filter
+    plugin.novel_chapters_filter[manifest.book_id] = filter
 
-    local toc_menu
-    toc_menu = Menu:new{
+    local chapters_menu
+    chapters_menu = Menu:new{
         title = manifestTitle(manifest) .. " (" .. tostring(#manifest.chapters)
             .. " / " .. filterLabel(filter) .. ")",
         item_table = buildChapterItems(plugin, manifest, filter),
@@ -175,117 +175,117 @@ function Toc.showManifest(plugin, manifest, options)
         is_popout = false,
         title_bar_fm_style = true,
         close_callback = function()
-            if plugin.toc_menu == toc_menu then
-                plugin.toc_menu = nil
+            if plugin.chapters_menu == chapters_menu then
+                plugin.chapters_menu = nil
             end
         end,
     }
-    plugin.toc_menu = toc_menu
-    UIManager:show(toc_menu)
+    plugin.chapters_menu = chapters_menu
+    UIManager:show(chapters_menu)
 end
 
-function Toc.openChapter(plugin, manifest, position, options)
-    return Opener.open(plugin, manifest, position, options)
+function Chapters.openChapter(plugin, manifest, position, options)
+    return ReaderChapter.open(plugin, manifest, position, options)
 end
 
-function Toc.showList(plugin, source, book, result, options)
+function Chapters.showList(plugin, source, book, result, options)
     options = options or {}
     if not result or not result.ok then
-        local existing = Library:new():loadByBook(source, book)
+        local existing = Manifest:new():loadByBook(source, book)
         if existing then
-            Toc.showManifest(plugin, existing, options)
-            Dialog.message(_("TOC failed: ")
-                .. tostring(Dialog.errorText(result, _("TOC failed."))))
+            Chapters.showManifest(plugin, existing, options)
+            Dialog.message(_("Chapters failed: ")
+                .. tostring(Dialog.errorText(result, _("Chapters failed."))))
             return
         end
-        Dialog.message(_("TOC failed: ")
-            .. tostring(Dialog.errorText(result, _("TOC failed."))))
+        Dialog.message(_("Chapters failed: ")
+            .. tostring(Dialog.errorText(result, _("Chapters failed."))))
         return
     end
 
-    local manifest, err = Library:new():ensureBook(
+    local manifest, err = Manifest:new():ensureBook(
         source, result.book or book, result.chapters or {})
     if not manifest then
-        Dialog.message(_("TOC failed: ") .. tostring(err))
+        Dialog.message(_("Chapters failed: ") .. tostring(err))
         return
     end
     if options.open_position then
-        Toc.openChapter(plugin, manifest, options.open_position, {
+        Chapters.openChapter(plugin, manifest, options.open_position, {
             from_reader = options.from_reader,
             jump = options.jump,
         })
         return
     end
-    Toc.showManifest(plugin, manifest, options)
+    Chapters.showManifest(plugin, manifest, options)
 end
 
-function Toc.show(plugin, source, book, options)
+function Chapters.show(plugin, source, book, options)
     options = options or {}
     if not plugin.app then
         return
     end
 
-    local library = Library:new()
-    local existing = refreshManifest(library, library:loadByBook(source, book),
-        source, book)
+    local manifest_store = Manifest:new()
+    local existing = refreshManifest(manifest_store,
+        manifest_store:loadByBook(source, book), source, book)
     if options.local_only and existing then
-        Toc.showManifest(plugin, existing, options)
+        Chapters.showManifest(plugin, existing, options)
         return
     end
 
     local has_toc_html = book and book.tocHtml ~= nil and book.tocHtml ~= ""
     if not has_toc_html and NetworkMgr:willRerunWhenOnline(function()
-        Toc.show(plugin, source, book, options)
+        Chapters.show(plugin, source, book, options)
     end) then
         if existing then
-            Toc.showManifest(plugin, existing, options)
+            Chapters.showManifest(plugin, existing, options)
         end
         return
     end
 
-    plugin.toc_request_id = (plugin.toc_request_id or 0) + 1
-    local request_id = plugin.toc_request_id
+    plugin.chapters_request_id = (plugin.chapters_request_id or 0) + 1
+    local request_id = plugin.chapters_request_id
 
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local TocService = require("novel.catalog.chapters")
-            return TocService.run(source, book)
+            local ChapterCatalog = require("novel.catalog.chapters")
+            return ChapterCatalog.run(source, book)
         end, _("Loading chapters... (tap to cancel)"))
 
-        if not plugin.app or plugin.toc_request_id ~= request_id then
+        if not plugin.app or plugin.chapters_request_id ~= request_id then
             return
         end
         if not completed then
             Dialog.message(_("Chapter list loading canceled."))
             return
         end
-        Toc.showList(plugin, source, book, result, options)
+        Chapters.showList(plugin, source, book, result, options)
     end)
 end
 
-function Toc.resume(plugin, source, book, position)
+function Chapters.resume(plugin, source, book, position)
     position = tonumber(position)
-    local library = Library:new()
-    local manifest = refreshManifest(library, library:loadByBook(source, book),
-        source, book)
+    local manifest_store = Manifest:new()
+    local manifest = refreshManifest(manifest_store,
+        manifest_store:loadByBook(source, book), source, book)
     if manifest and position and manifest.chapters[position] then
-        Toc.openChapter(plugin, manifest, position)
+        Chapters.openChapter(plugin, manifest, position)
         return
     end
-    Toc.show(plugin, source, book, {
+    Chapters.show(plugin, source, book, {
         open_position = position,
     })
 end
 
-function Toc.showCurrent(plugin)
+function Chapters.showCurrent(plugin)
     local file = plugin and plugin.ui and plugin.ui.document
         and plugin.ui.document.file
-    local context = Library:new():findContextByFile(file)
-    if not context then
+    local current_chapter = Manifest:new():findChapterByFile(file)
+    if not current_chapter then
         Dialog.message(_("No novel chapters for this document."))
         return
     end
-    Toc.showManifest(plugin, context.manifest)
+    Chapters.showManifest(plugin, current_chapter.manifest)
 end
 
-return Toc
+return Chapters

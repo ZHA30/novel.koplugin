@@ -1,7 +1,7 @@
 local _ = require("novel.i18n")
 local Blitbuffer = require("ffi/blitbuffer")
 local Detail = require("novel.ui.detail")
-local BookList = require("novel.widget.booklist")
+local BookMenu = require("novel.widget.bookmenu")
 local Capability = require("novel.source.capability")
 local Dialog = require("novel.widget.dialog")
 local Discovery = require("novel.catalog.discovery")
@@ -259,7 +259,7 @@ function Discover.showResults(plugin, source, group, page, result)
 
     local no_more_source_pages = not Discovery.canRequestNextPage(source, group, page)
     local results_menu
-    results_menu = BookList:new{
+    results_menu = BookMenu:new{
         title = resultTitle(group, page, page),
         item_table = buildResultItems(plugin, source, result),
         covers_fullscreen = true,
@@ -402,7 +402,7 @@ function Discover.show(plugin)
 
     Dialog.closeWidget(plugin, "discover_group_menu")
     local source_groups, unsupported = Discovery.sourceGroups(
-        plugin.app:getSourceRepo():list())
+        plugin.app:getSourceRepository():list())
     local group_menu
     group_menu = Menu:new{
         title = _("Discover"),

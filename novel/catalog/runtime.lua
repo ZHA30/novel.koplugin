@@ -1,32 +1,32 @@
 local Capability = require("novel.source.capability")
 local Url = require("novel.net.url")
 
-local Context = {}
+local Runtime = {}
 
-function Context.trim(value)
+function Runtime.trim(value)
     return tostring(value or ""):match("^%s*(.-)%s*$")
 end
 
-function Context.isBlank(value)
-    return value == nil or Context.trim(value) == ""
+function Runtime.isBlank(value)
+    return value == nil or Runtime.trim(value) == ""
 end
 
-function Context.sourceName(source)
+function Runtime.sourceName(source)
     return Capability.title(source)
 end
 
-function Context.sourceKey(source)
+function Runtime.sourceKey(source)
     return Capability.key(source)
 end
 
-function Context.addDebug(debug, event, data)
+function Runtime.addDebug(debug, event, data)
     table.insert(debug, {
         event = event,
         data = data,
     })
 end
 
-function Context.error(kind, message, data)
+function Runtime.error(kind, message, data)
     return {
         kind = kind,
         message = message,
@@ -34,7 +34,7 @@ function Context.error(kind, message, data)
     }
 end
 
-function Context.responseSummary(response)
+function Runtime.responseSummary(response)
     response = response or {}
     return {
         request_url = response.request_url,
@@ -47,11 +47,11 @@ function Context.responseSummary(response)
     }
 end
 
-function Context.copyUnsupported(target, source, field, items, start_index)
+function Runtime.copyUnsupported(target, source, field, items, start_index)
     for index = start_index or 1, #(items or {}) do
         local item = items[index]
         table.insert(target, {
-            source = Context.sourceName(source),
+            source = Runtime.sourceName(source),
             field = field or item.field or "rule",
             kind = item.kind or "unknown",
             snippet = tostring(item.snippet or ""):sub(1, 120),
@@ -59,11 +59,11 @@ function Context.copyUnsupported(target, source, field, items, start_index)
     end
 end
 
-function Context.copyUrlUnsupported(target, source, items, field)
+function Runtime.copyUrlUnsupported(target, source, items, field)
     for index = 1, #(items or {}) do
         local item = items[index]
         table.insert(target, {
-            source = Context.sourceName(source),
+            source = Runtime.sourceName(source),
             field = item.field == "url" and (field or item.field) or item.field,
             kind = item.kind or "unknown",
             snippet = tostring(item.snippet or ""):sub(1, 120),
@@ -71,16 +71,16 @@ function Context.copyUrlUnsupported(target, source, items, field)
     end
 end
 
-function Context.addUnsupported(target, source, field, kind, snippet)
+function Runtime.addUnsupported(target, source, field, kind, snippet)
     table.insert(target, {
-        source = Context.sourceName(source),
+        source = Runtime.sourceName(source),
         field = field,
         kind = kind,
         snippet = tostring(snippet or ""):sub(1, 120),
     })
 end
 
-function Context.requestSpec(source, rule_url, options, context)
+function Runtime.requestSpec(source, rule_url, options, context)
     options = options or {}
     context = context or {}
     source = source or {}
@@ -98,10 +98,10 @@ function Context.requestSpec(source, rule_url, options, context)
     return spec
 end
 
-function Context.execute(service, source, spec)
+function Runtime.execute(service, source, spec)
     local token, wait_ms = service.throttle:acquire(source, source.concurrentRate)
     if not token then
-        return nil, Context.error("throttle", "source request is rate limited", {
+        return nil, Runtime.error("throttle", "source request is rate limited", {
             wait_ms = wait_ms,
         })
     end
@@ -112,13 +112,13 @@ function Context.execute(service, source, spec)
     service.throttle:release(token)
 
     if not ok then
-        return nil, Context.error("request", tostring(response))
+        return nil, Runtime.error("request", tostring(response))
     end
     if not response.ok then
-        return nil, response.error or Context.error("request", "request failed"),
+        return nil, response.error or Runtime.error("request", "request failed"),
             response
     end
     return response
 end
 
-return Context
+return Runtime

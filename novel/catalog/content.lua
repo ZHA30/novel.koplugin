@@ -1,8 +1,8 @@
 local Analyzer = require("novel.rule.analyzer")
 local Cache = require("novel.storage.cache")
 local ContentRule = require("novel.rule.content")
-local Context = require("novel.catalog.client")
-local Fields = require("novel.catalog.extract")
+local Runtime = require("novel.catalog.runtime")
+local Extract = require("novel.catalog.extract")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 local Url = require("novel.net.url")
@@ -12,14 +12,14 @@ Content.__index = Content
 
 local DEFAULT_MAX_PAGES = 20
 
-local isBlank = Context.isBlank
-local addDebug = Context.addDebug
-local addError = Context.error
-local responseSummary = Context.responseSummary
-local copyUnsupported = Context.copyUnsupported
-local copyUrlUnsupported = Context.copyUrlUnsupported
-local addUnsupported = Context.addUnsupported
-local requestSpec = Context.requestSpec
+local isBlank = Runtime.isBlank
+local addDebug = Runtime.addDebug
+local addError = Runtime.error
+local responseSummary = Runtime.responseSummary
+local copyUnsupported = Runtime.copyUnsupported
+local copyUrlUnsupported = Runtime.copyUrlUnsupported
+local addUnsupported = Runtime.addUnsupported
+local requestSpec = Runtime.requestSpec
 
 local function enqueue(queue, queued, visited, url)
     if url and url ~= "" and not visited[url] and not queued[url] then
@@ -78,7 +78,7 @@ function Content:fetchPage(source, url, options, unsupported)
         return nil, addError("url", spec.errors[1].error, spec.errors[1])
     end
 
-    return Context.execute(self, source, spec)
+    return Runtime.execute(self, source, spec)
 end
 
 local function applySourceRegex(source, rule, body, base_url, redirect_url, unsupported)
@@ -120,7 +120,7 @@ function Content.parsePage(source, book, chapter, rule, response, next_chapter_u
         rule = rule.content,
     })
     local content_type = ContentRule.typeForRule(rule.content)
-    local raw_content = Fields.raw(analyzer, unsupported, source,
+    local raw_content = Extract.raw(analyzer, unsupported, source,
         "ruleContent.content", rule.content)
     local text = ContentRule.format(raw_content, content_type)
 

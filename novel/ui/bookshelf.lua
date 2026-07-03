@@ -1,11 +1,11 @@
 local _ = require("novel.i18n")
-local BookList = require("novel.widget.booklist")
+local BookMenu = require("novel.widget.bookmenu")
 local Capability = require("novel.source.capability")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Detail = require("novel.ui.detail")
 local Dialog = require("novel.widget.dialog")
 local NetworkMgr = require("ui/network/manager")
-local Toc = require("novel.ui.chapters")
+local Chapters = require("novel.ui.chapters")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
@@ -32,7 +32,7 @@ end
 
 local function findCurrentSource(plugin, record)
     local source_url = record.source_url or ""
-    local sources = plugin.app:getSourceRepo():list()
+    local sources = plugin.app:getSourceRepository():list()
     for source_index = 1, #sources do
         local source = sources[source_index]
         if source.bookSourceUrl == source_url then
@@ -104,7 +104,7 @@ local function applySwitch(plugin, record, candidate)
                 Dialog.message(_("Novel is not ready."))
                 return
             end
-            local updated_record, err = plugin.app:getBookshelfService()
+            local updated_record, err = plugin.app:getBookshelfRecords()
                 :applySwitch(record, candidate.source, candidate.book)
             if not updated_record then
                 Dialog.message(_("Switch failed: ") .. tostring(err))
@@ -185,7 +185,7 @@ local function showSwitchResults(plugin, record, result)
     end
 
     local results_menu
-    results_menu = BookList:new{
+    results_menu = BookMenu:new{
         title = _("Switch source"),
         item_table = switchResultItems(plugin, record, result),
         covers_fullscreen = true,
@@ -209,7 +209,7 @@ local function confirmRemove(plugin, record)
         text = _("Remove book from bookshelf?"),
         ok_text = _("Remove"),
         ok_callback = function()
-            plugin.app:getBookshelfService():remove(record.source, record.book)
+            plugin.app:getBookshelfRecords():remove(record.source, record.book)
             if plugin.bookshelf_confirm_dialog == confirm_dialog then
                 plugin.bookshelf_confirm_dialog = nil
             end
@@ -229,11 +229,11 @@ local function resumeRecord(plugin, record)
     local source = findCurrentSource(plugin, record)
     local current = record.current
     if not current or not current.chapter then
-        Toc.show(plugin, source, record.book)
+        Chapters.show(plugin, source, record.book)
         return
     end
     local chapter_position = current.chapter_position or 1
-    Toc.resume(plugin, source, record.book, chapter_position)
+    Chapters.resume(plugin, source, record.book, chapter_position)
 end
 
 local function refreshRecord(plugin, record)
@@ -253,8 +253,8 @@ local function refreshRecord(plugin, record)
 
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local BookshelfService = require("novel.library.bookshelf")
-            return BookshelfService.fetchRefresh(source, record.book)
+            local BookshelfRecords = require("novel.books.records")
+            return BookshelfRecords.fetchRefresh(source, record.book)
         end, _("Refreshing... (tap to cancel)"))
 
         if not plugin.app or plugin.bookshelf_refresh_request_id ~= request_id then
@@ -270,7 +270,7 @@ local function refreshRecord(plugin, record)
             return
         end
 
-        local updated_record, err = plugin.app:getBookshelfService()
+        local updated_record, err = plugin.app:getBookshelfRecords()
             :applyRefresh(source, record.book, result)
         if not updated_record then
             Dialog.message(_("Refresh failed: ") .. tostring(err))
@@ -293,14 +293,14 @@ local function switchRecord(plugin, record)
         return
     end
 
-    local sources = plugin.app:getSourceRepo():list()
+    local sources = plugin.app:getSourceRepository():list()
     invalidateSwitch(plugin)
     local request_id = plugin.bookshelf_switch_request_id
 
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local SwitchService = require("novel.library.switch")
-            return SwitchService.find(record, sources, {
+            local BookMatcher = require("novel.books.matcher")
+            return BookMatcher.find(record, sources, {
                 timeout = 5,
             })
         end, _("Searching sources... (tap to cancel)"))
@@ -339,7 +339,7 @@ local function recordActions(plugin, record)
         {
             text = _("Chapters"),
             callback = function()
-                Toc.show(plugin, findCurrentSource(plugin, record), record.book)
+                Chapters.show(plugin, findCurrentSource(plugin, record), record.book)
             end,
         },
         {
@@ -403,9 +403,9 @@ function Bookshelf.show(plugin)
     end
 
     Dialog.closeWidget(plugin, "bookshelf_menu")
-    local records = plugin.app:getBookshelfService():list()
+    local records = plugin.app:getBookshelfRecords():list()
     local bookshelf_menu
-    bookshelf_menu = BookList:new{
+    bookshelf_menu = BookMenu:new{
         title = _("Bookshelf"),
         item_table = buildItems(plugin, records),
         covers_fullscreen = true,

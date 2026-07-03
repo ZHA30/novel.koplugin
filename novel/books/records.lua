@@ -1,12 +1,12 @@
 local Book = require("novel.model.book")
-local Context = require("novel.catalog.client")
+local Runtime = require("novel.catalog.runtime")
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
 
-local Bookshelf = {
+local BookshelfRecords = {
     path = DataStorage:getSettingsDir() .. "/novel_bookshelf.lua",
 }
-Bookshelf.__index = Bookshelf
+BookshelfRecords.__index = BookshelfRecords
 
 local function now()
     return os.time()
@@ -25,10 +25,10 @@ local function clone(value)
 end
 
 local function sourceUrl(source)
-    return Context.sourceKey(source)
+    return Runtime.sourceKey(source)
 end
 
-local sourceName = Context.sourceName
+local sourceName = Runtime.sourceName
 
 local function bookUrl(book)
     return book and book.bookUrl or ""
@@ -131,13 +131,13 @@ local function serviceError(stage, result)
     }
 end
 
-function Bookshelf:new()
+function BookshelfRecords:new()
     return setmetatable({
-        settings = LuaSettings:open(Bookshelf.path),
+        settings = LuaSettings:open(BookshelfRecords.path),
     }, self)
 end
 
-function Bookshelf:list()
+function BookshelfRecords:list()
     local records = self.settings:readSetting("books") or {}
     local normalized = {}
     for record_index = 1, #records do
@@ -147,17 +147,17 @@ function Bookshelf:list()
     return normalized
 end
 
-function Bookshelf:saveAll(records)
+function BookshelfRecords:saveAll(records)
     sortRecords(records)
     self.settings:saveSetting("books", records)
     self.settings:flush()
 end
 
-function Bookshelf:count()
+function BookshelfRecords:count()
     return #self:list()
 end
 
-function Bookshelf:get(source, book)
+function BookshelfRecords:get(source, book)
     local key = bookKey(source, book)
     for record_index, record in ipairs(self:list()) do
         if record.key == key then
@@ -167,11 +167,11 @@ function Bookshelf:get(source, book)
     return nil
 end
 
-function Bookshelf:has(source, book)
+function BookshelfRecords:has(source, book)
     return self:get(source, book) ~= nil
 end
 
-function Bookshelf:add(source, book)
+function BookshelfRecords:add(source, book)
     local records = self:list()
     local key = bookKey(source, book)
     if key == "\n" then
@@ -207,7 +207,7 @@ function Bookshelf:add(source, book)
     return record
 end
 
-function Bookshelf:remove(source, book)
+function BookshelfRecords:remove(source, book)
     local key = bookKey(source, book)
     local records = self:list()
     local removed = false
@@ -224,7 +224,7 @@ function Bookshelf:remove(source, book)
     return removed
 end
 
-function Bookshelf:applyRefresh(source, book, refresh)
+function BookshelfRecords:applyRefresh(source, book, refresh)
     if not refresh or not refresh.ok or type(refresh.book) ~= "table" then
         return nil, "invalid refresh result"
     end
@@ -264,7 +264,7 @@ function Bookshelf:applyRefresh(source, book, refresh)
     return nil, "book is not in bookshelf"
 end
 
-function Bookshelf:applySwitch(record, new_source, new_book)
+function BookshelfRecords:applySwitch(record, new_source, new_book)
     if type(record) ~= "table" then
         return nil, "book record is required"
     end
@@ -320,7 +320,7 @@ function Bookshelf:applySwitch(record, new_source, new_book)
     return stored
 end
 
-function Bookshelf:updateProgress(source, book, chapter, position, chapter_pos)
+function BookshelfRecords:updateProgress(source, book, chapter, position, chapter_pos)
     local record = self:get(source, book)
     if not record then
         return false
@@ -355,21 +355,21 @@ function Bookshelf:updateProgress(source, book, chapter, position, chapter_pos)
     return false
 end
 
-function Bookshelf:clear()
+function BookshelfRecords:clear()
     self:saveAll({})
 end
 
-function Bookshelf.deleteStorage()
-    os.remove(Bookshelf.path)
-    os.remove(Bookshelf.path .. ".old")
+function BookshelfRecords.deleteStorage()
+    os.remove(BookshelfRecords.path)
+    os.remove(BookshelfRecords.path .. ".old")
 end
 
-function Bookshelf.fetchRefresh(source, book, options)
+function BookshelfRecords.fetchRefresh(source, book, options)
     options = options or {}
-    local BookInfo = options.bookinfo or require("novel.catalog.detail")
-    local Toc = options.toc or require("novel.catalog.chapters")
+    local BookDetail = options.detail or require("novel.catalog.detail")
+    local ChapterCatalog = options.chapters or require("novel.catalog.chapters")
 
-    local detail = BookInfo.run(source, book, {
+    local detail = BookDetail.run(source, book, {
         refresh = true,
         use_info_html = false,
         timeout = options.timeout,
@@ -380,7 +380,7 @@ function Bookshelf.fetchRefresh(source, book, options)
         return serviceError("detail", detail)
     end
 
-    local toc = Toc.run(source, detail.book, {
+    local chapters = ChapterCatalog.run(source, detail.book, {
         refresh = true,
         use_toc_html = false,
         timeout = options.timeout,
@@ -388,23 +388,23 @@ function Bookshelf.fetchRefresh(source, book, options)
         max_redirects = options.max_redirects,
         max_pages = options.max_pages,
     })
-    if not toc or not toc.ok then
-        return serviceError("toc", toc)
+    if not chapters or not chapters.ok then
+        return serviceError("chapters", chapters)
     end
 
     return {
         ok = true,
-        book = toc.book or detail.book,
-        chapters = toc.chapters or {},
-        debug = mergeResultLists(detail.debug, toc.debug),
-        unsupported = mergeResultLists(detail.unsupported, toc.unsupported),
+        book = chapters.book or detail.book,
+        chapters = chapters.chapters or {},
+        debug = mergeResultLists(detail.debug, chapters.debug),
+        unsupported = mergeResultLists(detail.unsupported, chapters.unsupported),
         detail = detail.response,
-        toc = toc.pages,
+        chapter_pages = chapters.pages,
     }
 end
 
-function Bookshelf:refresh(source, book, options)
-    local result = Bookshelf.fetchRefresh(source, book, options)
+function BookshelfRecords:refresh(source, book, options)
+    local result = BookshelfRecords.fetchRefresh(source, book, options)
     if not result.ok then
         return result
     end
@@ -421,4 +421,4 @@ function Bookshelf:refresh(source, book, options)
     return result
 end
 
-return Bookshelf
+return BookshelfRecords

@@ -1,26 +1,26 @@
 local Analyzer = require("novel.rule.analyzer")
 local Chapter = require("novel.model.chapter")
 local Cache = require("novel.storage.cache")
-local Context = require("novel.catalog.client")
-local Fields = require("novel.catalog.extract")
+local Runtime = require("novel.catalog.runtime")
+local Extract = require("novel.catalog.extract")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 local Url = require("novel.net.url")
 
-local Toc = {}
-Toc.__index = Toc
+local Chapters = {}
+Chapters.__index = Chapters
 
 local DEFAULT_MAX_PAGES = 20
 
-local trim = Context.trim
-local isBlank = Context.isBlank
-local addDebug = Context.addDebug
-local addError = Context.error
-local responseSummary = Context.responseSummary
-local copyUnsupported = Context.copyUnsupported
-local copyUrlUnsupported = Context.copyUrlUnsupported
-local addUnsupported = Context.addUnsupported
-local requestSpec = Context.requestSpec
+local trim = Runtime.trim
+local isBlank = Runtime.isBlank
+local addDebug = Runtime.addDebug
+local addError = Runtime.error
+local responseSummary = Runtime.responseSummary
+local copyUnsupported = Runtime.copyUnsupported
+local copyUrlUnsupported = Runtime.copyUrlUnsupported
+local addUnsupported = Runtime.addUnsupported
+local requestSpec = Runtime.requestSpec
 
 local function listRule(rule)
     local value = trim(rule and rule.chapterList or "")
@@ -82,7 +82,7 @@ local function syntheticResponse(book, url)
     }
 end
 
-function Toc:new(options)
+function Chapters:new(options)
     options = options or {}
     return setmetatable({
         request = options.request or Request,
@@ -90,7 +90,7 @@ function Toc:new(options)
     }, self)
 end
 
-function Toc:fetchPage(source, book, url, options, unsupported)
+function Chapters:fetchPage(source, book, url, options, unsupported)
     if book.tocHtml and url == book.tocUrl and options.use_toc_html ~= false then
         return syntheticResponse(book, url)
     end
@@ -101,10 +101,10 @@ function Toc:fetchPage(source, book, url, options, unsupported)
         return nil, addError("url", spec.errors[1].error, spec.errors[1])
     end
 
-    return Context.execute(self, source, spec)
+    return Runtime.execute(self, source, spec)
 end
 
-function Toc.parsePage(source, book, rule, list_rule, response, get_next)
+function Chapters.parsePage(source, book, rule, list_rule, response, get_next)
     local debug, unsupported, chapters, next_urls = {}, {}, {}, {}
     local final_url = response.final_url or response.url or response.request_url
         or book.tocUrl or book.bookUrl or ""
@@ -127,7 +127,7 @@ function Toc.parsePage(source, book, rule, list_rule, response, get_next)
     })
 
     if get_next and not isBlank(rule.nextTocUrl) then
-        local values = Fields.urlList(analyzer, unsupported, source,
+        local values = Extract.urlList(analyzer, unsupported, source,
             "ruleToc.nextTocUrl", rule.nextTocUrl)
         for value_index = 1, #values do
             local next_url = values[value_index]
@@ -140,12 +140,12 @@ function Toc.parsePage(source, book, rule, list_rule, response, get_next)
     for element_index = 1, #elements do
         local element = elements[element_index]
         analyzer:setContent(element)
-        local title = Fields.text(analyzer, unsupported, source,
+        local title = Extract.text(analyzer, unsupported, source,
             "ruleToc.chapterName", rule.chapterName, element)
         if title ~= "" then
-            local is_volume = Fields.boolean(Fields.text(analyzer, unsupported, source,
+            local is_volume = Extract.boolean(Extract.text(analyzer, unsupported, source,
                 "ruleToc.isVolume", rule.isVolume, element))
-            local chapter_url = Fields.url(analyzer, unsupported, source,
+            local chapter_url = Extract.url(analyzer, unsupported, source,
                 "ruleToc.chapterUrl", rule.chapterUrl, element)
             if chapter_url == "" then
                 if is_volume then
@@ -154,7 +154,7 @@ function Toc.parsePage(source, book, rule, list_rule, response, get_next)
                     chapter_url = base_url
                 end
             end
-            local is_vip = Fields.boolean(Fields.text(analyzer, unsupported, source,
+            local is_vip = Extract.boolean(Extract.text(analyzer, unsupported, source,
                 "ruleToc.isVip", rule.isVip, element))
             table.insert(chapters, Chapter.new{
                 url = chapter_url,
@@ -163,7 +163,7 @@ function Toc.parsePage(source, book, rule, list_rule, response, get_next)
                 isVip = is_vip,
                 baseUrl = final_url,
                 bookUrl = book.bookUrl,
-                tag = Fields.text(analyzer, unsupported, source,
+                tag = Extract.text(analyzer, unsupported, source,
                     "ruleToc.updateTime", rule.updateTime, element),
             })
         end
@@ -203,7 +203,7 @@ local function dedupeChapters(chapters, reverse_rule)
     return deduped
 end
 
-function Toc:get(source, book, options)
+function Chapters:get(source, book, options)
     options = options or {}
     local debug, unsupported, pages = {}, {}, {}
     if type(source) ~= "table" then
@@ -295,7 +295,7 @@ function Toc:get(source, book, options)
                 }
             end
 
-            local parsed = Toc.parsePage(source, book, source.ruleToc,
+            local parsed = Chapters.parsePage(source, book, source.ruleToc,
                 rule, response, true)
             table.insert(pages, parsed.response)
             for index = 1, #parsed.debug do
@@ -350,8 +350,8 @@ function Toc:get(source, book, options)
     return result
 end
 
-function Toc.run(source, book, options)
-    return Toc:new(options):get(source, book, options)
+function Chapters.run(source, book, options)
+    return Chapters:new(options):get(source, book, options)
 end
 
-return Toc
+return Chapters

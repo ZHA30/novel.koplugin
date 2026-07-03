@@ -1,13 +1,13 @@
 local _ = require("novel.i18n")
 local Chapter = require("novel.model.chapter")
-local ChapterDoc = require("novel.library.chapterdoc")
+local ChapterDocument = require("novel.books.document")
 local Dialog = require("novel.widget.dialog")
-local Store = require("novel.library.store")
+local Manifest = require("novel.books.manifest")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
-local Opener = {}
+local ReaderChapter = {}
 
 local function jumpAfterOpen(reader_ui, jump)
     if not jump then
@@ -58,19 +58,19 @@ local function updateProgress(plugin, manifest, position)
     if not chapter then
         return
     end
-    plugin.app:getBookshelfService():updateProgress(
+    plugin.app:getBookshelfRecords():updateProgress(
         manifest.source, manifest.book, chapter, position, 0)
 end
 
-local function openDownloaded(plugin, store, manifest, position, options)
-    store:updateCurrent(manifest, position)
+local function openDownloadedChapter(plugin, manifest_store, manifest, position, options)
+    manifest_store:updateCurrent(manifest, position)
     updateProgress(plugin, manifest, position)
-    Dialog.closeWidget(plugin, "toc_menu")
+    Dialog.closeWidget(plugin, "chapters_menu")
     local chapter = manifest.chapters[position]
     openFile(plugin, chapter.file_path, options and options.jump)
 end
 
-function Opener.open(plugin, manifest, position, options)
+function ReaderChapter.open(plugin, manifest, position, options)
     options = options or {}
     if not plugin or not plugin.app then
         return
@@ -80,8 +80,8 @@ function Opener.open(plugin, manifest, position, options)
         plugin.novel_switching_chapter = nil
         return
     end
-    local store = Store:new()
-    manifest = store:load(manifest.book_id) or manifest
+    local manifest_store = Manifest:new()
+    manifest = manifest_store:load(manifest.book_id) or manifest
     local chapter = manifest and manifest.chapters and manifest.chapters[position]
     if not chapter then
         Dialog.message(_("Chapter not found."))
@@ -93,7 +93,7 @@ function Opener.open(plugin, manifest, position, options)
         local target_chapter, target_position = Chapter.nextOpenable(
             manifest.chapters, position, step)
         if target_chapter then
-            Opener.open(plugin, manifest, target_position, options)
+            ReaderChapter.open(plugin, manifest, target_position, options)
             return
         end
     end
@@ -102,13 +102,13 @@ function Opener.open(plugin, manifest, position, options)
         plugin.novel_switching_chapter = nil
         return
     end
-    if Store.chapterFileExists(manifest, position)
-        and ChapterDoc.contentIsCurrent(manifest, chapter) then
-        openDownloaded(plugin, store, manifest, position, options)
+    if Manifest.chapterFileExists(manifest, position)
+        and ChapterDocument.contentIsCurrent(manifest, chapter) then
+        openDownloadedChapter(plugin, manifest_store, manifest, position, options)
         return
     end
     if NetworkMgr:willRerunWhenOnline(function()
-        Opener.open(plugin, manifest, position, options)
+        ReaderChapter.open(plugin, manifest, position, options)
     end) then
         plugin.novel_switching_chapter = nil
         return
@@ -141,8 +141,8 @@ function Opener.open(plugin, manifest, position, options)
             return
         end
 
-        local html = ChapterDoc.html(chapter, result.text, result.content_type)
-        local file, err = store:saveChapter(manifest, position, html, {
+        local html = ChapterDocument.html(chapter, result.text, result.content_type)
+        local file, err = manifest_store:saveChapter(manifest, position, html, {
             content_type = result.content_type,
         })
         if not file then
@@ -150,9 +150,9 @@ function Opener.open(plugin, manifest, position, options)
             Dialog.message(_("Save chapter failed: ") .. tostring(err))
             return
         end
-        manifest = store:load(manifest.book_id) or manifest
-        openDownloaded(plugin, store, manifest, position, options)
+        manifest = manifest_store:load(manifest.book_id) or manifest
+        openDownloadedChapter(plugin, manifest_store, manifest, position, options)
     end)
 end
 
-return Opener
+return ReaderChapter

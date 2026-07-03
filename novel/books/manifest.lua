@@ -3,11 +3,11 @@ local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
 local util = require("util")
 
-local Library = {
+local Manifest = {
     root_dir = DataStorage:getDataDir() .. "/novel/books",
     schema_version = 1,
 }
-Library.__index = Library
+Manifest.__index = Manifest
 
 local function now()
     return os.time()
@@ -85,11 +85,11 @@ local function stripRuntimeFields(manifest)
     return copy
 end
 
-function Library:new()
+function Manifest:new()
     return setmetatable({}, self)
 end
 
-function Library.bookId(source, book)
+function Manifest.bookId(source, book)
     local url = bookUrl(book)
     local key = Cache.makeKey("book", {
         source = sourceUrl(source),
@@ -99,41 +99,41 @@ function Library.bookId(source, book)
     return safeId(key)
 end
 
-function Library.bookDir(book_id)
-    return Library.root_dir .. "/" .. book_id
+function Manifest.bookDir(book_id)
+    return Manifest.root_dir .. "/" .. book_id
 end
 
-function Library.chaptersDir(book_id)
-    return Library.bookDir(book_id) .. "/chapters"
+function Manifest.chaptersDir(book_id)
+    return Manifest.bookDir(book_id) .. "/chapters"
 end
 
-function Library.manifestPath(book_id)
-    return Library.bookDir(book_id) .. "/manifest.lua"
+function Manifest.manifestPath(book_id)
+    return Manifest.bookDir(book_id) .. "/manifest.lua"
 end
 
-function Library.chapterPath(book_id, chapter)
-    return Library.chaptersDir(book_id) .. "/" .. chapter.file_name
+function Manifest.chapterPath(book_id, chapter)
+    return Manifest.chaptersDir(book_id) .. "/" .. chapter.file_name
 end
 
-function Library.normalizeManifest(manifest)
+function Manifest.normalizeManifest(manifest)
     if type(manifest) ~= "table" or manifest.book_id == nil then
         return nil
     end
 
-    manifest.schema_version = manifest.schema_version or Library.schema_version
+    manifest.schema_version = manifest.schema_version or Manifest.schema_version
     manifest.chapters = manifest.chapters or {}
     for position = 1, #manifest.chapters do
         local chapter = manifest.chapters[position]
         chapter.position = position
         chapter.file_name = chapter.file_name
             or (chapterId(chapter, position) .. ".html")
-        chapter.file_path = Library.chapterPath(manifest.book_id, chapter)
+        chapter.file_path = Manifest.chapterPath(manifest.book_id, chapter)
         chapter.downloaded = util.pathExists(chapter.file_path) or false
     end
     return manifest
 end
 
-function Library:load(book_id)
+function Manifest:load(book_id)
     if not book_id or book_id == "" then
         return nil
     end
@@ -145,11 +145,11 @@ function Library:load(book_id)
     return self.normalizeManifest(settings:readSetting("manifest"))
 end
 
-function Library:loadByBook(source, book)
-    return self:load(Library.bookId(source, book))
+function Manifest:loadByBook(source, book)
+    return self:load(Manifest.bookId(source, book))
 end
 
-function Library:save(manifest)
+function Manifest:save(manifest)
     if type(manifest) ~= "table" or not manifest.book_id then
         return nil, "manifest is required"
     end
@@ -157,7 +157,7 @@ function Library:save(manifest)
     if not ok then
         return nil, err
     end
-    manifest.schema_version = Library.schema_version
+    manifest.schema_version = Manifest.schema_version
     manifest.updated_at = now()
     local settings = LuaSettings:open(self.manifestPath(manifest.book_id))
     settings:saveSetting("manifest", stripRuntimeFields(manifest))
@@ -165,9 +165,9 @@ function Library:save(manifest)
     return self.normalizeManifest(manifest)
 end
 
-function Library:ensureBook(source, book, chapters)
+function Manifest:ensureBook(source, book, chapters)
     chapters = chapters or {}
-    local book_id = Library.bookId(source, book)
+    local book_id = Manifest.bookId(source, book)
     local existing = self:load(book_id) or {}
     local by_identity = {}
     for position = 1, #(existing.chapters or {}) do
@@ -176,7 +176,7 @@ function Library:ensureBook(source, book, chapters)
     end
 
     local manifest = {
-        schema_version = Library.schema_version,
+        schema_version = Manifest.schema_version,
         book_id = book_id,
         source = clone(source or existing.source or {}),
         source_url = sourceUrl(source or existing.source),
@@ -201,7 +201,7 @@ function Library:ensureBook(source, book, chapters)
             chapter.last_opened_at = old.last_opened_at
             chapter.content_type = old.content_type
         end
-        chapter.file_path = Library.chapterPath(book_id, chapter)
+        chapter.file_path = Manifest.chapterPath(book_id, chapter)
         chapter.downloaded = util.pathExists(chapter.file_path) or false
         table.insert(manifest.chapters, chapter)
     end
@@ -209,9 +209,9 @@ function Library:ensureBook(source, book, chapters)
     return self:save(manifest)
 end
 
-function Library:findContextByFile(file)
+function Manifest:findChapterByFile(file)
     file = tostring(file or "")
-    local prefix = Library.root_dir .. "/"
+    local prefix = Manifest.root_dir .. "/"
     if file:sub(1, #prefix) ~= prefix then
         return nil
     end
@@ -240,19 +240,19 @@ function Library:findContextByFile(file)
     return nil
 end
 
-function Library.chapterFileExists(manifest, position)
+function Manifest.chapterFileExists(manifest, position)
     local chapter = manifest and manifest.chapters and manifest.chapters[position]
     return chapter and chapter.file_path and util.pathExists(chapter.file_path) or false
 end
 
-function Library:saveChapter(manifest, position, html, options)
+function Manifest:saveChapter(manifest, position, html, options)
     options = options or {}
     local chapter = manifest and manifest.chapters and manifest.chapters[position]
     if not chapter then
         return nil, "chapter is missing"
     end
 
-    local ok, err = util.makePath(Library.chaptersDir(manifest.book_id))
+    local ok, err = util.makePath(Manifest.chaptersDir(manifest.book_id))
     if not ok then
         return nil, err
     end
@@ -268,7 +268,7 @@ function Library:saveChapter(manifest, position, html, options)
     return chapter.file_path
 end
 
-function Library:updateCurrent(manifest, position)
+function Manifest:updateCurrent(manifest, position)
     local chapter = manifest and manifest.chapters and manifest.chapters[position]
     if not chapter then
         return false
@@ -279,7 +279,7 @@ function Library:updateCurrent(manifest, position)
     return true
 end
 
-function Library:markRead(manifest, position, read)
+function Manifest:markRead(manifest, position, read)
     local chapter = manifest and manifest.chapters and manifest.chapters[position]
     if not chapter then
         return false
@@ -290,11 +290,11 @@ function Library:markRead(manifest, position, read)
     return true
 end
 
-function Library.deleteStorage()
+function Manifest.deleteStorage()
     local ok, ffi_util = pcall(require, "ffi/util")
     if ok and ffi_util and ffi_util.purgeDir then
-        ffi_util.purgeDir(Library.root_dir)
+        ffi_util.purgeDir(Manifest.root_dir)
     end
 end
 
-return Library
+return Manifest

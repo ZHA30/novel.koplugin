@@ -1,6 +1,6 @@
-local Store = require("novel.library.store")
-local Context = require("novel.reader.context")
-local Opener = require("novel.reader.opener")
+local Manifest = require("novel.books.manifest")
+local ReaderDocument = require("novel.reader.document")
+local ReaderChapter = require("novel.reader.chapter")
 local UIManager = require("ui/uimanager")
 
 local Navigation = {}
@@ -105,25 +105,26 @@ local function switchChapter(plugin, direction)
         return true
     end
 
-    local context = plugin.novel_reader_context or Context.current(plugin)
-    local manifest = context and context.manifest
+    local current_chapter = plugin.novel_reader_chapter
+        or ReaderDocument.currentChapter(plugin)
+    local manifest = current_chapter and current_chapter.manifest
     if not manifest then
         return false
     end
-    local target_position = (context.position or 1) + direction
+    local target_position = (current_chapter.position or 1) + direction
     if target_position < 1 or target_position > #(manifest.chapters or {}) then
         return false
     end
 
     plugin.novel_switching_chapter = true
     if direction > 0 then
-        Store:new():markRead(manifest, context.position)
+        Manifest:new():markRead(manifest, current_chapter.position)
     end
     UIManager:nextTick(function()
         if not plugin.app then
             return
         end
-        Opener.open(plugin, manifest, target_position, {
+        ReaderChapter.open(plugin, manifest, target_position, {
             from_reader = true,
             jump = direction > 0 and "start" or "end",
         })
@@ -166,18 +167,18 @@ function Navigation.close(plugin)
     restoreWrapper(plugin.novel_rolling_wrapper)
     plugin.novel_paging_wrapper = nil
     plugin.novel_rolling_wrapper = nil
-    plugin.novel_reader_context = nil
+    plugin.novel_reader_chapter = nil
     plugin.novel_switching_chapter = nil
 end
 
 function Navigation.setup(plugin)
     Navigation.close(plugin)
-    local context = Context.current(plugin)
-    if not context then
+    local current_chapter = ReaderDocument.currentChapter(plugin)
+    if not current_chapter then
         return false
     end
 
-    plugin.novel_reader_context = context
+    plugin.novel_reader_chapter = current_chapter
     installWrapper(plugin, plugin.ui.paging, "onGotoViewRel",
         pagingAtBoundary, "novel_paging_wrapper")
     installWrapper(plugin, plugin.ui.rolling, "onGotoViewRel",

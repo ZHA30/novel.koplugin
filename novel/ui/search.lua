@@ -1,5 +1,5 @@
 local _ = require("novel.i18n")
-local BookList = require("novel.widget.booklist")
+local BookMenu = require("novel.widget.bookmenu")
 local Capability = require("novel.source.capability")
 local Detail = require("novel.ui.detail")
 local Dialog = require("novel.widget.dialog")
@@ -35,7 +35,7 @@ local function invalidate(plugin)
 end
 
 local function searchableSources(plugin)
-    return Capability.searchable(plugin.app:getSourceRepo():list())
+    return Capability.searchable(plugin.app:getSourceRepository():list())
 end
 
 function Search.close(plugin)
@@ -115,7 +115,7 @@ function Search.showResults(plugin, source, keyword, result)
     end
 
     local results_menu
-    results_menu = BookList:new{
+    results_menu = BookMenu:new{
         title = _("Search") .. ": " .. keyword,
         item_table = buildResultItems(plugin, source, keyword, result),
         covers_fullscreen = true,

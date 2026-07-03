@@ -1,7 +1,7 @@
 local ContentRule = require("novel.rule.content")
 local util = require("util")
 
-local ChapterDoc = {}
+local ChapterDocument = {}
 
 local function escapeHtml(value)
     return util.htmlEscape(tostring(value or ""))
@@ -31,17 +31,17 @@ local function htmlBody(html)
     return html
 end
 
-function ChapterDoc.expectedContentType(manifest)
+function ChapterDocument.expectedContentType(manifest)
     local rule = manifest and manifest.source and manifest.source.ruleContent
     return ContentRule.typeForRule(rule and rule.content)
 end
 
-function ChapterDoc.contentIsCurrent(manifest, chapter)
-    return ContentRule.isCurrent(ChapterDoc.expectedContentType(manifest),
+function ChapterDocument.contentIsCurrent(manifest, chapter)
+    return ContentRule.isCurrent(ChapterDocument.expectedContentType(manifest),
         chapter and chapter.content_type)
 end
 
-function ChapterDoc.html(chapter, content, content_type)
+function ChapterDocument.html(chapter, content, content_type)
     chapter = chapter or {}
     content_type = ContentRule.normalizeType(content_type)
     local body = content_type == ContentRule.html and htmlBody(content)
@@ -68,4 +68,4 @@ function ChapterDoc.html(chapter, content, content_type)
     })
 end
 
-return ChapterDoc
+return ChapterDocument

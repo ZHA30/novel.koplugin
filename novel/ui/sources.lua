@@ -70,7 +70,7 @@ local function rebuildMenuItems(plugin, sources, groups)
     end
 end
 
-local function buildSourceItem(plugin, repo, source)
+local function buildSourceItem(plugin, repository, source)
     local item
     item = {
         text_func = function()
@@ -86,7 +86,7 @@ local function buildSourceItem(plugin, repo, source)
         callback = function()
             local enabled = sourceEnabled(source)
             local next_enabled = not enabled
-            if repo:setEnabled(source.bookSourceUrl, next_enabled) then
+            if repository:setEnabled(source.bookSourceUrl, next_enabled) then
                 source.enabled = next_enabled
                 item.dim = not next_enabled
                 refreshCurrentMenu(plugin)
@@ -107,7 +107,7 @@ function Sources.buildItems(plugin, sources, groups)
         }
     end
 
-    local repo = plugin.app:getSourceRepo()
+    local repository = plugin.app:getSourceRepository()
     local item_table = {}
     for group_index = 1, #groups do
         local group = groups[group_index]
@@ -127,7 +127,8 @@ function Sources.buildItems(plugin, sources, groups)
         })
         if not groupCollapsed(plugin, group) then
             for source_index = 1, #group.sources do
-                table.insert(item_table, buildSourceItem(plugin, repo, group.sources[source_index]))
+                table.insert(item_table, buildSourceItem(plugin, repository,
+                    group.sources[source_index]))
             end
         end
     end
@@ -139,9 +140,9 @@ function Sources.show(plugin)
         return
     end
 
-    local repo = plugin.app:getSourceRepo()
-    local sources = repo:list()
-    local groups = repo:listGroups()
+    local repository = plugin.app:getSourceRepository()
+    local sources = repository:list()
+    local groups = repository:listGroups()
 
     if plugin.sources_menu then
         UIManager:close(plugin.sources_menu)

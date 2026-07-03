@@ -1,8 +1,8 @@
 local Log = require("novel.support.log")
-local Bookshelf = require("novel.library.bookshelf")
+local BookshelfRecords = require("novel.books.records")
 local Cache = require("novel.storage.cache")
-local Library = require("novel.library.store")
-local Repo = require("novel.source.repo")
+local Manifest = require("novel.books.manifest")
+local SourceRepository = require("novel.source.repository")
 local Settings = require("novel.storage.settings")
 
 local App = {}
@@ -24,8 +24,8 @@ end
 
 function App:onClose()
     self.closed = true
-    self.source_repo = nil
-    self.bookshelf_service = nil
+    self.source_repository = nil
+    self.bookshelf_records = nil
 end
 
 function App:saveSettings()
@@ -39,24 +39,24 @@ end
 
 function App.deleteStoredSettings()
     Settings.delete()
-    Repo.deleteStorage()
-    Bookshelf.deleteStorage()
+    SourceRepository.deleteStorage()
+    BookshelfRecords.deleteStorage()
     Cache.deleteStorage()
-    Library.deleteStorage()
+    Manifest.deleteStorage()
 end
 
-function App:getSourceRepo()
-    if not self.source_repo then
-        self.source_repo = Repo:new()
+function App:getSourceRepository()
+    if not self.source_repository then
+        self.source_repository = SourceRepository:new()
     end
-    return self.source_repo
+    return self.source_repository
 end
 
-function App:getBookshelfService()
-    if not self.bookshelf_service then
-        self.bookshelf_service = Bookshelf:new()
+function App:getBookshelfRecords()
+    if not self.bookshelf_records then
+        self.bookshelf_records = BookshelfRecords:new()
     end
-    return self.bookshelf_service
+    return self.bookshelf_records
 end
 
 return App

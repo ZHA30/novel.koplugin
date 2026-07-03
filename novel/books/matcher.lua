@@ -1,10 +1,10 @@
-local Context = require("novel.catalog.client")
+local Runtime = require("novel.catalog.runtime")
 local Search = require("novel.catalog.search")
 local Capability = require("novel.source.capability")
 
-local Switch = {}
+local BookMatcher = {}
 
-local trim = Context.trim
+local trim = Runtime.trim
 
 local function normalizeText(value)
     return trim(value):lower():gsub("%s+", "")
@@ -80,7 +80,7 @@ local function sortCandidates(candidates)
     end)
 end
 
-function Switch.find(record, sources, options)
+function BookMatcher.find(record, sources, options)
     options = options or {}
     local search_run = options.search_run or Search.run
     local target = record and record.book or {}
@@ -155,4 +155,4 @@ function Switch.find(record, sources, options)
     }
 end
 
-return Switch
+return BookMatcher

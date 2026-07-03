@@ -4,12 +4,12 @@ local DataStorage = require("datastorage")
 local Importer = require("novel.source.importer")
 local LuaSettings = require("luasettings")
 
-local Repo = {
+local SourceRepository = {
     state_path = DataStorage:getSettingsDir() .. "/novel_sources.lua",
-    source_dir = (debug.getinfo(1, "S").source:match("^@(.*/)novel/source/repo%.lua$")
+    source_dir = (debug.getinfo(1, "S").source:match("^@(.*/)novel/source/repository%.lua$")
         or "./") .. "source",
 }
-Repo.__index = Repo
+SourceRepository.__index = SourceRepository
 
 local function sourceKey(source)
     return source.bookSourceUrl
@@ -24,9 +24,9 @@ local function sortSources(sources)
     end)
 end
 
-function Repo:new()
+function SourceRepository:new()
     return setmetatable({
-        settings = LuaSettings:open(Repo.state_path),
+        settings = LuaSettings:open(SourceRepository.state_path),
     }, self)
 end
 
@@ -46,11 +46,11 @@ local function readFile(path)
 end
 
 local function sourceFiles()
-    if lfs.attributes(Repo.source_dir, "mode") ~= "directory" then
+    if lfs.attributes(SourceRepository.source_dir, "mode") ~= "directory" then
         return {}
     end
 
-    local ok, iter, dir_obj = pcall(lfs.dir, Repo.source_dir)
+    local ok, iter, dir_obj = pcall(lfs.dir, SourceRepository.source_dir)
     if not ok then
         return {}
     end
@@ -58,7 +58,7 @@ local function sourceFiles()
     local files = {}
     for entry in iter, dir_obj do
         if isJSONFile(entry) then
-            local path = Repo.source_dir .. "/" .. entry
+            local path = SourceRepository.source_dir .. "/" .. entry
             local mode = lfs.attributes(path, "mode")
             if mode == "file" or mode == "link" then
                 table.insert(files, path)
@@ -92,7 +92,7 @@ local function loadFile(path)
     return sources, errors or {}
 end
 
-function Repo:enabledStates()
+function SourceRepository:enabledStates()
     return self.settings:readSetting("source_enabled") or {}
 end
 
@@ -104,7 +104,7 @@ local function applyState(source, states)
     return source
 end
 
-function Repo:listWithErrors()
+function SourceRepository:listWithErrors()
     local sources, errors, index = {}, {}, {}
     local states = self:enabledStates()
     local files = sourceFiles()
@@ -131,12 +131,12 @@ function Repo:listWithErrors()
     return sources, errors
 end
 
-function Repo:list()
+function SourceRepository:list()
     local sources = self:listWithErrors()
     return sources
 end
 
-function Repo:get(book_source_url)
+function SourceRepository:get(book_source_url)
     for _, source in ipairs(self:list()) do
         if source.bookSourceUrl == book_source_url then
             return source
@@ -144,11 +144,11 @@ function Repo:get(book_source_url)
     end
 end
 
-function Repo:count()
+function SourceRepository:count()
     return #self:list()
 end
 
-function Repo:groups()
+function SourceRepository:groups()
     local groups = {}
     for _, source in ipairs(self:list()) do
         local group = source.bookSourceGroup or ""
@@ -157,7 +157,7 @@ function Repo:groups()
     return groups
 end
 
-function Repo:listGroups()
+function SourceRepository:listGroups()
     local groups, group_index = {}, {}
     for _, source in ipairs(self:list()) do
         local group_name = source.bookSourceGroup or ""
@@ -186,7 +186,7 @@ function Repo:listGroups()
     return groups
 end
 
-function Repo:setEnabled(book_source_url, enabled)
+function SourceRepository:setEnabled(book_source_url, enabled)
     if not self:get(book_source_url) then
         return false
     end
@@ -198,9 +198,9 @@ function Repo:setEnabled(book_source_url, enabled)
     return true
 end
 
-function Repo.deleteStorage()
-    os.remove(Repo.state_path)
-    os.remove(Repo.state_path .. ".old")
+function SourceRepository.deleteStorage()
+    os.remove(SourceRepository.state_path)
+    os.remove(SourceRepository.state_path .. ".old")
 end
 
-return Repo
+return SourceRepository

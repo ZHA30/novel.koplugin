@@ -1,5 +1,5 @@
-local BookList = require("novel.catalog.books")
-local Context = require("novel.catalog.client")
+local Books = require("novel.catalog.books")
+local Runtime = require("novel.catalog.runtime")
 local Request = require("novel.net.request")
 local Throttle = require("novel.net.throttle")
 local rapidjson = require("rapidjson")
@@ -7,12 +7,12 @@ local rapidjson = require("rapidjson")
 local Explore = {}
 Explore.__index = Explore
 
-local trim = Context.trim
-local isBlank = Context.isBlank
-local addDebug = Context.addDebug
-local addError = Context.error
-local addUnsupported = Context.addUnsupported
-local copyUrlUnsupported = Context.copyUrlUnsupported
+local trim = Runtime.trim
+local isBlank = Runtime.isBlank
+local addDebug = Runtime.addDebug
+local addError = Runtime.error
+local addUnsupported = Runtime.addUnsupported
+local copyUrlUnsupported = Runtime.copyUrlUnsupported
 
 local function activeRule(source)
     if type(source.ruleExplore) == "table" and not isBlank(source.ruleExplore.bookList) then
@@ -21,7 +21,7 @@ local function activeRule(source)
     return source.ruleSearch, "ruleSearch"
 end
 
-local responseSummary = Context.responseSummary
+local responseSummary = Runtime.responseSummary
 
 local function parseJsonGroups(source, groups, decoded)
     for index = 1, #decoded do
@@ -135,7 +135,7 @@ function Explore:explore(source, group, options)
         }
     end
 
-    local spec = Context.requestSpec(source, group.url, options, {
+    local spec = Runtime.requestSpec(source, group.url, options, {
         page = options.page or 1,
     })
     copyUrlUnsupported(unsupported, source, spec.unsupported, "exploreUrl")
@@ -157,7 +157,7 @@ function Explore:explore(source, group, options)
         }
     end
 
-    local response, request_err, failed_response = Context.execute(self, source, spec)
+    local response, request_err, failed_response = Runtime.execute(self, source, spec)
     if not response then
         if failed_response then
             addDebug(debug, "response", responseSummary(failed_response))
@@ -174,7 +174,7 @@ function Explore:explore(source, group, options)
 
     addDebug(debug, "response", responseSummary(response))
 
-    local parsed = BookList.parse(source, rule, prefix, response, {
+    local parsed = Books.parse(source, rule, prefix, response, {
         parse_event = "parse_explore_list",
         size_event = "explore_list_size",
     })

@@ -185,6 +185,12 @@ msgstr "全部"
 msgid "Unread"
 msgstr "未读"
 
+msgid "Ascending"
+msgstr "正序"
+
+msgid "Descending"
+msgstr "倒序"
+
 msgid "Read"
 msgstr "已读"
 

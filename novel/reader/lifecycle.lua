@@ -37,6 +37,7 @@ function ReaderLifecycle.restorePending(plugin)
         local Chapters = require("novel.ui.chapters")
         Chapters.showManifest(plugin, manifest, {
             filter = pending.filter,
+            sort = pending.sort,
         })
     end)
     return true
@@ -80,6 +81,8 @@ function ReaderLifecycle.onCloseDocument(plugin)
         book_id = current_chapter.book_id,
         filter = plugin.novel_chapters_filter
             and plugin.novel_chapters_filter[current_chapter.book_id] or nil,
+        sort = plugin.novel_chapters_sort
+            and plugin.novel_chapters_sort[current_chapter.book_id] or nil,
     }
     return true
 end

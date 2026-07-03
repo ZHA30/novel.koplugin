@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local ButtonDialog = require("ui/widget/buttondialog")
 local Chapter = require("novel.model.chapter")
 local Dialog = require("novel.widget.dialog")
 local Manifest = require("novel.books.manifest")
@@ -12,15 +13,9 @@ local Chapters = {}
 
 local FILTER_ALL = "all"
 local FILTER_UNREAD = "unread"
-local FILTER_READ = "read"
-local FILTER_DOWNLOADED = "downloaded"
 
-local FILTERS = {
-    FILTER_ALL,
-    FILTER_UNREAD,
-    FILTER_READ,
-    FILTER_DOWNLOADED,
-}
+local SORT_ASCENDING = "ascending"
+local SORT_DESCENDING = "descending"
 
 local function invalidate(plugin)
     plugin.chapters_request_id = (plugin.chapters_request_id or 0) + 1
@@ -57,12 +52,15 @@ end
 local function filterLabel(filter)
     if filter == FILTER_UNREAD then
         return _("Unread")
-    elseif filter == FILTER_READ then
-        return _("Read")
-    elseif filter == FILTER_DOWNLOADED then
-        return _("Downloaded")
     end
     return _("All")
+end
+
+local function sortLabel(sort)
+    if sort == SORT_DESCENDING then
+        return _("Descending")
+    end
+    return _("Ascending")
 end
 
 local function chapterStatus(manifest, chapter)
@@ -72,23 +70,31 @@ local function chapterStatus(manifest, chapter)
         return _("Locked")
     elseif manifest.current_position == chapter.position then
         return _("Current")
-    elseif chapter.read then
-        return _("Read")
     elseif chapter.downloaded then
         return _("Downloaded")
     end
-    return _("Unread")
+    return nil
 end
 
 local function matchesFilter(filter, chapter)
-    if filter == FILTER_READ then
-        return chapter.read == true
-    elseif filter == FILTER_UNREAD then
+    if filter == FILTER_UNREAD then
         return chapter.read ~= true and Chapter.isOpenable(chapter)
-    elseif filter == FILTER_DOWNLOADED then
-        return chapter.downloaded == true
     end
     return true
+end
+
+local function normalizeFilter(filter)
+    if filter == FILTER_UNREAD then
+        return FILTER_UNREAD
+    end
+    return FILTER_ALL
+end
+
+local function normalizeSort(sort)
+    if sort == SORT_DESCENDING then
+        return SORT_DESCENDING
+    end
+    return SORT_ASCENDING
 end
 
 function Chapters.close(plugin)
@@ -96,36 +102,24 @@ function Chapters.close(plugin)
     Dialog.closeWidget(plugin, "chapters_menu")
 end
 
-local function filterMenu(plugin, manifest, current_filter)
+local function buildChapterItems(plugin, manifest, filter, sort)
     local item_table = {}
-    for filter_index = 1, #FILTERS do
-        local filter = FILTERS[filter_index]
-        table.insert(item_table, {
-            text = filterLabel(filter),
-            mandatory = filter == current_filter and _("Current") or nil,
-            callback = function()
-                plugin.novel_chapters_filter = plugin.novel_chapters_filter or {}
-                plugin.novel_chapters_filter[manifest.book_id] = filter
-                Chapters.showManifest(plugin, manifest, { filter = filter })
-            end,
-        })
-    end
-    return item_table
-end
-
-local function buildChapterItems(plugin, manifest, filter)
-    local item_table = {}
+    local chapters = manifest.chapters or {}
     local shown_count = 0
+    local start_position = sort == SORT_DESCENDING and #chapters or 1
+    local end_position = sort == SORT_DESCENDING and 1 or #chapters
+    local step = sort == SORT_DESCENDING and -1 or 1
 
-    for position = 1, #(manifest.chapters or {}) do
-        local chapter = manifest.chapters[position]
+    for position = start_position, end_position, step do
+        local chapter = chapters[position]
         if matchesFilter(filter, chapter) then
+            local is_openable = Chapter.isOpenable(chapter)
             shown_count = shown_count + 1
             table.insert(item_table, {
                 text = chapterTitle(chapter),
                 mandatory = chapterStatus(manifest, chapter),
-                select_enabled = Chapter.isOpenable(chapter),
-                dim = not Chapter.isOpenable(chapter),
+                select_enabled = is_openable,
+                dim = chapter.read == true or not is_openable,
                 callback = function()
                     Chapters.openChapter(plugin, manifest, position, {
                         from_reader = plugin.ui and plugin.ui.document ~= nil,
@@ -144,14 +138,56 @@ local function buildChapterItems(plugin, manifest, filter)
         })
     end
 
-    item_table[#item_table].separator = true
-    table.insert(item_table, {
-        text = _("Filter: ") .. filterLabel(filter),
-        mandatory = tostring(#(manifest.chapters or {})),
-        sub_item_table = filterMenu(plugin, manifest, filter),
-    })
+    return item_table, shown_count
+end
 
-    return item_table
+local function showListMenu(plugin, manifest, chapters_menu, filter, sort)
+    local dialog
+    local function refresh(new_filter, new_sort)
+        if UIManager:isWidgetShown(dialog) then
+            UIManager:close(dialog)
+        end
+        Chapters.showManifest(plugin, manifest, {
+            filter = new_filter,
+            sort = new_sort,
+        })
+    end
+
+    dialog = ButtonDialog:new{
+        buttons = {
+            {{
+                text_func = function()
+                    return filterLabel(filter)
+                end,
+                checked_func = function()
+                    return filter == FILTER_UNREAD
+                end,
+                callback = function()
+                    refresh(filter == FILTER_UNREAD and FILTER_ALL
+                        or FILTER_UNREAD, sort)
+                end,
+                align = "left",
+            }},
+            {{
+                text_func = function()
+                    return sortLabel(sort)
+                end,
+                checked_func = function()
+                    return sort == SORT_DESCENDING
+                end,
+                callback = function()
+                    refresh(filter, sort == SORT_DESCENDING and SORT_ASCENDING
+                        or SORT_DESCENDING)
+                end,
+                align = "left",
+            }},
+        },
+        shrink_unneeded_width = true,
+        anchor = function()
+            return chapters_menu.title_bar.left_button.image.dimen
+        end,
+    }
+    UIManager:show(dialog)
 end
 
 function Chapters.showManifest(plugin, manifest, options)
@@ -160,20 +196,34 @@ function Chapters.showManifest(plugin, manifest, options)
     Dialog.closeWidget(plugin, "chapters_menu")
 
     plugin.novel_chapters_filter = plugin.novel_chapters_filter or {}
+    plugin.novel_chapters_sort = plugin.novel_chapters_sort or {}
     local filter = options.filter
         or plugin.novel_chapters_filter[manifest.book_id]
         or FILTER_ALL
+    filter = normalizeFilter(filter)
     plugin.novel_chapters_filter[manifest.book_id] = filter
+    local sort = options.sort
+        or plugin.novel_chapters_sort[manifest.book_id]
+        or SORT_ASCENDING
+    sort = normalizeSort(sort)
+    plugin.novel_chapters_sort[manifest.book_id] = sort
+
+    local item_table, shown_count = buildChapterItems(plugin, manifest, filter,
+        sort)
 
     local chapters_menu
     chapters_menu = Menu:new{
-        title = manifestTitle(manifest) .. " (" .. tostring(#manifest.chapters)
-            .. " / " .. filterLabel(filter) .. ")",
-        item_table = buildChapterItems(plugin, manifest, filter),
+        title = manifestTitle(manifest) .. " (" .. tostring(shown_count)
+            .. "/" .. tostring(#manifest.chapters) .. ")",
+        item_table = item_table,
         covers_fullscreen = true,
         is_borderless = true,
         is_popout = false,
         title_bar_fm_style = true,
+        title_bar_left_icon = "appbar.menu",
+        onLeftButtonTap = function()
+            showListMenu(plugin, manifest, chapters_menu, filter, sort)
+        end,
         close_callback = function()
             if plugin.chapters_menu == chapters_menu then
                 plugin.chapters_menu = nil

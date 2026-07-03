@@ -575,11 +575,21 @@ function BookMenu.onNextPage(self)
     return true
 end
 
+function BookMenu.onMenuHold(self, item)
+    local hold_callback = item.hold_callback_func and item.hold_callback_func()
+        or item.hold_callback
+    if hold_callback then
+        hold_callback(self, item)
+    end
+    return true
+end
+
 function BookMenu.new(_list, args)
     args = args or {}
     args.updateItems = args.updateItems or BookMenu.updateItems
     args.updatePageInfo = args.updatePageInfo or BookMenu.updatePageInfo
     args.onNextPage = args.onNextPage or BookMenu.onNextPage
+    args.onMenuHold = args.onMenuHold or BookMenu.onMenuHold
     args.canLoadNextSourcePage = args.canLoadNextSourcePage or BookMenu.canLoadNextSourcePage
     args._recalculateDimen = args._recalculateDimen or BookMenu._recalculateDimen
     args._updateItemsBuildUI = args._updateItemsBuildUI or BookMenu._updateItemsBuildUI

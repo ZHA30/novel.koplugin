@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local BookMenu = require("novel.widget.bookmenu")
+local ButtonDialog = require("ui/widget/buttondialog")
 local Capability = require("novel.source.capability")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Detail = require("novel.ui.detail")
@@ -42,15 +43,6 @@ local function findCurrentSource(plugin, record)
     return record.source
 end
 
-local function recordCurrentChapter(record)
-    if record.current and record.current.chapter and record.current.chapter.title then
-        return record.current.chapter.title
-    elseif record.current and record.current.chapter_title then
-        return record.current.chapter_title
-    end
-    return nil
-end
-
 local function showBookInfo(record)
     local book = record.book or {}
     local lines = {
@@ -87,6 +79,10 @@ end
 local function closeSwitchResults(plugin)
     Dialog.closeWidget(plugin, "bookshelf_switch_confirm_dialog")
     Dialog.closeWidget(plugin, "bookshelf_switch_results_menu")
+end
+
+local function closeActions(plugin)
+    Dialog.closeWidget(plugin, "bookshelf_actions_dialog")
 end
 
 local function applySwitch(plugin, record, candidate)
@@ -363,6 +359,55 @@ local function recordActions(plugin, record)
     }
 end
 
+local function showActions(plugin, record)
+    closeActions(plugin)
+    local actions = recordActions(plugin, record)
+    local actions_dialog
+
+    local function actionButton(action)
+        return {
+            text = action.text,
+            callback = function()
+                if plugin.bookshelf_actions_dialog == actions_dialog then
+                    plugin.bookshelf_actions_dialog = nil
+                end
+                UIManager:close(actions_dialog)
+                action.callback()
+            end,
+        }
+    end
+
+    actions_dialog = ButtonDialog:new{
+        title = bookTitle(record.book),
+        title_align = "center",
+        buttons = {
+            {
+                actionButton(actions[1]),
+                actionButton(actions[4]),
+            },
+            {
+                actionButton(actions[2]),
+                actionButton(actions[3]),
+            },
+            {
+                actionButton(actions[5]),
+                actionButton(actions[6]),
+            },
+            {},
+            {
+                actionButton(actions[7]),
+            },
+        },
+        tap_close_callback = function()
+            if plugin.bookshelf_actions_dialog == actions_dialog then
+                plugin.bookshelf_actions_dialog = nil
+            end
+        end,
+    }
+    plugin.bookshelf_actions_dialog = actions_dialog
+    UIManager:show(actions_dialog)
+end
+
 local function buildItems(plugin, records)
     if #records == 0 then
         return {{
@@ -379,10 +424,12 @@ local function buildItems(plugin, records)
             text = bookTitle(record.book),
             book = record.book,
             source_title = record.source_name,
-            book_subtitle_parts = {
-                recordCurrentChapter(record),
-            },
-            sub_item_table = recordActions(plugin, record),
+            callback = function()
+                Chapters.show(plugin, findCurrentSource(plugin, record), record.book)
+            end,
+            hold_callback = function()
+                showActions(plugin, record)
+            end,
         })
     end
     return item_table
@@ -391,6 +438,7 @@ end
 function Bookshelf.close(plugin)
     invalidateRefresh(plugin)
     invalidateSwitch(plugin)
+    closeActions(plugin)
     Dialog.closeWidget(plugin, "bookshelf_confirm_dialog")
     closeSwitchResults(plugin)
     Dialog.closeWidget(plugin, "bookshelf_menu")

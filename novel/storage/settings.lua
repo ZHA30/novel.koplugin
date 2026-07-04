@@ -15,6 +15,9 @@ Settings.defaults = {
         target_backend = "sqlite",
         schema_version = 0,
     },
+    chapter_list = {
+        books = {},
+    },
 }
 
 local function clone(value)

@@ -98,6 +98,62 @@ local function normalizeSort(sort)
     return SORT_ASCENDING
 end
 
+local function chapterListBooks(plugin)
+    local settings = plugin and plugin.app and plugin.app.settings
+    if type(settings) ~= "table" then
+        return nil
+    end
+    if type(settings.chapter_list) ~= "table" then
+        settings.chapter_list = {}
+    end
+    if type(settings.chapter_list.books) ~= "table" then
+        settings.chapter_list.books = {}
+    end
+    return settings.chapter_list.books
+end
+
+local function chapterListBookState(plugin, book_id, create)
+    if not book_id or book_id == "" then
+        return nil
+    end
+
+    local books = chapterListBooks(plugin)
+    if not books then
+        return nil
+    end
+
+    local state = books[book_id]
+    if type(state) ~= "table" then
+        if not create then
+            return nil
+        end
+        state = {}
+        books[book_id] = state
+    end
+    return state
+end
+
+local function saveBookState(plugin, book_id, filter, sort)
+    local state = chapterListBookState(plugin, book_id, true)
+    if not state then
+        return
+    end
+
+    local changed = false
+    if state.filter ~= filter then
+        state.filter = filter
+        changed = true
+    end
+    if state.sort ~= sort then
+        state.sort = sort
+        changed = true
+    end
+
+    if changed and plugin and plugin.app then
+        plugin.app:saveSettings()
+    end
+end
+
 function Chapters.close(plugin)
     invalidate(plugin)
     Loading.close(plugin, "chapters_loading")
@@ -197,18 +253,31 @@ function Chapters.showManifest(plugin, manifest, options)
     manifest = Manifest:new():load(manifest.book_id) or manifest
     Dialog.closeWidget(plugin, "chapters_menu")
 
+    local book_id = manifest.book_id
+    local book_state = chapterListBookState(plugin, book_id)
     plugin.novel_chapters_filter = plugin.novel_chapters_filter or {}
     plugin.novel_chapters_sort = plugin.novel_chapters_sort or {}
     local filter = options.filter
-        or plugin.novel_chapters_filter[manifest.book_id]
+        or (book_id and plugin.novel_chapters_filter[book_id])
+        or (book_state and book_state.filter)
         or FILTER_ALL
     filter = normalizeFilter(filter)
-    plugin.novel_chapters_filter[manifest.book_id] = filter
+    if book_id then
+        plugin.novel_chapters_filter[book_id] = filter
+    end
     local sort = options.sort
-        or plugin.novel_chapters_sort[manifest.book_id]
+        or (book_id and plugin.novel_chapters_sort[book_id])
+        or (book_state and book_state.sort)
         or SORT_ASCENDING
     sort = normalizeSort(sort)
-    plugin.novel_chapters_sort[manifest.book_id] = sort
+    if book_id then
+        plugin.novel_chapters_sort[book_id] = sort
+    end
+    if options.filter ~= nil or options.sort ~= nil
+        or (book_state and (book_state.filter ~= filter
+            or book_state.sort ~= sort)) then
+        saveBookState(plugin, book_id, filter, sort)
+    end
 
     local item_table, shown_count = buildChapterItems(plugin, manifest, filter,
         sort)

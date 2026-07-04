@@ -6,6 +6,7 @@ local Capability = require("novel.source.capability")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Detail = require("novel.ui.detail")
 local Dialog = require("novel.widget.dialog")
+local Loading = require("novel.widget.loading")
 local NetworkMgr = require("ui/network/manager")
 local Chapters = require("novel.ui.chapters")
 local Trapper = require("ui/trapper")
@@ -263,10 +264,12 @@ local function refreshRecord(plugin, record)
     local request_id = plugin.bookshelf_refresh_request_id
 
     Trapper:wrap(function()
+        local loading_widget = Loading.show(plugin, "bookshelf_refresh_loading")
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local BookshelfRecords = require("novel.books.records")
             return BookshelfRecords.fetchRefresh(source, record.book)
-        end, _("Refreshing... (tap to cancel)"))
+        end, loading_widget)
+        Loading.close(plugin, "bookshelf_refresh_loading", loading_widget)
 
         if not plugin.app or plugin.bookshelf_refresh_request_id ~= request_id then
             return
@@ -309,12 +312,14 @@ local function switchRecord(plugin, record)
     local request_id = plugin.bookshelf_switch_request_id
 
     Trapper:wrap(function()
+        local loading_widget = Loading.show(plugin, "bookshelf_switch_loading")
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local BookMatcher = require("novel.books.matcher")
             return BookMatcher.find(record, sources, {
                 timeout = 5,
             })
-        end, _("Searching sources... (tap to cancel)"))
+        end, loading_widget)
+        Loading.close(plugin, "bookshelf_switch_loading", loading_widget)
 
         if not plugin.app or plugin.bookshelf_switch_request_id ~= request_id then
             return
@@ -453,6 +458,8 @@ end
 function Bookshelf.close(plugin)
     invalidateRefresh(plugin)
     invalidateSwitch(plugin)
+    Loading.close(plugin, "bookshelf_refresh_loading")
+    Loading.close(plugin, "bookshelf_switch_loading")
     closeActions(plugin)
     Dialog.closeWidget(plugin, "bookshelf_confirm_dialog")
     closeSwitchResults(plugin)

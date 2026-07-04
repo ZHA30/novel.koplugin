@@ -64,22 +64,37 @@ local function collectLater(pid, read_fd)
     UIManager:scheduleIn(COLLECT_INTERVAL, collect)
 end
 
+local function notify(state, ok, reason)
+    local callbacks = state and state.callbacks
+    state.callbacks = nil
+    if not callbacks then
+        return
+    end
+    for callback_index = 1, #callbacks do
+        callbacks[callback_index](ok, reason)
+    end
+end
+
 local function finish(plugin, state, encoded)
     if plugin.novel_prefetch == state then
         plugin.novel_prefetch = nil
     end
+    local ok = false
     if not plugin.app then
+        notify(state, ok, "closed")
         return
     end
 
     local decoded, result = pcall(buffer.decode, encoded or "")
     if not decoded or type(result) ~= "table" then
         logger.warn("novel prefetch: cannot decode result:", result)
+        notify(state, ok, "failed")
         return
     end
     if not result.ok then
         logger.dbg("novel prefetch failed:", result.error
             and result.error.message or "unknown")
+        notify(state, ok, "failed")
         return
     end
 
@@ -88,6 +103,7 @@ local function finish(plugin, state, encoded)
     local chapter = manifest and manifest.chapters
         and manifest.chapters[state.position]
     if not chapter or isChapterCurrent(manifest, state.position) then
+        notify(state, chapter ~= nil, chapter and "done" or "failed")
         return
     end
 
@@ -97,9 +113,11 @@ local function finish(plugin, state, encoded)
     })
     if file then
         logger.dbg("novel prefetch saved:", file)
+        ok = true
     else
         logger.warn("novel prefetch save failed:", err)
     end
+    notify(state, ok, ok and "done" or "failed")
 end
 
 local function scheduleCheck(plugin, state)
@@ -128,6 +146,7 @@ local function scheduleCheck(plugin, state)
             if plugin.novel_prefetch == state then
                 plugin.novel_prefetch = nil
             end
+            notify(state, false, "failed")
             return
         end
 
@@ -230,6 +249,7 @@ function Prefetch.close(plugin)
     if not state then
         return
     end
+    plugin.novel_prefetch = nil
     if state.scheduled then
         UIManager:unschedule(state.scheduled)
     end
@@ -246,7 +266,26 @@ function Prefetch.close(plugin)
             collectLater(state.pid, state.read_fd)
         end
     end
-    plugin.novel_prefetch = nil
+    notify(state, false, "closed")
+end
+
+function Prefetch.isPending(plugin, manifest, position)
+    local state = plugin and plugin.novel_prefetch
+    return state and state.pid
+        and state.book_id == (manifest and manifest.book_id)
+        and state.position == position
+        or false
+end
+
+function Prefetch.await(plugin, manifest, position, callback)
+    local state = plugin and plugin.novel_prefetch
+    if not Prefetch.isPending(plugin, manifest, position)
+        or type(callback) ~= "function" then
+        return false
+    end
+    state.callbacks = state.callbacks or {}
+    table.insert(state.callbacks, callback)
+    return true
 end
 
 return Prefetch

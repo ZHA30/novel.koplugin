@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local ReaderChapter = require("novel.reader.chapter")
 local ReaderDocument = require("novel.reader.document")
 local Navigation = require("novel.reader.navigation")
 local Patches = require("novel.reader.patches")
@@ -14,6 +15,7 @@ local state = {
 }
 
 function ReaderLifecycle.close(plugin)
+    ReaderChapter.close(plugin)
     Prefetch.close(plugin)
     Navigation.close(plugin)
 end
@@ -64,6 +66,7 @@ function ReaderLifecycle.init(plugin)
 end
 
 function ReaderLifecycle.stopPlugin(plugin)
+    ReaderChapter.close(plugin, true)
     Prefetch.close(plugin)
     Patches.restore()
     state.pending_return = nil

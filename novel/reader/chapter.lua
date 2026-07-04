@@ -2,6 +2,7 @@ local _ = require("novel.i18n")
 local Chapter = require("novel.model.chapter")
 local ChapterDocument = require("novel.books.document")
 local Dialog = require("novel.widget.dialog")
+local Loading = require("novel.widget.loading")
 local Manifest = require("novel.books.manifest")
 local NetworkMgr = require("ui/network/manager")
 local Prefetch = require("novel.reader.prefetch")
@@ -9,6 +10,24 @@ local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
 local ReaderChapter = {}
+
+local function nextContentRequest(plugin)
+    plugin.content_request_id = (plugin.content_request_id or 0) + 1
+    return plugin.content_request_id
+end
+
+local function closeLoading(plugin, widget)
+    Loading.close(plugin, "novel_chapter_loading", widget)
+end
+
+local function showLoading(plugin)
+    return Loading.show(plugin, "novel_chapter_loading")
+end
+
+local function resetSwitch(plugin)
+    closeLoading(plugin)
+    plugin.novel_switching_chapter = nil
+end
 
 local function alreadyAtStart(reader_ui)
     local paging = reader_ui and reader_ui.paging
@@ -57,10 +76,13 @@ end
 
 local function openFile(plugin, file, jump)
     if not plugin.ui then
+        resetSwitch(plugin)
         return
     end
 
     local function afterOpen(reader_ui)
+        closeLoading(plugin)
+        plugin.novel_switching_chapter = nil
         jumpAfterOpen(reader_ui or plugin.ui, jump)
     end
 
@@ -68,7 +90,6 @@ local function openFile(plugin, file, jump)
         plugin.novel_switching_chapter = true
         if plugin.ui.document.file == file then
             afterOpen(plugin.ui)
-            plugin.novel_switching_chapter = nil
             return
         end
         local DocumentRegistry = require("document/documentregistry")
@@ -99,6 +120,47 @@ local function openDownloadedChapter(plugin, manifest_store, manifest, position,
     openFile(plugin, chapter.file_path, options and options.jump)
 end
 
+local function copyOptions(options)
+    local copied = {}
+    for key, value in pairs(options or {}) do
+        copied[key] = value
+    end
+    return copied
+end
+
+local function retryWithoutPrefetch(plugin, manifest, position, options)
+    local retry_options = copyOptions(options)
+    retry_options.skip_prefetch_wait = true
+    ReaderChapter.open(plugin, manifest, position, retry_options)
+end
+
+local function waitForPrefetch(plugin, manifest, position, options)
+    if options.skip_prefetch_wait
+        or not Prefetch.isPending(plugin, manifest, position) then
+        return false
+    end
+
+    local request_id = nextContentRequest(plugin)
+    local loading_widget = showLoading(plugin)
+
+    if not Prefetch.await(plugin, manifest, position, function(ok, reason)
+        if not plugin.app or plugin.content_request_id ~= request_id then
+            closeLoading(plugin, loading_widget)
+            return
+        end
+        if not ok and reason == "closed" then
+            closeLoading(plugin, loading_widget)
+            plugin.novel_switching_chapter = nil
+            return
+        end
+        retryWithoutPrefetch(plugin, manifest, position, options)
+    end) then
+        closeLoading(plugin, loading_widget)
+        return false
+    end
+    return true
+end
+
 function ReaderChapter.open(plugin, manifest, position, options)
     options = options or {}
     if not plugin or not plugin.app then
@@ -106,7 +168,7 @@ function ReaderChapter.open(plugin, manifest, position, options)
     end
     if not manifest or not manifest.book_id then
         Dialog.message(_("Chapter not found."))
-        plugin.novel_switching_chapter = nil
+        resetSwitch(plugin)
         return
     end
     local manifest_store = Manifest:new()
@@ -114,7 +176,7 @@ function ReaderChapter.open(plugin, manifest, position, options)
     local chapter = manifest and manifest.chapters and manifest.chapters[position]
     if not chapter then
         Dialog.message(_("Chapter not found."))
-        plugin.novel_switching_chapter = nil
+        resetSwitch(plugin)
         return
     end
     if not Chapter.isOpenable(chapter) and options.from_reader then
@@ -128,25 +190,31 @@ function ReaderChapter.open(plugin, manifest, position, options)
     end
     if not Chapter.isOpenable(chapter) then
         Dialog.message(_("Chapter cannot be opened."))
-        plugin.novel_switching_chapter = nil
+        resetSwitch(plugin)
         return
     end
     if Manifest.chapterFileExists(manifest, position)
         and ChapterDocument.contentIsCurrent(manifest, chapter) then
+        if options.from_reader then
+            showLoading(plugin)
+        end
         openDownloadedChapter(plugin, manifest_store, manifest, position, options)
+        return
+    end
+    if waitForPrefetch(plugin, manifest, position, options) then
         return
     end
     Prefetch.close(plugin)
     if NetworkMgr:willRerunWhenOnline(function()
         ReaderChapter.open(plugin, manifest, position, options)
     end) then
-        plugin.novel_switching_chapter = nil
+        resetSwitch(plugin)
         return
     end
 
-    plugin.content_request_id = (plugin.content_request_id or 0) + 1
-    local request_id = plugin.content_request_id
+    local request_id = nextContentRequest(plugin)
     local next_chapter = Chapter.nextOpenable(manifest.chapters, position, 1)
+    local loading_widget = showLoading(plugin)
 
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
@@ -154,18 +222,19 @@ function ReaderChapter.open(plugin, manifest, position, options)
             return ContentService.run(manifest.source, manifest.book, chapter, {
                 next_chapter_url = next_chapter and next_chapter.url or nil,
             })
-        end, _("Loading chapter... (tap to cancel)"))
+        end, loading_widget)
 
         if not plugin.app or plugin.content_request_id ~= request_id then
+            closeLoading(plugin, loading_widget)
             return
         end
         if not completed then
-            plugin.novel_switching_chapter = nil
+            resetSwitch(plugin)
             Dialog.message(_("Chapter loading canceled."))
             return
         end
         if not result or not result.ok then
-            plugin.novel_switching_chapter = nil
+            resetSwitch(plugin)
             Dialog.message(_("Content failed: ")
                 .. tostring(Dialog.errorText(result, _("Content failed."))))
             return
@@ -176,13 +245,23 @@ function ReaderChapter.open(plugin, manifest, position, options)
             content_type = result.content_type,
         })
         if not file then
-            plugin.novel_switching_chapter = nil
+            resetSwitch(plugin)
             Dialog.message(_("Save chapter failed: ") .. tostring(err))
             return
         end
         manifest = manifest_store:load(manifest.book_id) or manifest
         openDownloadedChapter(plugin, manifest_store, manifest, position, options)
     end)
+end
+
+function ReaderChapter.close(plugin, force)
+    if not plugin then
+        return
+    end
+    if not force and plugin.novel_switching_chapter then
+        return
+    end
+    closeLoading(plugin)
 end
 
 return ReaderChapter

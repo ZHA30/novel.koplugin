@@ -1,6 +1,7 @@
 local _ = require("novel.i18n")
 local BookshelfRecords = require("novel.books.records")
 local Dialog = require("novel.widget.dialog")
+local Loading = require("novel.widget.loading")
 local NetworkMgr = require("ui/network/manager")
 local TextViewer = require("ui/widget/textviewer")
 local Chapters = require("novel.ui.chapters")
@@ -114,6 +115,7 @@ end
 
 function Detail.close(plugin)
     invalidate(plugin)
+    Loading.close(plugin, "detail_loading")
     Dialog.closeWidget(plugin, "detail_menu")
     Dialog.closeWidget(plugin, "detail_viewer")
     Chapters.close(plugin)
@@ -148,10 +150,12 @@ function Detail.show(plugin, source, book)
     local request_id = plugin.detail_request_id
 
     Trapper:wrap(function()
+        local loading_widget = Loading.show(plugin, "detail_loading")
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local BookDetail = require("novel.catalog.detail")
             return BookDetail.run(source, book)
-        end, _("Loading details... (tap to cancel)"))
+        end, loading_widget)
+        Loading.close(plugin, "detail_loading", loading_widget)
 
         if not plugin.app or plugin.detail_request_id ~= request_id then
             return

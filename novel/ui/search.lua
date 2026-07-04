@@ -4,6 +4,7 @@ local Capability = require("novel.source.capability")
 local Detail = require("novel.ui.detail")
 local Dialog = require("novel.widget.dialog")
 local InputDialog = require("ui/widget/inputdialog")
+local Loading = require("novel.widget.loading")
 local Menu = require("novel.widget.menu")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
@@ -40,6 +41,7 @@ end
 
 function Search.close(plugin)
     invalidate(plugin)
+    Loading.close(plugin, "search_loading")
     Dialog.closeWidget(plugin, "search_source_menu")
     Dialog.closeWidget(plugin, "search_input_dialog")
     Dialog.closeWidget(plugin, "search_results_menu")
@@ -146,12 +148,14 @@ function Search.start(plugin, source, keyword)
     local request_id = plugin.search_request_id
 
     Trapper:wrap(function()
+        local loading_widget = Loading.show(plugin, "search_loading")
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local SearchService = require("novel.catalog.search")
             return SearchService.run(source, keyword, {
                 page = 1,
             })
-        end, _("Searching... (tap to cancel)"))
+        end, loading_widget)
+        Loading.close(plugin, "search_loading", loading_widget)
 
         if not plugin.app or plugin.search_request_id ~= request_id then
             return

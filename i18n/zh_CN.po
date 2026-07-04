@@ -62,9 +62,6 @@ msgstr "继续阅读"
 msgid "Refresh"
 msgstr "刷新"
 
-msgid "Refreshing... (tap to cancel)"
-msgstr "正在刷新……（点击取消）"
-
 msgid "Refresh canceled."
 msgstr "刷新已取消。"
 
@@ -143,9 +140,6 @@ msgstr "详情加载失败。"
 msgid "Detail failed: "
 msgstr "详情加载失败："
 
-msgid "Loading details... (tap to cancel)"
-msgstr "正在加载详情……（点击取消）"
-
 msgid "Detail loading canceled."
 msgstr "详情加载已取消。"
 
@@ -163,9 +157,6 @@ msgstr "没有返回结果"
 
 msgid "unknown error"
 msgstr "未知错误"
-
-msgid "Loading discovery... (tap to cancel)"
-msgstr "正在加载发现……（点击取消）"
 
 msgid "Discover canceled."
 msgstr "发现已取消。"
@@ -227,11 +218,8 @@ msgstr "正文加载失败："
 msgid "Save chapter failed: "
 msgstr "保存章节失败："
 
-msgid "Loading chapter... (tap to cancel)"
-msgstr "正在加载章节……（点击取消）"
-
-msgid "Loading chapters... (tap to cancel)"
-msgstr "正在加载目录……（点击取消）"
+msgid "Loading..."
+msgstr "加载中..."
 
 msgid "Chapter loading canceled."
 msgstr "章节加载已取消。"
@@ -319,12 +307,6 @@ msgstr "搜索失败："
 
 msgid "Search source"
 msgstr "搜索书源"
-
-msgid "Searching sources... (tap to cancel)"
-msgstr "正在搜索书源……（点击取消）"
-
-msgid "Searching... (tap to cancel)"
-msgstr "正在搜索……（点击取消）"
 
 msgid "Skipped: "
 msgstr "已跳过："

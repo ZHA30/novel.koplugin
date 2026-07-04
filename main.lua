@@ -4,6 +4,7 @@ local Bookshelf = require("novel.ui.bookshelf")
 local Discover = require("novel.ui.discover")
 local Dialog = require("novel.widget.dialog")
 local Icons = require("novel.icons")
+local Loading = require("novel.widget.loading")
 local Menu = require("novel.widget.menu")
 local ReaderLifecycle = require("novel.reader.lifecycle")
 local Size = require("ui/size")
@@ -35,6 +36,14 @@ end
 
 function Novel:onCloseWidget()
     ReaderLifecycle.close(self)
+    Loading.closeKeys(self, {
+        "bookshelf_refresh_loading",
+        "bookshelf_switch_loading",
+        "chapters_loading",
+        "detail_loading",
+        "discover_loading",
+        "search_loading",
+    })
     Chapters.close(self)
     if self.novel_menu then
         local novel_menu = self.novel_menu

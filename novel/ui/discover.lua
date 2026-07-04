@@ -6,6 +6,7 @@ local Capability = require("novel.source.capability")
 local Dialog = require("novel.widget.dialog")
 local Discovery = require("novel.catalog.discovery")
 local Grouping = require("novel.widget.grouping")
+local Loading = require("novel.widget.loading")
 local Menu = require("novel.widget.menu")
 local NetworkMgr = require("ui/network/manager")
 local Size = require("ui/size")
@@ -119,6 +120,7 @@ end
 
 function Discover.close(plugin)
     invalidate(plugin)
+    Loading.close(plugin, "discover_loading")
     Dialog.closeWidget(plugin, "discover_group_menu")
     Dialog.closeWidget(plugin, "discover_results_menu")
     Detail.close(plugin)
@@ -194,9 +196,11 @@ function Discover.loadNextPage(plugin, results_menu)
     local request_id = plugin.discover_request_id
 
     Trapper:wrap(function()
+        local loading_widget = Loading.show(plugin, "discover_loading")
         local completed, encoded_result = Trapper:dismissableRunInSubprocess(function()
             return Discovery.runEncoded(source, group, next_page)
-        end, _("Loading discovery... (tap to cancel)"), true)
+        end, loading_widget, true)
+        Loading.close(plugin, "discover_loading", loading_widget)
 
         if not plugin.app
             or plugin.discover_request_id ~= request_id
@@ -300,9 +304,11 @@ function Discover.start(plugin, source, group, page)
     local request_id = plugin.discover_request_id
 
     Trapper:wrap(function()
+        local loading_widget = Loading.show(plugin, "discover_loading")
         local completed, encoded_result = Trapper:dismissableRunInSubprocess(function()
             return Discovery.runEncoded(source, group, page)
-        end, _("Loading discovery... (tap to cancel)"), true)
+        end, loading_widget, true)
+        Loading.close(plugin, "discover_loading", loading_widget)
 
         if not plugin.app or plugin.discover_request_id ~= request_id then
             return

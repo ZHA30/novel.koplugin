@@ -18,6 +18,9 @@ local FILTER_UNREAD = "unread"
 local SORT_ASCENDING = "ascending"
 local SORT_DESCENDING = "descending"
 
+local RETURN_TO_BOOKSHELF = "bookshelf"
+local RETURN_TO_NOVEL_MENU = "novel_menu"
+
 local function invalidate(plugin)
     plugin.chapters_request_id = (plugin.chapters_request_id or 0) + 1
     plugin.content_request_id = (plugin.content_request_id or 0) + 1
@@ -154,13 +157,38 @@ local function saveBookState(plugin, book_id, filter, sort)
     end
 end
 
+local function returnAfterClose(plugin, return_to)
+    if return_to ~= RETURN_TO_BOOKSHELF
+        and return_to ~= RETURN_TO_NOVEL_MENU then
+        return
+    end
+    UIManager:nextTick(function()
+        if not plugin or not plugin.app then
+            return
+        end
+        if return_to == RETURN_TO_BOOKSHELF then
+            if plugin.bookshelf_menu
+                and UIManager:isWidgetShown(plugin.bookshelf_menu) then
+                return
+            end
+            local Bookshelf = require("novel.ui.bookshelf")
+            Bookshelf.show(plugin)
+        elseif type(plugin.onShowNovelMenu) == "function" then
+            if plugin.novel_menu and UIManager:isWidgetShown(plugin.novel_menu) then
+                return
+            end
+            plugin:onShowNovelMenu()
+        end
+    end)
+end
+
 function Chapters.close(plugin)
     invalidate(plugin)
     Loading.close(plugin, "chapters_loading")
     Dialog.closeWidget(plugin, "chapters_menu")
 end
 
-local function buildChapterItems(plugin, manifest, filter, sort)
+local function buildChapterItems(plugin, manifest, filter, sort, options)
     local item_table = {}
     local chapters = manifest.chapters or {}
     local shown_count = 0
@@ -182,6 +210,7 @@ local function buildChapterItems(plugin, manifest, filter, sort)
                     Chapters.openChapter(plugin, manifest, position, {
                         from_reader = plugin.ui and plugin.ui.document ~= nil,
                         jump = "start",
+                        return_to = options and options.return_to,
                     })
                 end,
             })
@@ -199,7 +228,7 @@ local function buildChapterItems(plugin, manifest, filter, sort)
     return item_table, shown_count
 end
 
-local function showListMenu(plugin, manifest, chapters_menu, filter, sort)
+local function showListMenu(plugin, manifest, chapters_menu, filter, sort, options)
     local dialog
     local function refresh(new_filter, new_sort)
         if UIManager:isWidgetShown(dialog) then
@@ -208,6 +237,7 @@ local function showListMenu(plugin, manifest, chapters_menu, filter, sort)
         Chapters.showManifest(plugin, manifest, {
             filter = new_filter,
             sort = new_sort,
+            return_to = options and options.return_to,
         })
     end
 
@@ -280,7 +310,7 @@ function Chapters.showManifest(plugin, manifest, options)
     end
 
     local item_table, shown_count = buildChapterItems(plugin, manifest, filter,
-        sort)
+        sort, options)
 
     local chapters_menu
     chapters_menu = Menu:new{
@@ -293,12 +323,13 @@ function Chapters.showManifest(plugin, manifest, options)
         title_bar_fm_style = true,
         title_bar_left_icon = "appbar.menu",
         onLeftButtonTap = function()
-            showListMenu(plugin, manifest, chapters_menu, filter, sort)
+            showListMenu(plugin, manifest, chapters_menu, filter, sort, options)
         end,
         close_callback = function()
             if plugin.chapters_menu == chapters_menu then
                 plugin.chapters_menu = nil
             end
+            returnAfterClose(plugin, options.return_to)
         end,
     }
     plugin.chapters_menu = chapters_menu
@@ -334,6 +365,7 @@ function Chapters.showList(plugin, source, book, result, options)
         Chapters.openChapter(plugin, manifest, options.open_position, {
             from_reader = options.from_reader,
             jump = options.jump,
+            return_to = options.return_to,
         })
         return
     end
@@ -386,17 +418,21 @@ function Chapters.show(plugin, source, book, options)
     end)
 end
 
-function Chapters.resume(plugin, source, book, position)
+function Chapters.resume(plugin, source, book, position, options)
+    options = options or {}
     position = tonumber(position)
     local manifest_store = Manifest:new()
     local manifest = refreshManifest(manifest_store,
         manifest_store:loadByBook(source, book), source, book)
     if manifest and position and manifest.chapters[position] then
-        Chapters.openChapter(plugin, manifest, position)
+        Chapters.openChapter(plugin, manifest, position, {
+            return_to = options.return_to,
+        })
         return
     end
     Chapters.show(plugin, source, book, {
         open_position = position,
+        return_to = options.return_to,
     })
 end
 

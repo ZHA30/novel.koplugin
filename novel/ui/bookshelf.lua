@@ -14,6 +14,8 @@ local UIManager = require("ui/uimanager")
 
 local Bookshelf = {}
 
+local RETURN_TO_BOOKSHELF = "bookshelf"
+
 local function invalidateRefresh(plugin)
     plugin.bookshelf_refresh_request_id = (plugin.bookshelf_refresh_request_id or 0) + 1
 end
@@ -241,11 +243,15 @@ local function resumeRecord(plugin, record)
     local source = findCurrentSource(plugin, record)
     local current = record.current
     if not current or not current.chapter then
-        Chapters.show(plugin, source, record.book)
+        Chapters.show(plugin, source, record.book, {
+            return_to = RETURN_TO_BOOKSHELF,
+        })
         return
     end
     local chapter_position = current.chapter_position or 1
-    Chapters.resume(plugin, source, record.book, chapter_position)
+    Chapters.resume(plugin, source, record.book, chapter_position, {
+        return_to = RETURN_TO_BOOKSHELF,
+    })
 end
 
 local function refreshRecord(plugin, record)
@@ -355,7 +361,9 @@ local function recordActions(plugin, record)
         {
             text = _("Chapters"),
             callback = function()
-                Chapters.show(plugin, findCurrentSource(plugin, record), record.book)
+                Chapters.show(plugin, findCurrentSource(plugin, record), record.book, {
+                    return_to = RETURN_TO_BOOKSHELF,
+                })
             end,
         },
         {
@@ -445,7 +453,9 @@ local function buildItems(plugin, records)
             book = record.book,
             source_title = record.source_name,
             callback = function()
-                Chapters.show(plugin, findCurrentSource(plugin, record), record.book)
+                Chapters.show(plugin, findCurrentSource(plugin, record), record.book, {
+                    return_to = RETURN_TO_BOOKSHELF,
+                })
             end,
             hold_callback = function()
                 showActions(plugin, record)

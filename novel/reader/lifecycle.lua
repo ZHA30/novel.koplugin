@@ -14,6 +14,8 @@ local state = {
     suppress_return_ui = nil,
 }
 
+local RETURN_TO_NOVEL_MENU = "novel_menu"
+
 function ReaderLifecycle.close(plugin)
     ReaderChapter.close(plugin)
     Prefetch.close(plugin)
@@ -40,6 +42,7 @@ function ReaderLifecycle.restorePending(plugin)
         Chapters.showManifest(plugin, manifest, {
             filter = pending.filter,
             sort = pending.sort,
+            return_to = pending.return_to or RETURN_TO_NOVEL_MENU,
         })
     end)
     return true
@@ -67,6 +70,7 @@ end
 
 function ReaderLifecycle.stopPlugin(plugin)
     ReaderChapter.close(plugin, true)
+    ReaderChapter.clearReturnTarget()
     Prefetch.close(plugin)
     Navigation.close(plugin)
     Patches.restoreStatisticsInstance(plugin and plugin.ui and plugin.ui.statistics)
@@ -88,6 +92,7 @@ function ReaderLifecycle.onCloseDocument(plugin)
             and plugin.novel_chapters_filter[current_chapter.book_id] or nil,
         sort = plugin.novel_chapters_sort
             and plugin.novel_chapters_sort[current_chapter.book_id] or nil,
+        return_to = ReaderChapter.returnTarget(),
     }
     return true
 end

@@ -11,6 +11,8 @@ local UIManager = require("ui/uimanager")
 
 local ReaderChapter = {}
 
+local return_to = nil
+
 local function nextContentRequest(plugin)
     plugin.content_request_id = (plugin.content_request_id or 0) + 1
     return plugin.content_request_id
@@ -27,6 +29,14 @@ end
 local function resetSwitch(plugin)
     closeLoading(plugin)
     plugin.novel_switching_chapter = nil
+end
+
+local function updateReturnTarget(options)
+    if options and options.return_to ~= nil then
+        return_to = options.return_to
+    elseif not (options and options.from_reader) then
+        return_to = nil
+    end
 end
 
 local function alreadyAtStart(reader_ui)
@@ -115,6 +125,7 @@ end
 local function openDownloadedChapter(plugin, manifest_store, manifest, position, options)
     manifest_store:updateCurrent(manifest, position)
     updateProgress(plugin, manifest, position)
+    updateReturnTarget(options)
     Dialog.closeWidget(plugin, "chapters_menu")
     local chapter = manifest.chapters[position]
     openFile(plugin, chapter.file_path, options and options.jump)
@@ -262,6 +273,14 @@ function ReaderChapter.close(plugin, force)
         return
     end
     closeLoading(plugin)
+end
+
+function ReaderChapter.returnTarget()
+    return return_to
+end
+
+function ReaderChapter.clearReturnTarget()
+    return_to = nil
 end
 
 return ReaderChapter

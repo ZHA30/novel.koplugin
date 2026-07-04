@@ -221,18 +221,25 @@ function Patches.patchStatisticsInstance(statistics)
         return
     end
     statistics.novel_patched = true
+    statistics.novel_patch_methods = {}
 
     local function wrap(method, blocked_value)
         local original = statistics[method]
         if type(original) ~= "function" then
             return
         end
-        statistics[method] = function(statistics_self, ...)
+        local wrapper
+        wrapper = function(statistics_self, ...)
             if isCurrentStatsDocumentNovel(statistics_self) then
                 return blocked_value
             end
             return original(statistics_self, ...)
         end
+        statistics[method] = wrapper
+        statistics.novel_patch_methods[method] = {
+            original = original,
+            wrapper = wrapper,
+        }
     end
 
     wrap("isEnabled", false)
@@ -247,7 +254,8 @@ function Patches.patchStatisticsInstance(statistics)
 
     local original_reader_ready = statistics.onReaderReady
     if type(original_reader_ready) == "function" then
-        statistics.onReaderReady = function(statistics_self, ...)
+        local wrapper
+        wrapper = function(statistics_self, ...)
             if isCurrentStatsDocumentNovel(statistics_self) then
                 statistics_self.is_doc = false
                 statistics_self.is_doc_not_frozen = false
@@ -255,7 +263,26 @@ function Patches.patchStatisticsInstance(statistics)
             end
             return original_reader_ready(statistics_self, ...)
         end
+        statistics.onReaderReady = wrapper
+        statistics.novel_patch_methods.onReaderReady = {
+            original = original_reader_ready,
+            wrapper = wrapper,
+        }
     end
+end
+
+function Patches.restoreStatisticsInstance(statistics)
+    local patched = statistics and statistics.novel_patch_methods
+    if type(patched) ~= "table" then
+        return
+    end
+    for method, patch in pairs(patched) do
+        if statistics[method] == patch.wrapper then
+            statistics[method] = patch.original
+        end
+    end
+    statistics.novel_patch_methods = nil
+    statistics.novel_patched = nil
 end
 
 function Patches.install(state)

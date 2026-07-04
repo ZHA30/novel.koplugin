@@ -7,6 +7,7 @@ local Icons = require("novel.icons")
 local Loading = require("novel.widget.loading")
 local Menu = require("novel.widget.menu")
 local ReaderLifecycle = require("novel.reader.lifecycle")
+local Search = require("novel.ui.search")
 local Size = require("ui/size")
 local Sources = require("novel.ui.sources")
 local Chapters = require("novel.ui.chapters")
@@ -48,14 +49,13 @@ function Novel:onCloseWidget()
     if self.novel_menu then
         local novel_menu = self.novel_menu
         self.novel_menu = nil
-        UIManager:close(novel_menu)
+        if UIManager:isWidgetShown(novel_menu) then
+            UIManager:close(novel_menu)
+        end
     end
-    if self.sources_menu then
-        local sources_menu = self.sources_menu
-        self.sources_menu = nil
-        UIManager:close(sources_menu)
-    end
+    Sources.close(self)
     Bookshelf.close(self)
+    Search.close(self)
     Discover.close(self)
     if self.app then
         self.app:onClose()
@@ -88,7 +88,9 @@ end
 
 function Novel:onShowNovelMenu()
     if self.novel_menu then
-        UIManager:close(self.novel_menu)
+        if UIManager:isWidgetShown(self.novel_menu) then
+            UIManager:close(self.novel_menu)
+        end
         self.novel_menu = nil
     end
 

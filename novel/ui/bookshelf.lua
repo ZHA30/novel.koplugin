@@ -463,6 +463,7 @@ function Bookshelf.close(plugin)
     closeActions(plugin)
     Dialog.closeWidget(plugin, "bookshelf_confirm_dialog")
     closeSwitchResults(plugin)
+    Detail.close(plugin)
     Dialog.closeWidget(plugin, "bookshelf_menu")
 end
 

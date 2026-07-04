@@ -68,6 +68,8 @@ end
 function ReaderLifecycle.stopPlugin(plugin)
     ReaderChapter.close(plugin, true)
     Prefetch.close(plugin)
+    Navigation.close(plugin)
+    Patches.restoreStatisticsInstance(plugin and plugin.ui and plugin.ui.statistics)
     Patches.restore()
     state.pending_return = nil
     state.suppress_return_ui = nil

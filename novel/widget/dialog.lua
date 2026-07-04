@@ -8,7 +8,9 @@ function Dialog.closeWidget(owner, key)
     if owner and owner[key] then
         local widget = owner[key]
         owner[key] = nil
-        UIManager:close(widget)
+        if UIManager:isWidgetShown(widget) then
+            UIManager:close(widget)
+        end
     end
 end
 

@@ -40,6 +40,7 @@ local function buildButtons(plugin, source, result)
         {
             text = _("Chapters"),
             callback = function()
+                Dialog.closeWidget(plugin, "detail_viewer")
                 Chapters.show(plugin, source, book)
             end,
         },
@@ -118,13 +119,11 @@ function Detail.close(plugin)
     Loading.close(plugin, "detail_loading")
     Dialog.closeWidget(plugin, "detail_menu")
     Dialog.closeWidget(plugin, "detail_viewer")
-    Chapters.close(plugin)
 end
 
 function Detail.showLoaded(plugin, source, result)
     Dialog.closeWidget(plugin, "detail_menu")
     Dialog.closeWidget(plugin, "detail_viewer")
-    Chapters.close(plugin)
     if not result or not result.ok then
         Dialog.message(_("Detail failed: ")
             .. tostring(Dialog.errorText(result, _("Detail failed."))))

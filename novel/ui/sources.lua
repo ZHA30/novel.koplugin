@@ -144,10 +144,7 @@ function Sources.show(plugin)
     local sources = repository:list()
     local groups = repository:listGroups()
 
-    if plugin.sources_menu then
-        UIManager:close(plugin.sources_menu)
-        plugin.sources_menu = nil
-    end
+    Sources.close(plugin)
 
     local sources_menu
     sources_menu = Menu:new{
@@ -170,6 +167,19 @@ function Sources.show(plugin)
     }
     plugin.sources_menu = sources_menu
     UIManager:show(sources_menu)
+end
+
+function Sources.close(plugin)
+    if not plugin then
+        return
+    end
+    if plugin.sources_menu then
+        local sources_menu = plugin.sources_menu
+        plugin.sources_menu = nil
+        if UIManager:isWidgetShown(sources_menu) then
+            UIManager:close(sources_menu)
+        end
+    end
 end
 
 return Sources

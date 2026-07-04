@@ -35,6 +35,10 @@ function Novel:onCloseDocument()
     ReaderLifecycle.onCloseDocument(self)
 end
 
+function Novel:onSaveSettings()
+    ReaderLifecycle.onSaveSettings(self)
+end
+
 function Novel:onCloseWidget()
     ReaderLifecycle.close(self)
     Loading.closeKeys(self, {

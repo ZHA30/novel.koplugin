@@ -6,6 +6,7 @@ local Loading = require("novel.widget.loading")
 local Manifest = require("novel.books.manifest")
 local NetworkMgr = require("ui/network/manager")
 local Prefetch = require("novel.reader.prefetch")
+local ReaderSettings = require("novel.reader.settings")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
@@ -128,6 +129,7 @@ local function openDownloadedChapter(plugin, manifest_store, manifest, position,
     updateReturnTarget(options)
     Dialog.closeWidget(plugin, "chapters_menu")
     local chapter = manifest.chapters[position]
+    ReaderSettings.syncBeforeOpen(plugin, manifest, chapter.file_path)
     openFile(plugin, chapter.file_path, options and options.jump)
 end
 

@@ -4,6 +4,7 @@ local ReaderDocument = require("novel.reader.document")
 local Navigation = require("novel.reader.navigation")
 local Patches = require("novel.reader.patches")
 local Prefetch = require("novel.reader.prefetch")
+local ReaderSettings = require("novel.reader.settings")
 local Manifest = require("novel.books.manifest")
 local UIManager = require("ui/uimanager")
 
@@ -80,6 +81,8 @@ function ReaderLifecycle.stopPlugin(plugin)
 end
 
 function ReaderLifecycle.onCloseDocument(plugin)
+    ReaderSettings.capture(plugin)
+
     local current_chapter = ReaderDocument.currentChapter(plugin)
     if not current_chapter or plugin.novel_switching_chapter
         or plugin.ui == state.suppress_return_ui then
@@ -95,6 +98,13 @@ function ReaderLifecycle.onCloseDocument(plugin)
         return_to = ReaderChapter.returnTarget(),
     }
     return true
+end
+
+function ReaderLifecycle.onSaveSettings(plugin)
+    if plugin and plugin.novel_skip_reader_settings_capture then
+        return
+    end
+    ReaderSettings.capture(plugin)
 end
 
 function ReaderLifecycle.setup(plugin)

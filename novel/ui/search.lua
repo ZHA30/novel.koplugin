@@ -149,10 +149,12 @@ function Search.start(plugin, source, keyword)
 
     Trapper:wrap(function()
         local loading_widget = Loading.show(plugin, "search_loading")
+        local settings = plugin.app and plugin.app.settings
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local SearchService = require("novel.catalog.search")
             return SearchService.run(source, keyword, {
                 page = 1,
+                settings = settings,
             })
         end, loading_widget)
         Loading.close(plugin, "search_loading", loading_widget)

@@ -30,10 +30,7 @@ local function cacheKey(source, spec, keyword, options)
 end
 
 local function cacheInstance(options)
-    if options.cache == false then
-        return nil
-    end
-    return options.cache or Cache:new()
+    return Cache.instance(options)
 end
 
 local function cachedResult(cache, key, options)
@@ -165,7 +162,18 @@ function Search:search(source, keyword, options)
     parsed.unsupported = unsupported
     parsed.response = responseSummary(response)
     if parsed.ok and parsed.books and #parsed.books > 0 and cache then
-        cache:set("search", key, parsed, options)
+        cache:set("search", key, parsed, {
+            owner = {
+                source = source.bookSourceUrl,
+            },
+            tags = {
+                kind = "search",
+                keyword = keyword or "",
+            },
+            settings = options.settings,
+            ttl = options.ttl,
+            flush = options.flush,
+        })
     end
     return parsed
 end

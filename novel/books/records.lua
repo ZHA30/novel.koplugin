@@ -372,6 +372,7 @@ function BookshelfRecords.fetchRefresh(source, book, options)
     local detail = BookDetail.run(source, book, {
         refresh = true,
         use_info_html = false,
+        settings = options.settings,
         timeout = options.timeout,
         total_timeout = options.total_timeout,
         max_redirects = options.max_redirects,
@@ -383,6 +384,7 @@ function BookshelfRecords.fetchRefresh(source, book, options)
     local chapters = ChapterCatalog.run(source, detail.book, {
         refresh = true,
         use_toc_html = false,
+        settings = options.settings,
         timeout = options.timeout,
         total_timeout = options.total_timeout,
         max_redirects = options.max_redirects,

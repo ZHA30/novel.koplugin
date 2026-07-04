@@ -256,9 +256,16 @@ function Manifest:saveChapter(manifest, position, html, options)
     if not ok then
         return nil, err
     end
-    local written, write_err = util.writeToFile(html, chapter.file_path, true)
+    local tmp_path = chapter.file_path .. ".tmp." .. tostring(os.time())
+        .. "." .. tostring(position)
+    local written, write_err = util.writeToFile(html, tmp_path, true)
     if not written then
         return nil, write_err
+    end
+    local renamed, rename_err = os.rename(tmp_path, chapter.file_path)
+    if not renamed then
+        os.remove(tmp_path)
+        return nil, rename_err
     end
 
     chapter.downloaded = true

@@ -228,12 +228,14 @@ function ReaderChapter.open(plugin, manifest, position, options)
     local request_id = nextContentRequest(plugin)
     local next_chapter = Chapter.nextOpenable(manifest.chapters, position, 1)
     local loading_widget = showLoading(plugin)
+    local settings = plugin.app and plugin.app.settings
 
     Trapper:wrap(function()
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local ContentService = require("novel.catalog.content")
             return ContentService.run(manifest.source, manifest.book, chapter, {
                 next_chapter_url = next_chapter and next_chapter.url or nil,
+                settings = settings,
             })
         end, loading_widget)
 

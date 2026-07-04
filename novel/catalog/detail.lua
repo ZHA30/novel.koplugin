@@ -1,5 +1,6 @@
 local Analyzer = require("novel.rule.analyzer")
 local Book = require("novel.model.book")
+local Cache = require("novel.storage.cache")
 local Runtime = require("novel.catalog.runtime")
 local Extract = require("novel.catalog.extract")
 local Request = require("novel.net.request")
@@ -22,6 +23,38 @@ local function applyIfPresent(target, field, value, replace)
     if value ~= "" and (replace or isBlank(target[field])) then
         target[field] = value
     end
+end
+
+local function cacheKey(source, book, options)
+    return Cache.makeKey("detail", {
+        source = source.bookSourceUrl,
+        book = book.bookUrl,
+        rule = source.ruleBookInfo,
+        use_info_html = options.use_info_html ~= false and book.infoHtml ~= nil,
+    })
+end
+
+local function cachedResult(cache, key, options)
+    if not cache then
+        return nil
+    end
+
+    local value, meta = cache:get("detail", key, options)
+    if not value then
+        return nil
+    end
+    value.cached = true
+    value.cache = meta
+    value.debug = value.debug or {}
+    table.insert(value.debug, 1, {
+        event = "cache_hit",
+        data = {
+            kind = "detail",
+            key = key,
+            stored_at = meta.stored_at,
+        },
+    })
+    return value
 end
 
 local function allowsRename(analyzer, unsupported, source, rule, can_rename)
@@ -183,6 +216,13 @@ function BookDetail:get(source, search_book, options)
         }
     end
 
+    local cache = Cache.instance(options)
+    local key = cacheKey(source, search_book, options)
+    local cached = cachedResult(cache, key, options)
+    if cached then
+        return cached
+    end
+
     local response
     if search_book.infoHtml and options.use_info_html ~= false then
         response = syntheticResponse(search_book)
@@ -236,6 +276,20 @@ function BookDetail:get(source, search_book, options)
     parsed.debug = debug
     parsed.unsupported = unsupported
     parsed.response = responseSummary(response)
+    if parsed.ok and parsed.book and cache then
+        cache:set("detail", key, parsed, {
+            owner = {
+                source = source.bookSourceUrl,
+                book = parsed.book.bookUrl or search_book.bookUrl,
+            },
+            tags = {
+                kind = "detail",
+            },
+            settings = options.settings,
+            ttl = options.ttl,
+            flush = options.flush,
+        })
+    end
     return parsed
 end
 

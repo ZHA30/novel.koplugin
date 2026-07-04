@@ -5,10 +5,25 @@ local Settings = {
 }
 
 Settings.defaults = {
-    schema_version = 1,
+    schema_version = 2,
     debug = {
         enabled = false,
         max_entries = 200,
+    },
+    cache = {
+        enabled = true,
+        chapter_content_enabled = true,
+        search_ttl_days = 0,
+        detail_ttl_days = 0,
+        toc_ttl_days = 0,
+        content_ttl_days = 0,
+        max_metadata_records = 10000,
+    },
+    prefetch = {
+        enabled = true,
+        lookahead = 1,
+        initial_delay = 0.8,
+        timeout_seconds = 45,
     },
     storage = {
         backend = "prototype",
@@ -47,6 +62,24 @@ local function mergeDefaults(settings, defaults)
     return changed
 end
 
+local function migrate(settings)
+    local version = tonumber(settings.schema_version) or 0
+    if version >= Settings.defaults.schema_version then
+        return false
+    end
+
+    settings.cache = settings.cache or {}
+    settings.cache.chapter_content_enabled = settings.cache.chapter_content_enabled ~= false
+    settings.cache.search_ttl_days = 0
+    settings.cache.detail_ttl_days = 0
+    settings.cache.toc_ttl_days = 0
+    settings.cache.content_ttl_days = 0
+    settings.cache.max_metadata_records = settings.cache.max_metadata_records or 10000
+    settings.cleanup = nil
+    settings.schema_version = Settings.defaults.schema_version
+    return true
+end
+
 function Settings.load()
     local settings = G_reader_settings:readSetting(Settings.key)
     local changed = false
@@ -56,6 +89,9 @@ function Settings.load()
         changed = true
     end
 
+    if migrate(settings) then
+        changed = true
+    end
     if mergeDefaults(settings, Settings.defaults) then
         changed = true
     end

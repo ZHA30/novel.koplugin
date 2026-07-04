@@ -116,6 +116,7 @@ function BookMatcher.find(record, sources, options)
             checked = checked + 1
             local result = search_run(source, keyword, {
                 page = options.page or 1,
+                settings = options.settings,
                 timeout = options.timeout,
                 total_timeout = options.total_timeout,
                 max_redirects = options.max_redirects,

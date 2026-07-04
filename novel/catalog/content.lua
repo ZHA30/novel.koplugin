@@ -45,6 +45,10 @@ local function cacheKey(source, book, chapter, first_url, next_chapter_url, rule
 end
 
 local function cachedResult(cache, key, options)
+    if not cache then
+        return nil
+    end
+
     local value, meta = cache:get("content", key, options)
     if not value then
         return nil
@@ -241,7 +245,8 @@ function Content:get(source, book, chapter, options)
         and Url.absolute(chapter.baseUrl or book.tocUrl or book.bookUrl,
             options.next_chapter_url)
         or ""
-    local cache = options.cache or Cache:new()
+    local cache = Cache.isKindEnabled("content", options)
+        and Cache.instance(options) or nil
     local key = cacheKey(source, book, chapter, first_url, next_chapter_url,
         source.ruleContent, options)
     local cached = cachedResult(cache, key, options)
@@ -325,7 +330,21 @@ function Content:get(source, book, chapter, options)
         unsupported = unsupported,
         pages = pages,
     }
-    cache:set("content", key, result, options)
+    if cache then
+        cache:set("content", key, result, {
+            owner = {
+                source = source.bookSourceUrl,
+                book = book.bookUrl,
+            },
+            tags = {
+                kind = "content",
+                chapter = chapter.url,
+            },
+            settings = options.settings,
+            ttl = options.ttl,
+            flush = options.flush,
+        })
+    end
     return result
 end
 

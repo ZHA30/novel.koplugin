@@ -150,9 +150,12 @@ function Detail.show(plugin, source, book)
 
     Trapper:wrap(function()
         local loading_widget = Loading.show(plugin, "detail_loading")
+        local settings = plugin.app and plugin.app.settings
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local BookDetail = require("novel.catalog.detail")
-            return BookDetail.run(source, book)
+            return BookDetail.run(source, book, {
+                settings = settings,
+            })
         end, loading_widget)
         Loading.close(plugin, "detail_loading", loading_widget)
 

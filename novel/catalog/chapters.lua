@@ -45,6 +45,10 @@ local function cacheKey(source, book, toc_url, rule, options)
 end
 
 local function cachedResult(cache, key, options)
+    if not cache then
+        return nil
+    end
+
     local value, meta = cache:get("toc", key, options)
     if not value then
         return nil
@@ -262,7 +266,7 @@ function Chapters:get(source, book, options)
             "js", source.ruleToc.preUpdateJs)
     end
 
-    local cache = options.cache or Cache:new()
+    local cache = Cache.instance(options)
     local key = cacheKey(source, book, toc_url, source.ruleToc, options)
     local cached = cachedResult(cache, key, options)
     if cached then
@@ -346,7 +350,20 @@ function Chapters:get(source, book, options)
         unsupported = unsupported,
         pages = pages,
     }
-    cache:set("toc", key, result, options)
+    if cache then
+        cache:set("toc", key, result, {
+            owner = {
+                source = source.bookSourceUrl,
+                book = book.bookUrl,
+            },
+            tags = {
+                kind = "toc",
+            },
+            settings = options.settings,
+            ttl = options.ttl,
+            flush = options.flush,
+        })
+    end
     return result
 end
 

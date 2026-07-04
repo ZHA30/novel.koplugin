@@ -271,9 +271,12 @@ local function refreshRecord(plugin, record)
 
     Trapper:wrap(function()
         local loading_widget = Loading.show(plugin, "bookshelf_refresh_loading")
+        local settings = plugin.app and plugin.app.settings
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local BookshelfRecords = require("novel.books.records")
-            return BookshelfRecords.fetchRefresh(source, record.book)
+            return BookshelfRecords.fetchRefresh(source, record.book, {
+                settings = settings,
+            })
         end, loading_widget)
         Loading.close(plugin, "bookshelf_refresh_loading", loading_widget)
 
@@ -319,9 +322,11 @@ local function switchRecord(plugin, record)
 
     Trapper:wrap(function()
         local loading_widget = Loading.show(plugin, "bookshelf_switch_loading")
+        local settings = plugin.app and plugin.app.settings
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local BookMatcher = require("novel.books.matcher")
             return BookMatcher.find(record, sources, {
+                settings = settings,
                 timeout = 5,
             })
         end, loading_widget)

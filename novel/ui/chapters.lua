@@ -401,9 +401,12 @@ function Chapters.show(plugin, source, book, options)
 
     Trapper:wrap(function()
         local loading_widget = Loading.show(plugin, "chapters_loading")
+        local settings = plugin.app and plugin.app.settings
         local completed, result = Trapper:dismissableRunInSubprocess(function()
             local ChapterCatalog = require("novel.catalog.chapters")
-            return ChapterCatalog.run(source, book)
+            return ChapterCatalog.run(source, book, {
+                settings = settings,
+            })
         end, loading_widget)
         Loading.close(plugin, "chapters_loading", loading_widget)
 

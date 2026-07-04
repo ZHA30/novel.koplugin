@@ -9,10 +9,26 @@ local logger = require("logger")
 
 local Prefetch = {}
 
-local INITIAL_DELAY = 0.8
-local POLL_INTERVAL = 0.25
-local COLLECT_INTERVAL = 1
-local LOOKAHEAD_LIMIT = 2
+local DEFAULT_INITIAL_DELAY = 0.8
+local DEFAULT_POLL_INTERVAL = 0.25
+local DEFAULT_COLLECT_INTERVAL = 1
+local DEFAULT_LOOKAHEAD = 1
+local DEFAULT_TIMEOUT = 45
+
+local STATUS_SCHEDULED = "scheduled"
+local STATUS_RUNNING = "running"
+local STATUS_DONE = "done"
+local STATUS_FAILED = "failed"
+local STATUS_CANCELED = "canceled"
+
+local function now()
+    return os.time()
+end
+
+local function prefetchSettings(plugin)
+    local settings = plugin and plugin.app and plugin.app.settings
+    return settings and settings.prefetch or {}
+end
 
 local function isChapterCurrent(manifest, position)
     local chapter = manifest and manifest.chapters and manifest.chapters[position]
@@ -32,10 +48,11 @@ local function nextContentUrl(manifest, position)
     return next_chapter and next_chapter.url or nil
 end
 
-local function findTarget(manifest, current_position)
+local function findTarget(manifest, current_position, lookahead)
     local position = current_position
     local checked = 0
-    while checked < LOOKAHEAD_LIMIT do
+    lookahead = tonumber(lookahead) or DEFAULT_LOOKAHEAD
+    while checked < math.max(lookahead, 1) do
         checked = checked + 1
         local chapter, target_position = Chapter.nextOpenable(
             manifest.chapters, position, 1)
@@ -59,14 +76,16 @@ local function collectLater(pid, read_fd)
             end
             return
         end
-        UIManager:scheduleIn(COLLECT_INTERVAL, collect)
+        UIManager:scheduleIn(DEFAULT_COLLECT_INTERVAL, collect)
     end
-    UIManager:scheduleIn(COLLECT_INTERVAL, collect)
+    UIManager:scheduleIn(DEFAULT_COLLECT_INTERVAL, collect)
 end
 
 local function notify(state, ok, reason)
     local callbacks = state and state.callbacks
-    state.callbacks = nil
+    if state then
+        state.callbacks = nil
+    end
     if not callbacks then
         return
     end
@@ -79,22 +98,24 @@ local function finish(plugin, state, encoded)
     if plugin.novel_prefetch == state then
         plugin.novel_prefetch = nil
     end
-    local ok = false
     if not plugin.app then
-        notify(state, ok, "closed")
+        state.status = STATUS_CANCELED
+        notify(state, false, "closed")
         return
     end
 
     local decoded, result = pcall(buffer.decode, encoded or "")
     if not decoded or type(result) ~= "table" then
+        state.status = STATUS_FAILED
         logger.warn("novel prefetch: cannot decode result:", result)
-        notify(state, ok, "failed")
+        notify(state, false, "failed")
         return
     end
     if not result.ok then
+        state.status = STATUS_FAILED
         logger.dbg("novel prefetch failed:", result.error
             and result.error.message or "unknown")
-        notify(state, ok, "failed")
+        notify(state, false, "failed")
         return
     end
 
@@ -102,8 +123,14 @@ local function finish(plugin, state, encoded)
     local manifest = manifest_store:load(state.book_id)
     local chapter = manifest and manifest.chapters
         and manifest.chapters[state.position]
-    if not chapter or isChapterCurrent(manifest, state.position) then
-        notify(state, chapter ~= nil, chapter and "done" or "failed")
+    if not chapter then
+        state.status = STATUS_FAILED
+        notify(state, false, "failed")
+        return
+    end
+    if isChapterCurrent(manifest, state.position) then
+        state.status = STATUS_DONE
+        notify(state, true, "done")
         return
     end
 
@@ -112,17 +139,53 @@ local function finish(plugin, state, encoded)
         content_type = result.content_type,
     })
     if file then
+        state.status = STATUS_DONE
         logger.dbg("novel prefetch saved:", file)
-        ok = true
+        notify(state, true, "done")
     else
+        state.status = STATUS_FAILED
         logger.warn("novel prefetch save failed:", err)
+        notify(state, false, "failed")
     end
-    notify(state, ok, ok and "done" or "failed")
+end
+
+local function cancelRunning(plugin, state, reason)
+    if plugin and plugin.novel_prefetch == state then
+        plugin.novel_prefetch = nil
+    end
+    state.status = STATUS_CANCELED
+    if state.check then
+        UIManager:unschedule(state.check)
+    end
+    if state.pid then
+        if ffiutil.isSubProcessDone(state.pid) then
+            if state.read_fd then
+                ffiutil.readAllFromFD(state.read_fd)
+                state.read_fd = nil
+            end
+        else
+            ffiutil.terminateSubProcess(state.pid)
+            collectLater(state.pid, state.read_fd)
+            state.read_fd = nil
+        end
+    end
+    notify(state, false, reason or "closed")
+end
+
+local function checkTimedOut(state)
+    local timeout = tonumber(state.timeout_seconds) or DEFAULT_TIMEOUT
+    return timeout > 0 and state.started_at
+        and now() - state.started_at >= timeout
 end
 
 local function scheduleCheck(plugin, state)
     state.check = function()
         if plugin.novel_prefetch ~= state then
+            return
+        end
+        if checkTimedOut(state) then
+            logger.warn("novel prefetch timed out:", state.book_id, state.position)
+            cancelRunning(plugin, state, "timeout")
             return
         end
 
@@ -146,25 +209,28 @@ local function scheduleCheck(plugin, state)
             if plugin.novel_prefetch == state then
                 plugin.novel_prefetch = nil
             end
+            state.status = STATUS_FAILED
             notify(state, false, "failed")
             return
         end
 
-        UIManager:scheduleIn(POLL_INTERVAL, state.check)
+        UIManager:scheduleIn(DEFAULT_POLL_INTERVAL, state.check)
     end
-    UIManager:scheduleIn(POLL_INTERVAL, state.check)
+    UIManager:scheduleIn(DEFAULT_POLL_INTERVAL, state.check)
 end
 
-local function start(plugin, manifest, position)
+local function start(plugin, state, manifest, position)
     local chapter = manifest.chapters[position]
     local source = manifest.source
     local book = manifest.book
     local next_chapter_url = nextContentUrl(manifest, position)
+    local plugin_settings = plugin.app and plugin.app.settings
 
     local pid, read_fd = ffiutil.runInSubProcess(function(_pid, write_fd)
         local ContentService = require("novel.catalog.content")
         local result = ContentService.run(source, book, chapter, {
             next_chapter_url = next_chapter_url,
+            settings = plugin_settings,
         })
         local ok, encoded = pcall(buffer.encode, result or {})
         if not ok then
@@ -179,33 +245,45 @@ local function start(plugin, manifest, position)
     end, true)
     if not pid then
         logger.warn("novel prefetch start failed:", read_fd)
-        plugin.novel_prefetch = nil
+        if plugin.novel_prefetch == state then
+            plugin.novel_prefetch = nil
+        end
+        state.status = STATUS_FAILED
+        notify(state, false, "failed")
         return false
     end
 
-    local state = {
-        pid = pid,
-        read_fd = read_fd,
-        book_id = manifest.book_id,
-        position = position,
-    }
-    plugin.novel_prefetch = state
+    state.status = STATUS_RUNNING
+    state.pid = pid
+    state.read_fd = read_fd
+    state.book_id = manifest.book_id
+    state.position = position
+    state.started_at = now()
     scheduleCheck(plugin, state)
     return true
 end
 
-local function run(plugin, current_chapter)
+local function run(plugin, current_chapter, state)
+    if plugin.novel_prefetch ~= state then
+        return
+    end
     if not plugin.app or not plugin.ui or not plugin.ui.document then
         plugin.novel_prefetch = nil
+        state.status = STATUS_CANCELED
+        notify(state, false, "closed")
         return
     end
     if current_chapter.chapter and current_chapter.chapter.file_path
         and plugin.ui.document.file ~= current_chapter.chapter.file_path then
         plugin.novel_prefetch = nil
+        state.status = STATUS_CANCELED
+        notify(state, false, "closed")
         return
     end
     if not networkAvailable() then
         plugin.novel_prefetch = nil
+        state.status = STATUS_FAILED
+        notify(state, false, "offline")
         return
     end
 
@@ -213,15 +291,20 @@ local function run(plugin, current_chapter)
         or current_chapter.manifest
     if not manifest then
         plugin.novel_prefetch = nil
+        state.status = STATUS_FAILED
+        notify(state, false, "failed")
         return
     end
 
-    local position = findTarget(manifest, current_chapter.position)
+    local position = findTarget(manifest, current_chapter.position,
+        state.lookahead)
     if not position then
         plugin.novel_prefetch = nil
+        state.status = STATUS_DONE
+        notify(state, true, "done")
         return
     end
-    start(plugin, manifest, position)
+    start(plugin, state, manifest, position)
 end
 
 function Prefetch.setup(plugin)
@@ -231,16 +314,26 @@ function Prefetch.setup(plugin)
         return false
     end
 
-    local state = {}
+    local settings = prefetchSettings(plugin)
+    if settings.enabled == false then
+        return false
+    end
+
+    local state = {
+        status = STATUS_SCHEDULED,
+        lookahead = settings.lookahead or DEFAULT_LOOKAHEAD,
+        timeout_seconds = settings.timeout_seconds or DEFAULT_TIMEOUT,
+    }
     state.scheduled = function()
         if plugin.novel_prefetch ~= state then
             return
         end
         state.scheduled = nil
-        run(plugin, current_chapter)
+        run(plugin, current_chapter, state)
     end
     plugin.novel_prefetch = state
-    UIManager:scheduleIn(INITIAL_DELAY, state.scheduled)
+    UIManager:scheduleIn(settings.initial_delay or DEFAULT_INITIAL_DELAY,
+        state.scheduled)
     return true
 end
 
@@ -252,26 +345,22 @@ function Prefetch.close(plugin)
     plugin.novel_prefetch = nil
     if state.scheduled then
         UIManager:unschedule(state.scheduled)
+        state.scheduled = nil
     end
     if state.check then
         UIManager:unschedule(state.check)
     end
     if state.pid then
-        if ffiutil.isSubProcessDone(state.pid) then
-            if state.read_fd then
-                ffiutil.readAllFromFD(state.read_fd)
-            end
-        else
-            ffiutil.terminateSubProcess(state.pid)
-            collectLater(state.pid, state.read_fd)
-        end
+        cancelRunning(plugin, state, "closed")
+    else
+        state.status = STATUS_CANCELED
+        notify(state, false, "closed")
     end
-    notify(state, false, "closed")
 end
 
 function Prefetch.isPending(plugin, manifest, position)
     local state = plugin and plugin.novel_prefetch
-    return state and state.pid
+    return state and state.status == STATUS_RUNNING and state.pid
         and state.book_id == (manifest and manifest.book_id)
         and state.position == position
         or false

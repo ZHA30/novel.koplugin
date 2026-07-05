@@ -148,6 +148,54 @@ local function applyReplacement(result, rule)
     return replaceRegex(result, rule)
 end
 
+local function resultHasValues(result)
+    if result == nil then
+        return false
+    end
+    if type(result) == "table" then
+        return #result > 0
+    end
+    return tostring(result) ~= ""
+end
+
+local function asResultList(result)
+    if result == nil then
+        return {}
+    end
+    if type(result) == "table" then
+        return result
+    end
+    return { result }
+end
+
+local function combineResults(results, operator)
+    local combined = {}
+    if operator == "%%" and #results > 0 then
+        for item_index = 1, #results[1] do
+            for list_index = 1, #results do
+                if item_index <= #results[list_index] then
+                    table.insert(combined, results[list_index][item_index])
+                end
+            end
+        end
+        return combined
+    end
+
+    for list_index = 1, #results do
+        for item_index = 1, #results[list_index] do
+            table.insert(combined, results[list_index][item_index])
+        end
+    end
+    return combined
+end
+
+local function branchList(rule)
+    if rule.branches and #rule.branches > 0 then
+        return rule.branches, rule.operator
+    end
+    return { rule }, nil
+end
+
 function Analyzer:dispatchStringList(content, rule)
     local active_rule = self:makeRule(rule)
     if active_rule == "" and rule.replace_regex ~= "" then
@@ -190,6 +238,50 @@ function Analyzer:dispatchElements(content, rule)
     return HtmlRule.parse(content):getElements(active_rule)
 end
 
+function Analyzer:applyRuleUnsupported(rule, field)
+    for item_index = 1, #(rule and rule.unsupported or {}) do
+        local item = rule.unsupported[item_index]
+        if item.kind ~= "js" then
+            self:addUnsupported(field or "rule", item.kind, item.snippet)
+        end
+    end
+end
+
+function Analyzer:evaluateRuleStep(rule, content, mode)
+    local branches, operator = branchList(rule)
+    if #branches == 1 and not operator then
+        local branch = branches[1]
+        self:applyRuleUnsupported(branch)
+        if mode == "elements" then
+            return applyReplacement(self:dispatchElements(content, branch), branch)
+        end
+        return applyReplacement(self:dispatchStringList(content, branch), branch)
+    end
+
+    local results = {}
+    for branch_index = 1, #branches do
+        local branch = branches[branch_index]
+        self:applyRuleUnsupported(branch)
+
+        local branch_result
+        if mode == "elements" then
+            branch_result = self:dispatchElements(content, branch)
+        else
+            branch_result = self:dispatchStringList(content, branch)
+        end
+        branch_result = applyReplacement(branch_result, branch)
+
+        if resultHasValues(branch_result) then
+            table.insert(results, asResultList(branch_result))
+            if operator == "||" then
+                break
+            end
+        end
+    end
+
+    return combineResults(results, operator)
+end
+
 function Analyzer:evaluate(rule_text, content, mode)
     local rules = Split.splitSourceRules(rule_text, {
         all_in_one = mode == "elements",
@@ -203,17 +295,12 @@ function Analyzer:evaluate(rule_text, content, mode)
     for rule_index = 1, #rules do
         local rule = rules[rule_index]
         self:applyPutMap(rule.put_map)
-        if mode == "elements" then
-            result = self:dispatchElements(result, rule)
-        else
-            result = self:dispatchStringList(result, rule)
-            if mode == "string" and type(result) == "table" then
-                result = table.concat(result, "\n")
-            end
-        end
-        result = applyReplacement(result, rule)
+        result = self:evaluateRuleStep(rule, result, mode)
         if result == nil then
             return nil
+        end
+        if mode == "string" and type(result) == "table" then
+            result = table.concat(result, "\n")
         end
     end
 

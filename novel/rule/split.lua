@@ -280,18 +280,15 @@ local function collectDynamicParts(rule)
     return parts
 end
 
-function Split.parseSourceRule(rule, options)
+local function parseBranchRule(rule, options)
     options = options or {}
     local raw = trim(rule)
     local mode, normalized_rule = detectMode(raw, options)
-    local put_map
-    normalized_rule, put_map = splitPutRule(normalized_rule)
 
     local result = {
         raw = raw,
         mode = mode,
         rule = normalized_rule,
-        put_map = put_map,
         replace_regex = "",
         replacement = "",
         replace_first = false,
@@ -327,6 +324,62 @@ function Split.parseSourceRule(rule, options)
                 snippet = capture,
             })
         end
+    end
+
+    return result
+end
+
+local function mergeUnsupported(target, items)
+    for index = 1, #(items or {}) do
+        table.insert(target, items[index])
+    end
+end
+
+function Split.parseSourceRule(rule, options)
+    options = options or {}
+    local raw = trim(rule)
+    local normalized_rule = raw
+    local put_map
+    normalized_rule, put_map = splitPutRule(normalized_rule)
+
+    local branches = {}
+    local operator = nil
+    local branch_rules = { normalized_rule }
+    if not options.regex then
+        branch_rules, operator = Split.splitOperators(normalized_rule)
+        if #branch_rules <= 1 then
+            operator = nil
+        end
+    end
+
+    for branch_index = 1, #branch_rules do
+        local branch = parseBranchRule(branch_rules[branch_index], options)
+        if branch.raw ~= "" then
+            table.insert(branches, branch)
+        end
+    end
+
+    if #branches == 0 then
+        table.insert(branches, parseBranchRule(normalized_rule, options))
+    end
+
+    local first_branch = branches[1]
+    local result = {
+        raw = raw,
+        mode = first_branch and first_branch.mode or modes.default,
+        rule = first_branch and first_branch.rule or "",
+        put_map = put_map,
+        replace_regex = first_branch and first_branch.replace_regex or "",
+        replacement = first_branch and first_branch.replacement or "",
+        replace_first = first_branch and first_branch.replace_first or false,
+        dynamic_parts = first_branch and first_branch.dynamic_parts or {},
+        unsupported = {},
+        operator = operator,
+        branches = branches,
+    }
+
+    for branch_index = 1, #branches do
+        mergeUnsupported(result.unsupported, branches[branch_index].unsupported)
     end
 
     return result

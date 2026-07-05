@@ -1,6 +1,7 @@
 local Analyzer = require("novel.rule.analyzer")
 local Runtime = require("novel.catalog.runtime")
 local Extract = require("novel.catalog.extract")
+local Url = require("novel.net.url")
 
 local Books = {}
 
@@ -9,6 +10,84 @@ local sourceName = Runtime.sourceName
 local sourceKey = Runtime.sourceKey
 local addDebug = Runtime.addDebug
 local addError = Runtime.error
+
+local function looksMalformedKind(kind)
+    kind = trim(kind)
+    return kind == ""
+        or kind:find("||", 1, true) ~= nil
+        or kind:find("&&", 1, true) ~= nil
+end
+
+local function bookUrlSlug(book_url)
+    local path = tostring(book_url or ""):match("^https?://[^/]+(/[^?#]*)$")
+        or tostring(book_url or "")
+    return path:match("^/([^/]+)/") or path:match("^([^/]+)/")
+end
+
+local function parseExploreKindMap(source)
+    if type(source) ~= "table" then
+        return {}
+    end
+    if source._explore_kind_map then
+        return source._explore_kind_map
+    end
+
+    local map = {}
+    local explore_url = trim(source.exploreUrl)
+    if explore_url == "" then
+        source._explore_kind_map = map
+        return map
+    end
+
+    local normalized = explore_url:gsub("\r\n", "\n"):gsub("\r", "\n")
+    for raw_line in (normalized .. "\n"):gmatch("([^\n]*)\n") do
+        local start_index = 1
+        while start_index <= #raw_line do
+            local delimiter_start = raw_line:find("&&", start_index, true)
+            local part = delimiter_start
+                and raw_line:sub(start_index, delimiter_start - 1)
+                or raw_line:sub(start_index)
+            local title, group_url = trim(part):match("^(.-)::(.+)$")
+            if title and group_url then
+                local spec = Url.parse(trim(group_url), {
+                    base_url = source.bookSourceUrl,
+                    page = 1,
+                })
+                local slug = bookUrlSlug(spec.url_no_query ~= "" and spec.url_no_query or spec.url)
+                if slug and slug ~= "" and trim(title) ~= "" and map[slug] == nil then
+                    map[slug] = trim(title)
+                end
+            end
+            if not delimiter_start then
+                break
+            end
+            start_index = delimiter_start + 2
+        end
+    end
+
+    source._explore_kind_map = map
+    return map
+end
+
+local function normalizeKind(source, book_url, kind)
+    kind = trim(kind)
+    if not looksMalformedKind(kind) then
+        return kind
+    end
+
+    local kind_map = parseExploreKindMap(source)
+    local cleaned = kind:match("^([%w_%-]+)") or ""
+    if cleaned ~= "" and kind_map[cleaned] then
+        return kind_map[cleaned]
+    end
+
+    local slug = bookUrlSlug(book_url)
+    if slug and kind_map[slug] then
+        return kind_map[slug]
+    end
+
+    return kind
+end
 
 local function listRule(rule)
     local value = trim(rule and rule.bookList or "")
@@ -37,6 +116,9 @@ local function parseBook(analyzer, unsupported, source, rule, prefix, item, fina
 
     local latest_chapter = Extract.cleanString(analyzer, unsupported, source,
         prefix .. ".lastChapter", rule.lastChapter, item)
+    local kind = Extract.listText(analyzer, unsupported, source,
+        prefix .. ".kind", rule.kind, item)
+    kind = normalizeKind(source, book_url, kind)
 
     return {
         name = name,
@@ -44,8 +126,7 @@ local function parseBook(analyzer, unsupported, source, rule, prefix, item, fina
             prefix .. ".author", rule.author, item),
         intro = Extract.cleanString(analyzer, unsupported, source,
             prefix .. ".intro", rule.intro, item),
-        kind = Extract.listText(analyzer, unsupported, source,
-            prefix .. ".kind", rule.kind, item),
+        kind = kind,
         latestChapter = latest_chapter,
         latestChapterTitle = latest_chapter,
         updateTime = Extract.cleanString(analyzer, unsupported, source,

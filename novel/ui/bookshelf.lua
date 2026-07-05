@@ -6,6 +6,7 @@ local Capability = require("novel.source.capability")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Detail = require("novel.ui.detail")
 local Dialog = require("novel.widget.dialog")
+local EmptyView = require("novel.widget.emptyview")
 local Loading = require("novel.widget.loading")
 local NetworkMgr = require("ui/network/manager")
 local Chapters = require("novel.ui.chapters")
@@ -442,14 +443,6 @@ local function showActions(plugin, record)
 end
 
 local function buildItems(plugin, records)
-    if #records == 0 then
-        return {{
-            text = _("No books in bookshelf."),
-            select_enabled = false,
-            dim = true,
-        }}
-    end
-
     local item_table = {}
     for record_index = 1, #records do
         local record = records[record_index]
@@ -479,6 +472,7 @@ function Bookshelf.close(plugin)
     Dialog.closeWidget(plugin, "bookshelf_confirm_dialog")
     closeSwitchResults(plugin)
     Detail.close(plugin)
+    Dialog.closeWidget(plugin, "bookshelf_empty_view")
     Dialog.closeWidget(plugin, "bookshelf_menu")
 end
 
@@ -488,8 +482,26 @@ function Bookshelf.show(plugin)
         return
     end
 
+    Dialog.closeWidget(plugin, "bookshelf_empty_view")
     Dialog.closeWidget(plugin, "bookshelf_menu")
     local records = plugin.app:getBookshelfRecords():list()
+    if #records == 0 then
+        local empty_view
+        empty_view = EmptyView:new{
+            title = _("Bookshelf"),
+            kaomoji = "(._.)",
+            message = _("Empty"),
+            close_callback = function()
+                if plugin.bookshelf_empty_view == empty_view then
+                    plugin.bookshelf_empty_view = nil
+                end
+            end,
+        }
+        plugin.bookshelf_empty_view = empty_view
+        UIManager:show(empty_view)
+        return
+    end
+
     local bookshelf_menu
     bookshelf_menu = BookMenu:new{
         title = _("Bookshelf"),

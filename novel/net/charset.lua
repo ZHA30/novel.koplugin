@@ -1,4 +1,5 @@
-local GB2312 = require("novel.net.gb2312")
+local GB18030 = require("novel.net.gb18030")
+local GBK = require("novel.net.gbk")
 
 local Charset = {}
 
@@ -14,9 +15,11 @@ local function normalize(charset)
     if charset == "utf8" then
         return "utf-8"
     end
-    if charset == "gb2312" or charset == "gbk"
-        or charset == "cp936" or charset == "gb18030" then
-        return "gb2312"
+    if charset == "gb2312" or charset == "gbk" or charset == "cp936" then
+        return "gbk"
+    end
+    if charset == "gb18030" then
+        return "gb18030"
     end
     return charset
 end
@@ -36,8 +39,11 @@ function Charset.toUTF8(value, charset)
     end
 
     local normalized = normalize(charset)
-    if normalized == "gb2312" then
-        return GB2312.toUTF8(value)
+    if normalized == "gbk" then
+        return GBK.toUTF8(value)
+    end
+    if normalized == "gb18030" then
+        return GB18030.toUTF8(value)
     end
     return value, unsupported(charset)
 end
@@ -48,8 +54,11 @@ function Charset.fromUTF8(value, charset)
     end
 
     local normalized = normalize(charset)
-    if normalized == "gb2312" then
-        return GB2312.fromUTF8(value)
+    if normalized == "gbk" then
+        return GBK.fromUTF8(value)
+    end
+    if normalized == "gb18030" then
+        return GB18030.fromUTF8(value)
     end
     return value, unsupported(charset)
 end

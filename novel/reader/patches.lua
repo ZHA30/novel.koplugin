@@ -1,5 +1,5 @@
 local _ = require("novel.i18n")
-local ReaderDocument = require("novel.reader.document")
+local ChapterDoc = require("novel.reader.chapterdoc")
 
 local Patches = {}
 local patches = {}
@@ -10,7 +10,7 @@ local function firstNonNovelHistoryFile(ReadHistory)
     end
     for index = 1, #ReadHistory.hist do
         local item = ReadHistory.hist[index]
-        if item and item.file and not ReaderDocument.chapterByFile(item.file) then
+        if item and item.file and not ChapterDoc.chapterByFile(item.file) then
             return item.file
         end
     end
@@ -24,7 +24,7 @@ local function cleanLastFileSettings(ReadHistory)
 
     local changed = false
     local lastfile = G_reader_settings:readSetting("lastfile")
-    if ReaderDocument.chapterByFile(lastfile) then
+    if ChapterDoc.chapterByFile(lastfile) then
         local fallback = firstNonNovelHistoryFile(ReadHistory)
         if fallback then
             G_reader_settings:saveSetting("lastfile", fallback)
@@ -34,7 +34,7 @@ local function cleanLastFileSettings(ReadHistory)
             G_reader_settings:delSetting("lastdir")
         end
         changed = true
-    elseif ReaderDocument.isNovelPath(G_reader_settings:readSetting("lastdir")) then
+    elseif ChapterDoc.isNovelPath(G_reader_settings:readSetting("lastdir")) then
         G_reader_settings:delSetting("lastdir")
         changed = true
     end
@@ -53,7 +53,7 @@ local function cleanReadHistory(ReadHistory)
     local removed = false
     for index = #ReadHistory.hist, 1, -1 do
         local item = ReadHistory.hist[index]
-        if item and ReaderDocument.chapterByFile(item.file) then
+        if item and ChapterDoc.chapterByFile(item.file) then
             ReadHistory:removeItem(item, index, true)
             removed = true
         end
@@ -102,7 +102,7 @@ local function readerTocNovelPlugin(reader_toc)
     if not reader_ui or not reader_ui.document then
         return nil
     end
-    if not ReaderDocument.isNovelPath(reader_ui.document.file) then
+    if not ChapterDoc.isNovelPath(reader_ui.document.file) then
         return nil
     end
     return reader_ui.novel
@@ -113,8 +113,8 @@ local function showNovelChapters(reader_toc)
     if not plugin or not plugin.app then
         return false
     end
-    local Chapters = require("novel.ui.chapters")
-    Chapters.showCurrent(plugin)
+    local ChaptersFlow = require("novel.ui.chapters.flow")
+    ChaptersFlow.showCurrent(plugin)
     return true
 end
 
@@ -123,7 +123,7 @@ local function installCorePatches(state)
     if ok_history and ReadHistory then
         installPatch("readhistory_add_item", ReadHistory, "addItem", function(original)
             return function(history, file, ...)
-                if ReaderDocument.chapterByFile(file) then
+                if ChapterDoc.chapterByFile(file) then
                     return
                 end
                 return original(history, file, ...)
@@ -132,7 +132,7 @@ local function installCorePatches(state)
         installPatch("readhistory_update_last_book_time", ReadHistory,
             "updateLastBookTime", function(original)
             return function(history, ...)
-                if ReaderDocument.chapterByFile(ReaderDocument.currentReaderFile()) then
+                if ChapterDoc.chapterByFile(ChapterDoc.currentReaderFile()) then
                     return
                 end
                 return original(history, ...)
@@ -146,7 +146,7 @@ local function installCorePatches(state)
         installPatch("readcollection_update_last_book_time", ReadCollection,
             "updateLastBookTime", function(original)
             return function(collection, file, ...)
-                if ReaderDocument.chapterByFile(file) then
+                if ChapterDoc.chapterByFile(file) then
                     return
                 end
                 return original(collection, file, ...)
@@ -161,7 +161,7 @@ local function installCorePatches(state)
             return function(reader_ui, ...)
                 local previous = state.suppress_return_ui
                 if reader_ui and reader_ui.document
-                    and ReaderDocument.chapterByFile(reader_ui.document.file) then
+                    and ChapterDoc.chapterByFile(reader_ui.document.file) then
                     state.suppress_return_ui = reader_ui
                 end
                 local results = { pcall(original, reader_ui, ...) }
@@ -176,7 +176,7 @@ local function installCorePatches(state)
         installPatch("readerui_show_file_manager", ReaderUI, "showFileManager",
             function(original)
             return function(reader_ui, file, selected_files)
-                if state.pending_return and ReaderDocument.chapterByFile(file) then
+                if state.pending_return and ChapterDoc.chapterByFile(file) then
                     file = nil
                 end
                 local results = { pcall(original, reader_ui, file, selected_files) }
@@ -213,7 +213,7 @@ end
 
 local function isCurrentStatsDocumentNovel(statistics)
     local ui = statistics and statistics.ui
-    return ui and ui.document and ReaderDocument.chapterByFile(ui.document.file) or nil
+    return ui and ui.document and ChapterDoc.chapterByFile(ui.document.file) or nil
 end
 
 function Patches.patchStatisticsInstance(statistics)

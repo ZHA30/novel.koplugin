@@ -1,6 +1,6 @@
-local Chapter = require("novel.model.chapter")
-local ChapterDocument = require("novel.books.document")
-local Manifest = require("novel.books.manifest")
+local ChapterRecord = require("novel.reader.chapterrecord")
+local ChapterDoc = require("novel.reader.chapterdoc")
+local Manifest = require("novel.storage.manifest")
 local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
 local buffer = require("string.buffer")
@@ -33,7 +33,7 @@ end
 local function isChapterCurrent(manifest, position)
     local chapter = manifest and manifest.chapters and manifest.chapters[position]
     return Manifest.chapterFileExists(manifest, position)
-        and ChapterDocument.contentIsCurrent(manifest, chapter)
+        and ChapterDoc.contentIsCurrent(manifest, chapter)
 end
 
 local function networkAvailable()
@@ -44,7 +44,7 @@ local function networkAvailable()
 end
 
 local function nextContentUrl(manifest, position)
-    local next_chapter = Chapter.nextOpenable(manifest.chapters, position, 1)
+    local next_chapter = ChapterRecord.nextOpenable(manifest.chapters, position, 1)
     return next_chapter and next_chapter.url or nil
 end
 
@@ -54,7 +54,7 @@ local function findTarget(manifest, current_position, lookahead)
     lookahead = tonumber(lookahead) or DEFAULT_LOOKAHEAD
     while checked < math.max(lookahead, 1) do
         checked = checked + 1
-        local chapter, target_position = Chapter.nextOpenable(
+        local chapter, target_position = ChapterRecord.nextOpenable(
             manifest.chapters, position, 1)
         if not chapter then
             return nil
@@ -134,7 +134,7 @@ local function finish(plugin, state, encoded)
         return
     end
 
-    local html = ChapterDocument.html(chapter, result.text, result.content_type)
+    local html = ChapterDoc.html(chapter, result.text, result.content_type)
     local file, err = manifest_store:saveChapter(manifest, state.position, html, {
         content_type = result.content_type,
     })
@@ -227,8 +227,8 @@ local function start(plugin, state, manifest, position)
     local plugin_settings = plugin.app and plugin.app.settings
 
     local pid, read_fd = ffiutil.runInSubProcess(function(_pid, write_fd)
-        local ContentService = require("novel.catalog.content")
-        local result = ContentService.run(source, book, chapter, {
+        local ChapterContent = require("novel.catalog.reading.chaptercontent")
+        local result = ChapterContent.run(source, book, chapter, {
             next_chapter_url = next_chapter_url,
             settings = plugin_settings,
         })

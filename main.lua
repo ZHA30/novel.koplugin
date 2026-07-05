@@ -1,20 +1,14 @@
 local _ = dofile((debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "i18n/po.lua")
-local App = require("novel.app")
-local Bookshelf = require("novel.ui.bookshelf")
-local Discover = require("novel.ui.discover")
-local Dialog = require("novel.widget.dialog")
-local Icons = require("novel.icons")
-local Loading = require("novel.widget.loading")
-local Menu = require("novel.widget.menu")
-local ReaderLifecycle = require("novel.reader.lifecycle")
-local Search = require("novel.ui.search")
-local Size = require("ui/size")
-local Sources = require("novel.ui.sources")
-local Chapters = require("novel.ui.chapters")
-local UIManager = require("ui/uimanager")
+local AppContext = require("novel.appcontext")
+local BookshelfFlow = require("novel.ui.bookshelf.flow")
+local DiscoverFlow = require("novel.ui.discover.flow")
+local Dialog = require("novel.ui.widget.dialog")
+local Loading = require("novel.ui.widget.loading")
+local ReaderHooks = require("novel.reader.readerhooks")
+local SearchFlow = require("novel.ui.search.flow")
+local ChaptersFlow = require("novel.ui.chapters.flow")
+local Shell = require("novel.ui.shell")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
-
-local MENU_ICON_WIDTH = Icons.size.menu + Size.padding.default
 
 local Novel = WidgetContainer:extend{
     name = "novel",
@@ -22,9 +16,9 @@ local Novel = WidgetContainer:extend{
 }
 
 function Novel:init()
-    self.app = App:new{ plugin = self }
+    self.app = AppContext:new{ plugin = self }
     self.app:init()
-    ReaderLifecycle.init(self)
+    ReaderHooks.init(self)
 
     if self.ui and self.ui.menu then
         self.ui.menu:registerToMainMenu(self)
@@ -32,15 +26,15 @@ function Novel:init()
 end
 
 function Novel:onCloseDocument()
-    ReaderLifecycle.onCloseDocument(self)
+    ReaderHooks.onCloseDocument(self)
 end
 
 function Novel:onSaveSettings()
-    ReaderLifecycle.onSaveSettings(self)
+    ReaderHooks.onSaveSettings(self)
 end
 
 function Novel:onCloseWidget()
-    ReaderLifecycle.close(self)
+    ReaderHooks.close(self)
     Loading.closeKeys(self, {
         "bookshelf_refresh_loading",
         "bookshelf_switch_loading",
@@ -49,18 +43,11 @@ function Novel:onCloseWidget()
         "discover_loading",
         "search_loading",
     })
-    Chapters.close(self)
-    if self.novel_menu then
-        local novel_menu = self.novel_menu
-        self.novel_menu = nil
-        if UIManager:isWidgetShown(novel_menu) then
-            UIManager:close(novel_menu)
-        end
-    end
-    Sources.close(self)
-    Bookshelf.close(self)
-    Search.close(self)
-    Discover.close(self)
+    ChaptersFlow.close(self)
+    Shell.close(self)
+    BookshelfFlow.close(self)
+    SearchFlow.close(self)
+    DiscoverFlow.close(self)
     if self.app then
         self.app:onClose()
         self.app = nil
@@ -68,19 +55,19 @@ function Novel:onCloseWidget()
 end
 
 function Novel:onReaderReady()
-    ReaderLifecycle.setup(self)
+    ReaderHooks.setup(self)
 end
 
 function Novel.deletePluginSettings()
-    App.deleteStoredSettings()
+    AppContext.deleteStoredSettings()
 end
 
 function Novel:stopPlugin()
-    ReaderLifecycle.stopPlugin(self)
+    ReaderHooks.stopPlugin(self)
 end
 
 function Novel:addToMainMenu(menu_items)
-    ReaderLifecycle.addToMainMenu(self, menu_items)
+    ReaderHooks.addToMainMenu(self, menu_items)
     menu_items.novel_search = {
         text = _("Novel"),
         sorting_hint = "search",
@@ -91,52 +78,7 @@ function Novel:addToMainMenu(menu_items)
 end
 
 function Novel:onShowNovelMenu()
-    if self.novel_menu then
-        if UIManager:isWidgetShown(self.novel_menu) then
-            UIManager:close(self.novel_menu)
-        end
-        self.novel_menu = nil
-    end
-
-    local novel_menu
-    novel_menu = Menu:new{
-        title = _("Novel"),
-        item_table = {
-            {
-                text = _("Bookshelf"),
-                state = Icons.menuState("bookshelf", MENU_ICON_WIDTH),
-                callback = function()
-                    Bookshelf.show(self)
-                end,
-            },
-            {
-                text = _("Discover"),
-                state = Icons.menuState("discover", MENU_ICON_WIDTH),
-                callback = function()
-                    Discover.show(self)
-                end,
-            },
-            {
-                text = _("Sources"),
-                state = Icons.menuState("sources", MENU_ICON_WIDTH),
-                callback = function()
-                    Sources.show(self)
-                end,
-            },
-        },
-        covers_fullscreen = true,
-        is_borderless = true,
-        is_popout = false,
-        title_bar_fm_style = true,
-        state_w = MENU_ICON_WIDTH,
-        close_callback = function()
-            if self.novel_menu == novel_menu then
-                self.novel_menu = nil
-            end
-        end,
-    }
-    self.novel_menu = novel_menu
-    UIManager:show(self.novel_menu)
+    Shell.show(self)
 end
 
 function Novel.showUnderDevelopment(message)

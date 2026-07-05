@@ -1,0 +1,177 @@
+local _ = require("novel.i18n")
+local BookshelfSupport = require("novel.ui.bookshelf.bookshelfsupport")
+local ChapterListing = require("novel.ui.chapters.listing")
+local DiscoverResultSet = require("novel.ui.discover.resultset")
+local SearchSupport = require("novel.ui.search.searchsupport")
+
+local ShellRoutes = {}
+
+local TOP_LEVEL = {
+    bookshelf = true,
+    discover = true,
+    sources = true,
+}
+
+function ShellRoutes.normalizeTab(tab)
+    if TOP_LEVEL[tab] then
+        return tab
+    end
+    return "bookshelf"
+end
+
+function ShellRoutes.copy(route)
+    local copied = {}
+    for key, value in pairs(route or {}) do
+        copied[key] = value
+    end
+    copied.key = copied.key or ShellRoutes.normalizeTab(copied.tab)
+    copied.tab = ShellRoutes.normalizeTab(copied.tab or copied.key)
+    return copied
+end
+
+function ShellRoutes.isTopLevel(route)
+    return route and TOP_LEVEL[route.key] == true
+end
+
+function ShellRoutes.bookshelf()
+    return {
+        key = "bookshelf",
+        tab = "bookshelf",
+    }
+end
+
+function ShellRoutes.discover()
+    return {
+        key = "discover",
+        tab = "discover",
+    }
+end
+
+function ShellRoutes.sources()
+    return {
+        key = "sources",
+        tab = "sources",
+    }
+end
+
+function ShellRoutes.chapters(args)
+    args = args or {}
+    return ShellRoutes.copy{
+        key = "chapters",
+        tab = args.tab or "bookshelf",
+        source = args.source,
+        book = args.book,
+        manifest = args.manifest,
+        filter = args.filter,
+        sort = args.sort,
+        loading = args.loading == true,
+        error = args.error,
+    }
+end
+
+function ShellRoutes.discoverResults(args)
+    args = args or {}
+    return ShellRoutes.copy{
+        key = "discover_results",
+        tab = args.tab or "discover",
+        source = args.source,
+        source_name = args.source_name,
+        group = args.group,
+        books = args.books or {},
+        unsupported = args.unsupported or {},
+        first_page = tonumber(args.first_page) or tonumber(args.current_page) or 1,
+        current_page = tonumber(args.current_page) or tonumber(args.first_page) or 1,
+        no_more_source_pages = args.no_more_source_pages == true,
+        loading = args.loading == true,
+        loading_more = args.loading_more == true,
+        error = args.error,
+    }
+end
+
+function ShellRoutes.bookshelfSwitchResults(args)
+    args = args or {}
+    return ShellRoutes.copy{
+        key = "bookshelf_switch_results",
+        tab = args.tab or "bookshelf",
+        record = args.record,
+        keyword = args.keyword,
+        checked = args.checked,
+        skipped = args.skipped,
+        failed = args.failed,
+        candidates = args.candidates or {},
+        apply_callback = args.apply_callback,
+    }
+end
+
+function ShellRoutes.searchSources(args)
+    args = args or {}
+    return ShellRoutes.copy{
+        key = "search_sources",
+        tab = args.tab or "discover",
+        sources = args.sources or {},
+    }
+end
+
+function ShellRoutes.searchResults(args)
+    args = args or {}
+    return ShellRoutes.copy{
+        key = "search_results",
+        tab = args.tab or "discover",
+        source = args.source,
+        source_name = args.source_name,
+        keyword = args.keyword or "",
+        books = args.books or {},
+        unsupported = args.unsupported or {},
+        loading = args.loading == true,
+        error = args.error,
+    }
+end
+
+function ShellRoutes.title(route)
+    if route and route.key == "search_sources" then
+        return _("Search source")
+    end
+    if route and route.key == "search_results" then
+        return _("Search") .. ": " .. tostring(route.keyword or "")
+    end
+    if route and route.key == "bookshelf_switch_results" then
+        return _("Switch source")
+    end
+    if route and route.key == "chapters" then
+        return ChapterListing.bookTitle(
+            route.manifest and route.manifest.book or route.book
+        )
+    end
+    if route and route.key == "discover_results" then
+        return DiscoverResultSet.resultTitle(
+            route.group,
+            route.first_page,
+            route.current_page
+        )
+    end
+    return _("Novel")
+end
+
+function ShellRoutes.subtitle(route)
+    if route and route.key == "search_sources" then
+        return tostring(#(route.sources or {})) .. " " .. _("sources")
+    end
+    if route and route.key == "search_results" then
+        return route.source_name or SearchSupport.sourceTitle(route.source)
+    end
+    if route and route.key == "bookshelf_switch_results" then
+        return BookshelfSupport.bookTitle(route.record and route.record.book)
+    end
+    if route and route.key == "chapters" and route.manifest then
+        local total = #(route.manifest.chapters or {})
+        if total > 0 then
+            return tostring(total) .. " " .. _("chapters")
+        end
+    end
+    if route and route.key == "discover_results" then
+        return route.source_name or DiscoverResultSet.sourceTitle(route.source)
+    end
+    return ""
+end
+
+return ShellRoutes

@@ -2,7 +2,7 @@ local DataStorage = require("datastorage")
 local DocSettings = require("docsettings")
 local Event = require("ui/event")
 local LuaSettings = require("luasettings")
-local ReaderDocument = require("novel.reader.document")
+local ChapterDoc = require("novel.reader.chapterdoc")
 
 local ReaderSettings = {
     path = DataStorage:getSettingsDir() .. "/novel_reader_settings.lua",
@@ -171,7 +171,7 @@ local function saveCurrentReaderState(plugin)
 end
 
 function ReaderSettings.capture(plugin, current_chapter)
-    current_chapter = current_chapter or ReaderDocument.currentChapter(plugin)
+    current_chapter = current_chapter or ChapterDoc.currentChapter(plugin)
     if not current_chapter or not current_chapter.book_id
         or not plugin or not plugin.ui or not plugin.ui.doc_settings then
         return false
@@ -212,7 +212,7 @@ function ReaderSettings.syncBeforeOpen(plugin, manifest, target_file)
         return false
     end
 
-    local current_chapter = ReaderDocument.currentChapter(plugin)
+    local current_chapter = ChapterDoc.currentChapter(plugin)
     if current_chapter and current_chapter.book_id == manifest.book_id then
         saveCurrentReaderState(plugin)
         ReaderSettings.capture(plugin, current_chapter)

@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local BookshelfRecords = require("novel.books.records")
+local DetailVisited = require("novel.books.visited")
 local Dialog = require("novel.widget.dialog")
 local Loading = require("novel.widget.loading")
 local NetworkMgr = require("ui/network/manager")
@@ -121,7 +122,7 @@ function Detail.close(plugin)
     Dialog.closeWidget(plugin, "detail_viewer")
 end
 
-function Detail.showLoaded(plugin, source, result)
+function Detail.showLoaded(plugin, source, result, options)
     Dialog.closeWidget(plugin, "detail_menu")
     Dialog.closeWidget(plugin, "detail_viewer")
     if not result or not result.ok then
@@ -130,10 +131,16 @@ function Detail.showLoaded(plugin, source, result)
         return
     end
 
+    local visited_book = result.book or {}
+    DetailVisited.markVisited(plugin, source, visited_book)
+    if options and type(options.on_visited) == "function" then
+        options.on_visited(visited_book)
+    end
+
     showDetailViewer(plugin, source, result)
 end
 
-function Detail.show(plugin, source, book)
+function Detail.show(plugin, source, book, options)
     if not plugin.app then
         return
     end
@@ -166,7 +173,7 @@ function Detail.show(plugin, source, book)
             Dialog.message(_("Detail loading canceled."))
             return
         end
-        Detail.showLoaded(plugin, source, result)
+        Detail.showLoaded(plugin, source, result, options)
     end)
 end
 

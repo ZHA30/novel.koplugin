@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local DetailVisited = require("novel.books.visited")
 local BookMenu = require("novel.widget.bookmenu")
 local Capability = require("novel.source.capability")
 local Detail = require("novel.ui.detail")
@@ -52,12 +53,21 @@ local function showUnsupported(result)
     Dialog.showUnsupported(result and result.unsupported)
 end
 
-local function resultActions(plugin, source, book)
+local function resultActions(plugin, source, book, item)
     return {
         {
             text = _("Details"),
             callback = function()
-                Detail.show(plugin, source, book)
+                Detail.show(plugin, source, book, {
+                    on_visited = function(visited_book)
+                        item.book = visited_book or item.book
+                        item.dim = true
+                        local menu = plugin.search_results_menu
+                        if menu and menu.item_table then
+                            menu:updateItems(menu.itemnumber, true)
+                        end
+                    end,
+                })
             end,
         },
     }
@@ -97,12 +107,14 @@ local function buildResultItems(plugin, source, keyword, result)
 
     for book_index = 1, #result.books do
         local book = result.books[book_index]
-        table.insert(item_table, {
+        local item = {
             text = book.name,
             book = book,
+            dim = DetailVisited.isVisited(plugin, source, book),
             source_title = sourceTitle(source),
-            sub_item_table = resultActions(plugin, source, book),
-        })
+        }
+        item.sub_item_table = resultActions(plugin, source, book, item)
+        table.insert(item_table, item)
     end
     return item_table
 end

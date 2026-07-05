@@ -33,6 +33,9 @@ Settings.defaults = {
     chapter_list = {
         books = {},
     },
+    book_list = {
+        detail_visited = {},
+    },
 }
 
 local function clone(value)

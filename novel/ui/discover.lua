@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local Blitbuffer = require("ffi/blitbuffer")
+local DetailVisited = require("novel.books.visited")
 local Detail = require("novel.ui.detail")
 local BookMenu = require("novel.widget.bookmenu")
 local Capability = require("novel.source.capability")
@@ -57,14 +58,26 @@ local function showUnsupported(items)
 end
 
 local function buildBookItem(plugin, source, book)
-    return {
+    local item
+    item = {
         text = book.name,
         book = book,
+        dim = DetailVisited.isVisited(plugin, source, book),
         source_title = sourceTitle(source),
         callback = function()
-            Detail.show(plugin, source, book)
+            Detail.show(plugin, source, book, {
+                on_visited = function(visited_book)
+                    item.book = visited_book or item.book
+                    item.dim = true
+                    local menu = plugin.discover_results_menu
+                    if menu and menu.item_table then
+                        menu:updateItems(menu.itemnumber, true)
+                    end
+                end,
+            })
         end,
     }
+    return item
 end
 
 local function bookKey(book)

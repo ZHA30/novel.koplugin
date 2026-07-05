@@ -7,7 +7,7 @@ local BASE_DIR = (debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "../
 
 local Icons = {
     size = {
-        menu = Screen:scaleBySize(22),
+        menu = Screen:scaleBySize(24),
     },
 }
 

@@ -36,6 +36,12 @@ Settings.defaults = {
     book_list = {
         detail_visited = {},
     },
+    ui = {
+        grouping = {
+            sources_collapsed_groups = {},
+            discover_collapsed_sources = {},
+        },
+    },
 }
 
 local function clone(value)

@@ -20,6 +20,51 @@ local function rawString(analyzer, unsupported, source, field, rule, content, is
     return value or ""
 end
 
+local function elementMarkup(element)
+    if type(element) == "table" then
+        if element.getcontent then
+            return element:getcontent()
+        end
+        if element.gettext then
+            return element:gettext()
+        end
+    elseif type(element) == "string" and element:find("<", 1, true) then
+        return element
+    end
+end
+
+local function removeUnsupportedFrom(analyzer, start_index)
+    for index = #analyzer.unsupported, start_index, -1 do
+        analyzer.unsupported[index] = nil
+    end
+end
+
+local function htmlElementText(analyzer, unsupported, source, field, rule, content)
+    if Runtime.isBlank(rule) then
+        return ""
+    end
+
+    local start_index = #analyzer.unsupported + 1
+    local elements = analyzer:getElements(rule, content)
+    local output = {}
+    for index = 1, #elements do
+        local markup = elementMarkup(elements[index])
+        local value = markup and HtmlFormat.text(markup) or ""
+        if value ~= "" then
+            table.insert(output, value)
+        end
+    end
+
+    if #output == 0 then
+        removeUnsupportedFrom(analyzer, start_index)
+        return ""
+    end
+
+    Runtime.copyUnsupported(unsupported, source, field,
+        analyzer.unsupported, start_index)
+    return Runtime.trim(table.concat(output, "\n"))
+end
+
 function Extract.raw(analyzer, unsupported, source, field, rule, content)
     return rawString(analyzer, unsupported, source, field, rule, content)
 end
@@ -27,6 +72,15 @@ end
 function Extract.text(analyzer, unsupported, source, field, rule, content)
     return HtmlFormat.text(rawString(analyzer, unsupported, source, field,
         rule, content))
+end
+
+function Extract.paragraphText(analyzer, unsupported, source, field, rule, content)
+    local value = htmlElementText(analyzer, unsupported, source, field,
+        rule, content)
+    if value ~= "" then
+        return value
+    end
+    return Extract.text(analyzer, unsupported, source, field, rule, content)
 end
 
 function Extract.cleanString(analyzer, unsupported, source, field, rule, content)

@@ -462,7 +462,7 @@ local function buildItems(plugin, records)
                     return_to = RETURN_TO_BOOKSHELF,
                 })
             end,
-            hold_callback = function()
+            long_press_callback = function()
                 showActions(plugin, record)
             end,
         })

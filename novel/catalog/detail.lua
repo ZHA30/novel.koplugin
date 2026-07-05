@@ -126,7 +126,7 @@ local function parseBook(source, input_book, rule, response, options)
     applyIfPresent(book, "updateTime", Extract.text(analyzer, unsupported, source,
         "ruleBookInfo.updateTime", rule.updateTime), true)
 
-    applyIfPresent(book, "intro", Extract.text(analyzer, unsupported, source,
+    applyIfPresent(book, "intro", Extract.paragraphText(analyzer, unsupported, source,
         "ruleBookInfo.intro", rule.intro), true)
     applyIfPresent(book, "coverUrl", Extract.url(analyzer, unsupported, source,
         "ruleBookInfo.coverUrl", rule.coverUrl), true)

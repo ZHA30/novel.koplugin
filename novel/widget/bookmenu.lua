@@ -576,10 +576,11 @@ function BookMenu.onNextPage(self)
 end
 
 function BookMenu.onMenuHold(self, item)
-    local hold_callback = item.hold_callback_func and item.hold_callback_func()
-        or item.hold_callback
-    if hold_callback then
-        hold_callback(self, item)
+    local long_press_callback = item.long_press_callback_func
+        and item.long_press_callback_func()
+        or item.long_press_callback
+    if long_press_callback then
+        long_press_callback(self, item)
     end
     return true
 end

@@ -21,12 +21,12 @@ function ChaptersFlow.close(plugin)
     Loading.close(plugin, "chapters_loading")
 end
 
-function ChaptersFlow.showManifest(plugin, manifest, options)
+local function manifestRoute(plugin, manifest, options)
     options = options or {}
     manifest = Manifest:new():load(manifest.book_id) or manifest
 
     local filter, sort = ChapterListing.resolveState(plugin, manifest, options)
-    local route = ShellRoutes.chapters{
+    return ShellRoutes.chapters{
         tab = options.tab or "bookshelf",
         source = manifest.source,
         book = manifest.book,
@@ -34,13 +34,33 @@ function ChaptersFlow.showManifest(plugin, manifest, options)
         filter = filter,
         sort = sort,
     }
+end
+
+local function currentMatchesManifest(plugin, manifest)
+    local current = Shell.currentRoute(plugin)
+    return current and current.key == "chapters"
+        and current.manifest
+        and current.manifest.book_id == manifest.book_id
+end
+
+function ChaptersFlow.showManifest(plugin, manifest, options)
+    local route = manifestRoute(plugin, manifest, options)
     local current = Shell.currentRoute(plugin)
     if current and current.key == "chapters"
         and current.manifest
-        and current.manifest.book_id == manifest.book_id then
+        and current.manifest.book_id == route.manifest.book_id then
         Shell.replace(plugin, route)
     else
         Shell.push(plugin, route)
+    end
+end
+
+function ChaptersFlow.showManifestImmediate(plugin, manifest, options)
+    local route = manifestRoute(plugin, manifest, options)
+    if currentMatchesManifest(plugin, route.manifest) then
+        Shell.replaceNow(plugin, route)
+    else
+        Shell.pushNow(plugin, route)
     end
 end
 

@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local ChapterDoc = require("novel.reader.chapterdoc")
+local lfs = require("libs/libkoreader-lfs")
 
 local Patches = {}
 local patches = {}
@@ -84,19 +85,6 @@ local function installPatch(key, target, method, wrapper)
     }
 end
 
-local function restorePendingFromFileManager(state)
-    if not state.pending_return then
-        return false
-    end
-
-    local ok, FileManager = pcall(require, "apps/filemanager/filemanager")
-    local plugin = ok and FileManager.instance and FileManager.instance.novel
-    if plugin and state.restore_pending then
-        return state.restore_pending(plugin)
-    end
-    return false
-end
-
 local function readerTocNovelPlugin(reader_toc)
     local reader_ui = reader_toc and reader_toc.ui
     if not reader_ui or not reader_ui.document then
@@ -116,6 +104,25 @@ local function showNovelChapters(reader_toc)
     local ChaptersFlow = require("novel.ui.chapters.flow")
     ChaptersFlow.showCurrent(plugin)
     return true
+end
+
+local function refreshDocCacheSnapshot(doc_cache)
+    if not doc_cache then
+        return
+    end
+    if type(doc_cache.refreshSnapshot) == "function" then
+        doc_cache:refreshSnapshot()
+    end
+    if type(doc_cache.cached) ~= "table" then
+        return
+    end
+    for key, file in pairs(doc_cache.cached) do
+        local access = file and lfs.attributes(file, "access")
+        local size = file and lfs.attributes(file, "size")
+        if not access or not size then
+            doc_cache.cached[key] = nil
+        end
+    end
 end
 
 local function installCorePatches(state)
@@ -154,6 +161,19 @@ local function installCorePatches(state)
         end)
     end
 
+    local ok_doccache, DocCache = pcall(require, "document/doccache")
+    if ok_doccache and DocCache then
+        installPatch("doccache_serialize", DocCache, "serialize", function(original)
+            return function(doc_cache, doc_path, ...)
+                refreshDocCacheSnapshot(doc_cache)
+                if ChapterDoc.chapterByFile(doc_path) then
+                    return
+                end
+                return original(doc_cache, doc_path, ...)
+            end
+        end)
+    end
+
     local ok_readerui, ReaderUI = pcall(require, "apps/reader/readerui")
     if ok_readerui and ReaderUI then
         installPatch("readerui_switch_document", ReaderUI, "switchDocument",
@@ -184,7 +204,6 @@ local function installCorePatches(state)
                     error(results[2])
                 end
                 table.remove(results, 1)
-                restorePendingFromFileManager(state)
                 return unpack(results)
             end
         end)

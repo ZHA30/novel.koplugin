@@ -292,12 +292,28 @@ function Shell.push(plugin, route)
     scheduleRender(plugin)
 end
 
+function Shell.pushNow(plugin, route)
+    if route and route.tab then
+        ShellSession.setActiveTab(plugin, route.tab)
+    end
+    ShellSession.push(plugin, route)
+    Shell.show(plugin)
+end
+
 function Shell.replace(plugin, route)
     if route and route.tab then
         ShellSession.setActiveTab(plugin, route.tab)
     end
     ShellSession.replace(plugin, route)
     scheduleRender(plugin)
+end
+
+function Shell.replaceNow(plugin, route)
+    if route and route.tab then
+        ShellSession.setActiveTab(plugin, route.tab)
+    end
+    ShellSession.replace(plugin, route)
+    Shell.show(plugin)
 end
 
 function Shell.pop(plugin)

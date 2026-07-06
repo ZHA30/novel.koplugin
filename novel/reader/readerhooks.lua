@@ -4,16 +4,10 @@ local ChapterDoc = require("novel.reader.chapterdoc")
 local ChapterTurn = require("novel.reader.chapterturn")
 local Patches = require("novel.reader.patches")
 local Prefetch = require("novel.reader.prefetch")
+local ReturnController = require("novel.reader.returncontroller")
 local ReaderSettings = require("novel.reader.settings")
-local Manifest = require("novel.storage.manifest")
-local UIManager = require("ui/uimanager")
 
 local ReaderHooks = {}
-
-local state = {
-    pending_return = nil,
-    suppress_return_ui = nil,
-}
 
 function ReaderHooks.close(plugin)
     ChapterOpen.close(plugin)
@@ -22,33 +16,11 @@ function ReaderHooks.close(plugin)
 end
 
 function ReaderHooks.restorePending(plugin)
-    if not state.pending_return or not plugin or not plugin.app
-        or not plugin.ui or plugin.ui.document then
-        return false
-    end
-
-    local pending = state.pending_return
-    state.pending_return = nil
-    UIManager:nextTick(function()
-        if not plugin.app then
-            return
-        end
-        local manifest = Manifest:new():load(pending.book_id)
-        if not manifest then
-            return
-        end
-        local ChaptersFlow = require("novel.ui.chapters.flow")
-        ChaptersFlow.showManifest(plugin, manifest, {
-            filter = pending.filter,
-            sort = pending.sort,
-        })
-    end)
-    return true
+    return ReturnController.scheduleRestore(plugin)
 end
 
 function ReaderHooks.init(plugin)
-    state.restore_pending = ReaderHooks.restorePending
-    Patches.install(state)
+    Patches.install(ReturnController.state)
 
     if not plugin or not plugin.ui then
         return
@@ -72,27 +44,12 @@ function ReaderHooks.stopPlugin(plugin)
     ChapterTurn.close(plugin)
     Patches.restoreStatisticsInstance(plugin and plugin.ui and plugin.ui.statistics)
     Patches.restore()
-    state.pending_return = nil
-    state.suppress_return_ui = nil
+    ReturnController.clear()
 end
 
 function ReaderHooks.onCloseDocument(plugin)
     ReaderSettings.capture(plugin)
-
-    local current_chapter = ChapterDoc.currentChapter(plugin)
-    if not current_chapter or plugin.novel_switching_chapter
-        or plugin.ui == state.suppress_return_ui then
-        return false
-    end
-
-    state.pending_return = {
-        book_id = current_chapter.book_id,
-        filter = plugin.novel_chapters_filter
-            and plugin.novel_chapters_filter[current_chapter.book_id] or nil,
-        sort = plugin.novel_chapters_sort
-            and plugin.novel_chapters_sort[current_chapter.book_id] or nil,
-    }
-    return true
+    return ReturnController.capture(plugin)
 end
 
 function ReaderHooks.onSaveSettings(plugin)

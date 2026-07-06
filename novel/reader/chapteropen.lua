@@ -6,6 +6,7 @@ local Loading = require("novel.ui.widget.loading")
 local Manifest = require("novel.storage.manifest")
 local NetworkMgr = require("ui/network/manager")
 local Prefetch = require("novel.reader.prefetch")
+local ReturnController = require("novel.reader.returncontroller")
 local ReaderSettings = require("novel.reader.settings")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
@@ -97,6 +98,7 @@ local function openFile(plugin, file, jump)
         local provider, is_provider_forced = DocumentRegistry:getProvider(file, true)
         plugin.ui:switchDocument(file, true, afterOpen, provider, is_provider_forced)
     elseif plugin.ui.openFile then
+        ReturnController.captureEntry(plugin)
         plugin.ui:openFile(file, nil, nil, nil, afterOpen)
     end
 end

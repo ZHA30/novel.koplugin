@@ -1,6 +1,8 @@
 local _ = require("novel.i18n")
 local ChapterDoc = require("novel.reader.chapterdoc")
+local ReturnController = require("novel.reader.returncontroller")
 local lfs = require("libs/libkoreader-lfs")
+local UIManager = require("ui/uimanager")
 
 local Patches = {}
 local patches = {}
@@ -85,6 +87,15 @@ local function installPatch(key, target, method, wrapper)
     }
 end
 
+local function callPatched(original, ...)
+    local results = { pcall(original, ...) }
+    if not results[1] then
+        error(results[2])
+    end
+    table.remove(results, 1)
+    return unpack(results)
+end
+
 local function readerTocNovelPlugin(reader_toc)
     local reader_ui = reader_toc and reader_toc.ui
     if not reader_ui or not reader_ui.document then
@@ -125,7 +136,7 @@ local function refreshDocCacheSnapshot(doc_cache)
     end
 end
 
-local function installCorePatches(state)
+local function installCorePatches()
     local ok_history, ReadHistory = pcall(require, "readhistory")
     if ok_history and ReadHistory then
         installPatch("readhistory_add_item", ReadHistory, "addItem", function(original)
@@ -176,35 +187,140 @@ local function installCorePatches(state)
 
     local ok_readerui, ReaderUI = pcall(require, "apps/reader/readerui")
     if ok_readerui and ReaderUI then
-        installPatch("readerui_switch_document", ReaderUI, "switchDocument",
-            function(original)
-            return function(reader_ui, ...)
-                local previous = state.suppress_return_ui
-                if reader_ui and reader_ui.document
-                    and ChapterDoc.chapterByFile(reader_ui.document.file) then
-                    state.suppress_return_ui = reader_ui
+        installPatch("readerui_on_close", ReaderUI, "onClose", function(original)
+            return function(reader_ui, full_refresh, ...)
+                local file = ReturnController.consumeCloseRestoreRequest()
+                if not file then
+                    return callPatched(original, reader_ui, full_refresh, ...)
                 end
-                local results = { pcall(original, reader_ui, ...) }
-                state.suppress_return_ui = previous
+
+                local results = { pcall(original, reader_ui, full_refresh, ...) }
                 if not results[1] then
                     error(results[2])
                 end
+                reader_ui:showFileManager(file)
+                ReturnController.scheduleRestoreFromLoadedPlugin()
                 table.remove(results, 1)
                 return unpack(results)
+            end
+        end)
+        installPatch("readerui_on_home", ReaderUI, "onHome", function(original)
+            return function(reader_ui, ...)
+                if ReturnController.requestCloseRestore(reader_ui) then
+                    reader_ui:onClose()
+                    return true
+                end
+                return original(reader_ui, ...)
             end
         end)
         installPatch("readerui_show_file_manager", ReaderUI, "showFileManager",
             function(original)
             return function(reader_ui, file, selected_files)
-                if state.pending_return and ChapterDoc.chapterByFile(file) then
+                if ReturnController.prepareReturnFromReader(reader_ui, file)
+                    and ChapterDoc.chapterByFile(file) then
                     file = nil
                 end
-                local results = { pcall(original, reader_ui, file, selected_files) }
-                if not results[1] then
-                    error(results[2])
+                local result = callPatched(original, reader_ui, file, selected_files)
+                ReturnController.scheduleRestoreFromLoadedPlugin()
+                return result
+            end
+        end)
+    end
+
+    local ok_readerback, ReaderBack = pcall(require, "apps/reader/modules/readerback")
+    if ok_readerback and ReaderBack then
+        installPatch("readerback_on_back", ReaderBack, "onBack", function(original)
+            return function(reader_back, ...)
+                if not ReturnController.canReturnFromReader(reader_back and reader_back.ui) then
+                    return original(reader_back, ...)
                 end
-                table.remove(results, 1)
-                return unpack(results)
+
+                local back_in_reader = G_reader_settings:readSetting("back_in_reader",
+                    "previous_location")
+                local back_to_exit = G_reader_settings:readSetting("back_to_exit", "prompt")
+
+                if back_in_reader == "previous_read_page" then
+                    if #reader_back.location_stack > 0 then
+                        return original(reader_back, ...)
+                    elseif not reader_back.back_resist or back_to_exit == "disable" then
+                        return original(reader_back, ...)
+                    end
+                    reader_back.back_resist = nil
+                elseif back_in_reader == "previous_location" then
+                    if back_to_exit == "disable" then
+                        return original(reader_back, ...)
+                    end
+                    if reader_back.back_resist then
+                        reader_back.back_resist = nil
+                    elseif reader_back.ui.link:onGoBackLink(true) then
+                        return true
+                    else
+                        reader_back.back_resist = true
+                        return true
+                    end
+                elseif back_in_reader == "filebrowser" then
+                    return original(reader_back, ...)
+                end
+
+                if back_to_exit == "disable" then
+                    return true
+                end
+                if ReturnController.requestCloseRestore(reader_back.ui) then
+                    reader_back.ui:onClose()
+                    return true
+                end
+                return reader_back.ui:onHome()
+            end
+        end)
+    end
+
+    local ok_readermenu, ReaderMenu = pcall(require, "apps/reader/modules/readermenu")
+    if ok_readermenu and ReaderMenu then
+        installPatch("readermenu_init", ReaderMenu, "init", function(original)
+            return function(reader_menu, ...)
+                callPatched(original, reader_menu, ...)
+                local filemanager = reader_menu.menu_items
+                    and reader_menu.menu_items.filemanager
+                if filemanager and type(filemanager.callback) == "function"
+                    and not filemanager.novel_wrapped then
+                    local original_callback = filemanager.callback
+                    filemanager.callback = function()
+                        if ReturnController.requestCloseRestore(reader_menu.ui) then
+                            reader_menu:onTapCloseMenu()
+                            reader_menu.ui:onClose()
+                            return true
+                        end
+                        return original_callback()
+                    end
+                    filemanager.novel_wrapped = true
+                end
+            end
+        end)
+        installPatch("readermenu_exit_or_restart", ReaderMenu, "exitOrRestart",
+            function(original)
+            return function(reader_menu, callback, force, ...)
+                if ReturnController.requestCloseRestore(reader_menu.ui) then
+                    reader_menu:onTapCloseMenu()
+                    UIManager:nextTick(function()
+                        reader_menu.ui:onClose()
+                    end)
+                    return true
+                end
+                return original(reader_menu, callback, force, ...)
+            end
+        end)
+    end
+
+    local ok_readerstatus, ReaderStatus = pcall(require, "apps/reader/modules/readerstatus")
+    if ok_readerstatus and ReaderStatus then
+        installPatch("readerstatus_open_file_browser", ReaderStatus, "openFileBrowser",
+            function(original)
+            return function(reader_status, ...)
+                if ReturnController.requestCloseRestore(reader_status.ui) then
+                    reader_status.ui:onClose()
+                    return true
+                end
+                return original(reader_status, ...)
             end
         end)
     end
@@ -304,8 +420,8 @@ function Patches.restoreStatisticsInstance(statistics)
     statistics.novel_patched = nil
 end
 
-function Patches.install(state)
-    installCorePatches(state)
+function Patches.install()
+    installCorePatches()
 end
 
 function Patches.restore()

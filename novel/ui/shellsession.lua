@@ -28,6 +28,18 @@ local function prepareRoute(route, previous_route)
     return copied
 end
 
+local function clone(value)
+    if type(value) ~= "table" then
+        return value
+    end
+
+    local copied = {}
+    for key, item in pairs(value) do
+        copied[key] = clone(item)
+    end
+    return copied
+end
+
 function ShellSession.get(plugin)
     if type(plugin.novel_shell_state) ~= "table" then
         plugin.novel_shell_state = {}
@@ -132,6 +144,19 @@ end
 
 function ShellSession.listInfo(plugin)
     return ShellSession.get(plugin).list_info
+end
+
+function ShellSession.snapshot(plugin)
+    return clone(ShellSession.get(plugin))
+end
+
+function ShellSession.clone(snapshot)
+    return clone(snapshot or {})
+end
+
+function ShellSession.restore(plugin, snapshot)
+    plugin.novel_shell_state = ShellSession.clone(snapshot)
+    return ShellSession.get(plugin)
 end
 
 return ShellSession

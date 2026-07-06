@@ -15,12 +15,8 @@ function ReaderHooks.close(plugin)
     ChapterTurn.close(plugin)
 end
 
-function ReaderHooks.restorePending(plugin)
-    return ReturnController.scheduleRestore(plugin)
-end
-
 function ReaderHooks.init(plugin)
-    Patches.install(ReturnController.state)
+    Patches.install()
 
     if not plugin or not plugin.ui then
         return
@@ -31,10 +27,6 @@ function ReaderHooks.init(plugin)
                 Patches.patchStatisticsInstance(plugin.ui.statistics)
             end)
         end
-    elseif plugin.ui.registerPostInitCallback then
-        plugin.ui:registerPostInitCallback(function()
-            ReaderHooks.restorePending(plugin)
-        end)
     end
 end
 
@@ -49,7 +41,7 @@ end
 
 function ReaderHooks.onCloseDocument(plugin)
     ReaderSettings.capture(plugin)
-    return ReturnController.capture(plugin)
+    return false
 end
 
 function ReaderHooks.onSaveSettings(plugin)

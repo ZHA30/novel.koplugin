@@ -2,6 +2,32 @@ local ShellRoutes = require("novel.ui.shellroutes")
 
 local ShellSession = {}
 
+local function normalizeListPage(page)
+    if page == "last" then
+        return "last"
+    end
+    page = math.floor(tonumber(page) or 1)
+    if page < 1 then
+        page = 1
+    end
+    return page
+end
+
+local function prepareRoute(route, previous_route)
+    local copied = ShellRoutes.copy(route)
+    if copied.list_page_anchor == "last" then
+        copied.list_page = "last"
+    elseif copied.list_page ~= nil then
+        copied.list_page = normalizeListPage(copied.list_page)
+    elseif previous_route and previous_route.list_page ~= nil then
+        copied.list_page = previous_route.list_page
+    else
+        copied.list_page = 1
+    end
+    copied.list_page_anchor = nil
+    return copied
+end
+
 function ShellSession.get(plugin)
     if type(plugin.novel_shell_state) ~= "table" then
         plugin.novel_shell_state = {}
@@ -9,9 +35,6 @@ function ShellSession.get(plugin)
     local state = plugin.novel_shell_state
     if type(state.stack) ~= "table" then
         state.stack = {}
-    end
-    if state.list_page == nil then
-        state.list_page = 1
     end
     state.active_tab = ShellRoutes.normalizeTab(state.active_tab or "bookshelf")
     return state
@@ -39,12 +62,13 @@ end
 function ShellSession.resetStack(plugin)
     local state = ShellSession.get(plugin)
     state.stack = {}
-    ShellSession.resetListPage(plugin)
+    state.list_page = 1
+    state.list_info = nil
 end
 
 function ShellSession.push(plugin, route)
-    table.insert(ShellSession.stack(plugin), ShellRoutes.copy(route))
-    ShellSession.resetListPage(plugin)
+    table.insert(ShellSession.stack(plugin), prepareRoute(route))
+    ShellSession.get(plugin).list_info = nil
 end
 
 function ShellSession.replace(plugin, route)
@@ -53,12 +77,8 @@ function ShellSession.replace(plugin, route)
         ShellSession.push(plugin, route)
         return
     end
-    stack[#stack] = ShellRoutes.copy(route)
-    if route and route.list_page_anchor == "last" then
-        ShellSession.setListPage(plugin, "last")
-    elseif route and route.list_page ~= nil then
-        ShellSession.setListPage(plugin, route.list_page)
-    end
+    stack[#stack] = prepareRoute(route, stack[#stack])
+    ShellSession.get(plugin).list_info = nil
 end
 
 function ShellSession.pop(plugin)
@@ -67,36 +87,47 @@ function ShellSession.pop(plugin)
         return nil
     end
     local route = table.remove(stack)
-    ShellSession.resetListPage(plugin)
+    ShellSession.get(plugin).list_info = nil
     return route
 end
 
 function ShellSession.listPage(plugin)
+    local route = ShellSession.currentRoute(plugin)
+    if route and route.list_page ~= nil then
+        return route.list_page
+    end
     return ShellSession.get(plugin).list_page or 1
 end
 
 function ShellSession.setListPage(plugin, page)
     local state = ShellSession.get(plugin)
-    if page == "last" then
-        state.list_page = "last"
-        return state.list_page
+    local list_page = normalizeListPage(page)
+    local route = ShellSession.currentRoute(plugin)
+    if route then
+        route.list_page = list_page
+    else
+        state.list_page = list_page
     end
-    page = math.floor(tonumber(page) or 1)
-    if page < 1 then
-        page = 1
-    end
-    state.list_page = page
-    return state.list_page
+    return list_page
 end
 
 function ShellSession.resetListPage(plugin)
     local state = ShellSession.get(plugin)
-    state.list_page = 1
+    local route = ShellSession.currentRoute(plugin)
+    if route then
+        route.list_page = 1
+    else
+        state.list_page = 1
+    end
     state.list_info = nil
 end
 
 function ShellSession.setListInfo(plugin, info)
-    ShellSession.get(plugin).list_info = info
+    local state = ShellSession.get(plugin)
+    state.list_info = info
+    if info and info.current_page then
+        ShellSession.setListPage(plugin, info.current_page)
+    end
 end
 
 function ShellSession.listInfo(plugin)

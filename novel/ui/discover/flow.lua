@@ -231,7 +231,7 @@ function DiscoverFlow.loadPage(plugin, page, options)
                 no_more_source_pages = appended == 0
                     or not DiscoverService.canRequestNextPage(source, group, page),
                 list_page = options.list_page,
-                list_page_anchor = options.list_page_anchor or "last",
+                list_page_anchor = options.list_page_anchor,
             })
             return
         end

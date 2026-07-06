@@ -351,7 +351,7 @@ function Shell.nextPage(plugin)
     end
     local DiscoverFlow = require("novel.ui.discover.flow")
     return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) + 1, {
-        list_page_anchor = "last",
+        list_page = tonumber(info.current_page) or ShellSession.listPage(plugin),
     })
 end
 

@@ -9,6 +9,8 @@ local ChaptersFlow = require("novel.ui.chapters.flow")
 local Trapper = require("ui/trapper")
 
 local DetailFlow = {}
+local DEFAULT_FONT_SIZE = 22
+local FONT_SIZE_OPTIONS = { 18, 20, 22, 24, 26, 28 }
 
 local function invalidate(plugin)
     plugin.detail_request_id = (plugin.detail_request_id or 0) + 1
@@ -29,6 +31,69 @@ end
 
 local function showUnsupported(result)
     Dialog.showUnsupported(result and result.unsupported)
+end
+
+local function normalizeFontSize(size)
+    size = tonumber(size)
+    if not size then
+        return DEFAULT_FONT_SIZE
+    end
+
+    for index = 1, #FONT_SIZE_OPTIONS do
+        if size == FONT_SIZE_OPTIONS[index] then
+            return size
+        end
+    end
+    return DEFAULT_FONT_SIZE
+end
+
+local function detailSettings(plugin, create)
+    local settings = plugin and plugin.app and plugin.app.settings
+    if type(settings) ~= "table" then
+        return nil
+    end
+
+    if type(settings.ui) ~= "table" then
+        if not create then
+            return nil
+        end
+        settings.ui = {}
+    end
+    if type(settings.ui.detail) ~= "table" then
+        if not create then
+            return nil
+        end
+        settings.ui.detail = {}
+    end
+
+    return settings.ui.detail
+end
+
+local function currentFontSize(plugin, options)
+    if options and options.state and options.state.font_size ~= nil then
+        return normalizeFontSize(options.state.font_size)
+    end
+
+    local detail = detailSettings(plugin, false)
+    if detail then
+        return normalizeFontSize(detail.font_size)
+    end
+    return DEFAULT_FONT_SIZE
+end
+
+local function saveFontSize(plugin, options, size)
+    size = normalizeFontSize(size)
+    options.state.font_size = size
+
+    local detail = detailSettings(plugin, true)
+    if not detail then
+        return size
+    end
+    if detail.font_size ~= size then
+        detail.font_size = size
+        plugin.app:saveSettings()
+    end
+    return size
 end
 
 local function buildButtons(plugin, source, result, options)
@@ -110,13 +175,18 @@ local function showDetailViewer(plugin, source, result, options)
         title = bookTitle(book),
         text = detailText(book),
         buttons_table = buildButtons(plugin, source, result, options),
-        text_font_size = tonumber(options.state.font_size) or 22,
-        on_font_size_change = function(size)
-            options.state.font_size = tonumber(size) or 22
+        text_font_size = currentFontSize(plugin, options),
+        on_font_size_change = function(size, owner)
+            if not plugin.app or plugin.detail_viewer ~= owner then
+                return
+            end
+            saveFontSize(plugin, options, size)
             DetailFlow.showLoaded(plugin, source, result, options)
         end,
         close_callback = function()
             Dialog.clearIfOwned(plugin, "detail_viewer", viewer)
+            local Shell = require("novel.ui.shell")
+            Shell.flushPendingRender(plugin)
         end,
     }
     Dialog.showWidget(plugin, "detail_viewer", viewer)

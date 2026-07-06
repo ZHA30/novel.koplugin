@@ -118,6 +118,11 @@ end
 local function scheduleRender(plugin)
     UIManager:nextTick(function()
         if plugin and plugin.app then
+            if plugin.detail_viewer and UIManager:isWidgetShown(plugin.detail_viewer) then
+                plugin.novel_shell_render_pending = true
+                return
+            end
+            plugin.novel_shell_render_pending = nil
             Shell.show(plugin)
         end
     end)
@@ -159,8 +164,16 @@ function Shell.show(plugin, options)
 end
 
 function Shell.close(plugin)
+    plugin.novel_shell_render_pending = nil
     ShellSession.resetStack(plugin)
     Dialog.closeWidget(plugin, "novel_home")
+end
+
+function Shell.flushPendingRender(plugin)
+    if not plugin or not plugin.novel_shell_render_pending then
+        return
+    end
+    scheduleRender(plugin)
 end
 
 function Shell.reshow(plugin)

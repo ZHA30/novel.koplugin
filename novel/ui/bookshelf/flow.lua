@@ -20,10 +20,6 @@ local function invalidateSwitch(plugin)
     plugin.bookshelf_switch_request_id = (plugin.bookshelf_switch_request_id or 0) + 1
 end
 
-local function bookTitle(book)
-    return BookshelfSupport.bookTitle(book)
-end
-
 local function sourceTitle(source)
     return BookshelfSupport.sourceTitle(source)
 end
@@ -77,6 +73,7 @@ local function showSwitchResults(plugin, record, result)
         return
     end
 
+    Dialog.closeWidget(plugin, "detail_viewer")
     Shell.push(plugin, ShellRoutes.bookshelfSwitchResults{
         record = record,
         keyword = result.keyword,
@@ -103,6 +100,7 @@ local function confirmRemove(plugin, record)
                 Dialog.message(_("Remove from bookshelf failed."))
                 return
             end
+            Dialog.closeWidget(plugin, "detail_viewer")
             BookshelfFlow.show(plugin)
             Dialog.message(_("Removed from bookshelf."))
         end,

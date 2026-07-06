@@ -5,6 +5,8 @@ local UIManager = require("ui/uimanager")
 local Loading = {}
 
 local active_widget
+-- Each show() call owns one lease, even when the same owner/key reuses
+-- the shared widget, so an older callback only releases its own lease.
 local active_refs = {}
 
 local function isShown(widget)
@@ -12,16 +14,16 @@ local function isShown(widget)
 end
 
 local function clearRefAt(index)
-    local ref = active_refs[index]
-    if ref.owner and ref.key and ref.owner[ref.key] == ref.widget then
-        ref.owner[ref.key] = nil
-    end
     table.remove(active_refs, index)
 end
 
 local function clearRefsForWidget(widget)
     for ref_index = #active_refs, 1, -1 do
-        if active_refs[ref_index].widget == widget then
+        local ref = active_refs[ref_index]
+        if ref.widget == widget then
+            if ref.owner and ref.key and ref.owner[ref.key] == widget then
+                ref.owner[ref.key] = nil
+            end
             clearRefAt(ref_index)
         end
     end
@@ -31,13 +33,6 @@ local function addRef(owner, key, widget)
     if not owner or not key then
         return
     end
-    for ref_index = 1, #active_refs do
-        local ref = active_refs[ref_index]
-        if ref.owner == owner and ref.key == key then
-            ref.widget = widget
-            return
-        end
-    end
     table.insert(active_refs, {
         owner = owner,
         key = key,
@@ -45,7 +40,17 @@ local function addRef(owner, key, widget)
     })
 end
 
-local function removeRef(owner, key, widget)
+local function hasKeyRefs(owner, key)
+    for ref_index = 1, #active_refs do
+        local ref = active_refs[ref_index]
+        if ref.owner == owner and ref.key == key then
+            return true
+        end
+    end
+    return false
+end
+
+local function removeRef(owner, key, widget, remove_all)
     if not owner or not key then
         return
     end
@@ -55,7 +60,13 @@ local function removeRef(owner, key, widget)
             and ref.key == key
             and (not widget or ref.widget == widget) then
             clearRefAt(ref_index)
+            if not remove_all then
+                break
+            end
         end
+    end
+    if owner[key] and not hasKeyRefs(owner, key) then
+        owner[key] = nil
     end
 end
 
@@ -76,7 +87,7 @@ function Loading.show(owner, key)
     end
 
     if existing then
-        removeRef(owner, key, existing)
+        removeRef(owner, key, existing, true)
         owner[key] = nil
     end
 
@@ -104,9 +115,8 @@ function Loading.close(owner, key, widget)
         return
     end
 
-    removeRef(owner, key, loading)
-    if owner and key and owner[key] == loading then
-        owner[key] = nil
+    if owner and key then
+        removeRef(owner, key, loading, not widget)
     end
 
     if loading == active_widget and not isShown(loading) then

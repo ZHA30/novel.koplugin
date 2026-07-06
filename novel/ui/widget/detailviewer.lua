@@ -19,6 +19,7 @@ local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local Dialog = require("novel.ui.widget.dialog")
 
 local Screen = Device.screen
 local Input = Device.input
@@ -318,7 +319,23 @@ function DetailViewer:onShow()
     return true
 end
 
+function DetailViewer:closeFontSizeDialog()
+    Dialog.closeWidget(self, "font_size_dialog")
+end
+
+function DetailViewer:runCloseCallback()
+    local callback = self.close_callback
+    self.close_callback = nil
+    if callback then
+        callback(self)
+    end
+end
+
 function DetailViewer:showFontSizeDialog()
+    if self._is_closed then
+        return true
+    end
+
     local value_index = 1
     for index = 1, #FONT_SIZE_OPTIONS do
         if FONT_SIZE_OPTIONS[index] == self.text_font_size then
@@ -327,27 +344,38 @@ function DetailViewer:showFontSizeDialog()
         end
     end
 
-    UIManager:show(SpinWidget:new{
+    local dialog
+    dialog = SpinWidget:new{
         title_text = _("Font size"),
         width_factor = 0.5,
         value_table = FONT_SIZE_OPTIONS,
         value_index = value_index,
         keep_shown_on_apply = false,
         callback = function(widget)
+            if self._is_closed or self.font_size_dialog ~= dialog then
+                return
+            end
             local size = widget.value_table and widget.value_table[widget.value_index or 1]
                 or widget.value
             if self.on_font_size_change then
-                self.on_font_size_change(size)
+                self.on_font_size_change(size, self)
             end
         end,
-    })
+        close_callback = function()
+            Dialog.clearIfOwned(self, "font_size_dialog", dialog)
+        end,
+    }
+    Dialog.showWidget(self, "font_size_dialog", dialog)
     return true
 end
 
 function DetailViewer:onCloseWidget()
+    self._is_closed = true
+    self:closeFontSizeDialog()
     UIManager:setDirty(nil, function()
         return "partial", self.frame.dimen
     end)
+    self:runCloseCallback()
 end
 
 function DetailViewer:onTapClose(_, ges)
@@ -365,9 +393,6 @@ end
 
 function DetailViewer:onClose()
     UIManager:close(self)
-    if self.close_callback then
-        self.close_callback()
-    end
     return true
 end
 

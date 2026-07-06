@@ -37,6 +37,9 @@ PluginSettings.defaults = {
         detail_visited = {},
     },
     ui = {
+        detail = {
+            font_size = 22,
+        },
         grouping = {
             sources_collapsed_groups = {},
             discover_collapsed_sources = {},

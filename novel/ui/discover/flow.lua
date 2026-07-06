@@ -52,23 +52,35 @@ local function resultRoute(source, group, page, result, options)
 end
 
 function DiscoverFlow.loadNextPage(plugin)
+    local route = currentResultsRoute(plugin)
+    if not route then
+        return false
+    end
+    return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) + 1)
+end
+
+function DiscoverFlow.loadPage(plugin, page)
     if not plugin.app then
         return false
     end
 
     local route = currentResultsRoute(plugin)
-    if not route or route.loading_more then
+    if not route or route.loading or route.loading_more then
         return false
     end
 
     local source = route.source
     local group = route.group
     local current_page = tonumber(route.current_page) or 1
-    local next_page = current_page + 1
+    page = tonumber(page) or current_page
     if not source or not group then
         return false
     end
-    if not DiscoverService.canRequestNextPage(source, group, current_page) then
+    if page < 1 or page == current_page then
+        return false
+    end
+    if page > current_page
+        and not DiscoverService.canRequestNextPage(source, group, current_page) then
         Shell.replace(plugin, resultRoute(source, group, current_page, {
             books = route.books,
             unsupported = route.unsupported,
@@ -80,7 +92,7 @@ function DiscoverFlow.loadNextPage(plugin)
     end
 
     if NetworkMgr:willRerunWhenOnline(function()
-        DiscoverFlow.loadNextPage(plugin)
+        DiscoverFlow.loadPage(plugin, page)
     end) then
         return false
     end
@@ -90,12 +102,9 @@ function DiscoverFlow.loadNextPage(plugin)
         source = source,
         source_name = route.source_name,
         group = group,
-        books = route.books,
-        unsupported = route.unsupported,
-        first_page = route.first_page,
-        current_page = current_page,
-        no_more_source_pages = route.no_more_source_pages,
-        loading_more = true,
+        first_page = page,
+        current_page = page,
+        loading = true,
     })
 
     invalidate(plugin)
@@ -104,7 +113,7 @@ function DiscoverFlow.loadNextPage(plugin)
     Trapper:wrap(function()
         local loading_widget = Loading.show(plugin, "discover_loading")
         local completed, encoded_result = Trapper:dismissableRunInSubprocess(function()
-            return DiscoverService.runEncoded(source, group, next_page)
+            return DiscoverService.runEncoded(source, group, page)
         end, loading_widget, true)
         Loading.close(plugin, "discover_loading", loading_widget)
 
@@ -121,11 +130,8 @@ function DiscoverFlow.loadNextPage(plugin)
                 source = current.source,
                 source_name = current.source_name,
                 group = current.group,
-                books = current.books,
-                unsupported = current.unsupported,
-                first_page = current.first_page,
-                current_page = current.current_page,
-                no_more_source_pages = current.no_more_source_pages,
+                first_page = page,
+                current_page = page,
                 error = _("Discover canceled."),
             })
             return
@@ -133,7 +139,7 @@ function DiscoverFlow.loadNextPage(plugin)
 
         local result = DiscoverService.decodeResult(encoded_result)
         if not result then
-            result = DiscoverService.run(source, group, next_page)
+            result = DiscoverService.run(source, group, page)
         end
         if not result or not result.ok then
             Shell.replace(plugin, ShellRoutes.discoverResults{
@@ -141,32 +147,9 @@ function DiscoverFlow.loadNextPage(plugin)
                 source = current.source,
                 source_name = current.source_name,
                 group = current.group,
-                books = current.books,
-                unsupported = current.unsupported,
-                first_page = current.first_page,
-                current_page = current.current_page,
-                no_more_source_pages = current.no_more_source_pages,
+                first_page = page,
+                current_page = page,
                 error = _("Discover failed: ") .. Dialog.errorText(result),
-            })
-            return
-        end
-        local merged_books, appended = DiscoverResultSet.mergeBooks(current.books,
-            result.books or {})
-        if not result.books or #result.books == 0 then
-            merged_books = current.books or {}
-            appended = 0
-        end
-        if appended == 0 then
-            Shell.replace(plugin, ShellRoutes.discoverResults{
-                tab = current.tab,
-                source = current.source,
-                source_name = current.source_name,
-                group = current.group,
-                books = merged_books,
-                unsupported = current.unsupported,
-                first_page = current.first_page,
-                current_page = current.current_page,
-                no_more_source_pages = true,
             })
             return
         end
@@ -176,21 +159,22 @@ function DiscoverFlow.loadNextPage(plugin)
             source = current.source,
             source_name = current.source_name,
             group = current.group,
-            books = merged_books,
-            unsupported = current.unsupported,
-            first_page = current.first_page,
-            current_page = next_page,
-            no_more_source_pages = not DiscoverService.canRequestNextPage(
-                source, group, next_page),
+            books = result.books or {},
+            unsupported = result.unsupported or {},
+            first_page = page,
+            current_page = page,
+            no_more_source_pages = #(result.books or {}) == 0
+                or not DiscoverService.canRequestNextPage(source, group, page),
         })
     end)
     return true
 end
 
-function DiscoverFlow.showResults(plugin, source, group, page, result)
+function DiscoverFlow.showResults(plugin, source, group, page, result, options)
+    options = options or {}
     if not result or not result.ok then
         Shell.replace(plugin, ShellRoutes.discoverResults{
-            tab = "discover",
+            tab = options.tab or "discover",
             source = source,
             source_name = sourceTitle(source),
             group = group,
@@ -201,7 +185,9 @@ function DiscoverFlow.showResults(plugin, source, group, page, result)
         return
     end
 
-    local route = resultRoute(source, group, page, result)
+    local route = resultRoute(source, group, page, result, {
+        tab = options.tab or "discover",
+    })
     local current = currentResultsRoute(plugin)
     if DiscoverResultSet.sameRoute(current, source, group) then
         Shell.replace(plugin, route)
@@ -268,7 +254,7 @@ function DiscoverFlow.start(plugin, source, group, page, options)
         if not result then
             result = DiscoverService.run(source, group, page)
         end
-        DiscoverFlow.showResults(plugin, source, group, page, result)
+        DiscoverFlow.showResults(plugin, source, group, page, result, options)
     end)
 end
 

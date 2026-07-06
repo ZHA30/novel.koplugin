@@ -1,8 +1,6 @@
 local _ = require("novel.i18n")
-local BookshelfSupport = require("novel.ui.bookshelf.bookshelfsupport")
 local ChapterListing = require("novel.ui.chapters.listing")
 local DiscoverResultSet = require("novel.ui.discover.resultset")
-local SearchSupport = require("novel.ui.search.searchsupport")
 
 local ShellRoutes = {}
 
@@ -150,28 +148,6 @@ function ShellRoutes.title(route)
         )
     end
     return _("Novel")
-end
-
-function ShellRoutes.subtitle(route)
-    if route and route.key == "search_sources" then
-        return tostring(#(route.sources or {})) .. " " .. _("sources")
-    end
-    if route and route.key == "search_results" then
-        return route.source_name or SearchSupport.sourceTitle(route.source)
-    end
-    if route and route.key == "bookshelf_switch_results" then
-        return BookshelfSupport.bookTitle(route.record and route.record.book)
-    end
-    if route and route.key == "chapters" and route.manifest then
-        local total = #(route.manifest.chapters or {})
-        if total > 0 then
-            return tostring(total) .. " " .. _("chapters")
-        end
-    end
-    if route and route.key == "discover_results" then
-        return route.source_name or DiscoverResultSet.sourceTitle(route.source)
-    end
-    return ""
 end
 
 return ShellRoutes

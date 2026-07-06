@@ -86,15 +86,6 @@ function DiscoverResultsPage.build(shell, plugin, route, runtime)
             title = _("No more results."),
             dim = true,
         })
-    else
-        table.insert(items, {
-            title = _("Load more"),
-            mandatory = tostring((tonumber(route.current_page) or 1) + 1),
-            callback = function()
-                local DiscoverFlow = require("novel.ui.discover.flow")
-                DiscoverFlow.loadNextPage(plugin)
-            end,
-        })
     end
 
     return ContentBuilder.buildList(shell, items)

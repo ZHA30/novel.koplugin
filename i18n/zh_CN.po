@@ -149,6 +149,15 @@ msgstr "详情加载已取消。"
 msgid "Next page"
 msgstr "下一页"
 
+msgid "Previous page"
+msgstr "上一页"
+
+msgid "Back"
+msgstr "返回"
+
+msgid "Exit"
+msgstr "退出"
+
 msgid "Discover failed."
 msgstr "发现失败。"
 

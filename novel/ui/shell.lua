@@ -8,12 +8,15 @@ local UIManager = require("ui/uimanager")
 
 local Shell = {}
 
-local function tabs(plugin)
+local function homeActions(plugin)
+    local active_tab = ShellSession.activeTab(plugin)
     return {
         {
             key = "bookshelf",
             text = _("Bookshelf"),
             icon = "bookshelf",
+            active = active_tab == "bookshelf",
+            dim = active_tab ~= "bookshelf",
             callback = function()
                 Shell.showTab(plugin, "bookshelf")
             end,
@@ -22,6 +25,8 @@ local function tabs(plugin)
             key = "discover",
             text = _("Discover"),
             icon = "discover",
+            active = active_tab == "discover",
+            dim = active_tab ~= "discover",
             callback = function()
                 Shell.showTab(plugin, "discover")
             end,
@@ -30,11 +35,76 @@ local function tabs(plugin)
             key = "sources",
             text = _("Sources"),
             icon = "sources",
+            active = active_tab == "sources",
+            dim = active_tab ~= "sources",
             callback = function()
                 Shell.showTab(plugin, "sources")
             end,
         },
+        {
+            key = "exit",
+            text = _("Exit"),
+            icon = "log-out",
+            callback = function()
+                Shell.close(plugin)
+            end,
+        },
     }
+end
+
+local function canPage(route)
+    return route
+        and route.key == "discover_results"
+        and route.source ~= nil
+        and route.group ~= nil
+        and route.loading ~= true
+        and route.loading_more ~= true
+end
+
+local function canPreviousPage(route)
+    return canPage(route) and (tonumber(route.current_page) or 1) > 1
+end
+
+local function canNextPage(route)
+    return canPage(route) and route.no_more_source_pages ~= true
+end
+
+local function listActions(plugin, route)
+    return {
+        {
+            key = "previous",
+            text = _("Previous page"),
+            icon = "arrow-left",
+            enabled = canPreviousPage(route),
+            callback = function()
+                Shell.previousPage(plugin)
+            end,
+        },
+        {
+            key = "next",
+            text = _("Next page"),
+            icon = "arrow-right",
+            enabled = canNextPage(route),
+            callback = function()
+                Shell.nextPage(plugin)
+            end,
+        },
+        {
+            key = "back",
+            text = _("Back"),
+            icon = "undo-2",
+            callback = function()
+                Shell.pop(plugin)
+            end,
+        },
+    }
+end
+
+local function bottomActions(plugin, route)
+    if ShellRoutes.isTopLevel(route) then
+        return homeActions(plugin)
+    end
+    return listActions(plugin, route)
 end
 
 local function currentPage(plugin)
@@ -74,13 +144,9 @@ function Shell.show(plugin, options)
     local page = currentPage(plugin)
     local home = HomeShell:new{
         title = ShellRoutes.title(page),
-        subtitle = ShellRoutes.subtitle(page),
         active_tab = ShellSession.activeTab(plugin),
-        tabs = tabs(plugin),
-        left_icon = ShellRoutes.isTopLevel(page) and nil or "back.top",
-        left_callback = ShellRoutes.isTopLevel(page) and nil or function()
-            Shell.pop(plugin)
-        end,
+        tabs = homeActions(plugin),
+        bottom_actions = bottomActions(plugin, page),
         content_builder = function(shell_widget)
             return buildContent(shell_widget, plugin, page)
         end,
@@ -126,6 +192,24 @@ end
 function Shell.pop(plugin)
     ShellSession.pop(plugin)
     scheduleRender(plugin)
+end
+
+function Shell.previousPage(plugin)
+    local route = Shell.currentRoute(plugin)
+    if not canPreviousPage(route) then
+        return false
+    end
+    local DiscoverFlow = require("novel.ui.discover.flow")
+    return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) - 1)
+end
+
+function Shell.nextPage(plugin)
+    local route = Shell.currentRoute(plugin)
+    if not canNextPage(route) then
+        return false
+    end
+    local DiscoverFlow = require("novel.ui.discover.flow")
+    return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) + 1)
 end
 
 function Shell.currentRoute(plugin)

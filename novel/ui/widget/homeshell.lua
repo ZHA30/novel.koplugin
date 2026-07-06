@@ -19,33 +19,37 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local Screen = Device.screen
 local Input = Device.input
 
-local TAB_BAR_HEIGHT = Screen:scaleBySize(72)
+local BOTTOM_BAR_HEIGHT = Screen:scaleBySize(72)
 local CONTENT_ICON_SIZE = Screen:scaleBySize(72)
-local TAB_ICON_SIZE = Screen:scaleBySize(24)
-local TAB_LABEL_SIZE = 14
+local ACTION_ICON_SIZE = Screen:scaleBySize(24)
+local ACTION_LABEL_SIZE = 14
 local CONTENT_LABEL_SIZE = 28
 
-local HomeTabButton = InputContainer:extend{
+local ShellActionButton = InputContainer:extend{
     key = nil,
     text = "",
     icon = nil,
     active = false,
+    dim = false,
+    enabled = true,
     width = 0,
-    height = TAB_BAR_HEIGHT,
+    height = BOTTOM_BAR_HEIGHT,
     callback = nil,
 }
 
-function HomeTabButton:init()
+function ShellActionButton:init()
+    local enabled = self.enabled ~= false
+    local dim = not enabled or self.dim == true
     local icon = Icons.widget(self.icon, {
-        size = TAB_ICON_SIZE,
-        dim = not self.active,
+        size = ACTION_ICON_SIZE,
+        dim = dim,
     })
-    local fgcolor = self.active and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_DARK_GRAY
+    local fgcolor = dim and Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_BLACK
     local label = TextWidget:new{
         text = self.text,
-        face = Font:getFace("smallinfofont", TAB_LABEL_SIZE),
+        face = Font:getFace("smallinfofont", ACTION_LABEL_SIZE),
         fgcolor = fgcolor,
-        bold = self.active,
+        bold = self.active and enabled,
     }
     local indicator_h = Screen:scaleBySize(3)
     local indicator = LineWidget:new{
@@ -53,7 +57,9 @@ function HomeTabButton:init()
             w = math.max(self.width - Screen:scaleBySize(24), Screen:scaleBySize(16)),
             h = indicator_h,
         },
-        background = self.active and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE,
+        background = self.active and enabled
+            and Blitbuffer.COLOR_BLACK
+            or Blitbuffer.COLOR_WHITE,
     }
 
     self.dimen = Geom:new{
@@ -84,7 +90,7 @@ function HomeTabButton:init()
                 CenterContainer:new{
                     dimen = Geom:new{
                         w = self.width,
-                        h = TAB_ICON_SIZE,
+                        h = ACTION_ICON_SIZE,
                     },
                     icon,
                 },
@@ -112,8 +118,8 @@ function HomeTabButton:init()
     }
 end
 
-function HomeTabButton:onTapSelect()
-    if self.callback then
+function ShellActionButton:onTapSelect()
+    if self.enabled ~= false and self.callback then
         self.callback(self.key)
     end
     return true
@@ -122,9 +128,9 @@ end
 local HomeShell = InputContainer:extend{
     is_borderless = true,
     title = "",
-    subtitle = "",
     active_tab = "bookshelf",
     tabs = nil,
+    bottom_actions = nil,
     content_builder = nil,
     left_icon = nil,
     left_callback = nil,
@@ -190,25 +196,29 @@ function HomeShell:buildContent()
     }
 end
 
-function HomeShell:buildTabBar()
+function HomeShell:buildBottomBar()
     local width = self.dimen.w
-    local tabs = self.tabs or {}
-    local count = math.max(#tabs, 1)
-    local tab_width = math.floor(width / count)
+    local actions = self.bottom_actions or {}
+    local count = math.max(#actions, 1)
+    local action_width = math.floor(width / count)
     local group = HorizontalGroup:new{}
 
-    for index = 1, #tabs do
-        local tab = tabs[index]
-        local current_width = index == #tabs and width - tab_width * (#tabs - 1) or tab_width
-        table.insert(group, HomeTabButton:new{
-            key = tab.key,
-            text = tab.text,
-            icon = tab.icon,
-            active = tab.key == self.active_tab,
+    for index = 1, #actions do
+        local action = actions[index]
+        local current_width = index == #actions
+            and width - action_width * (#actions - 1)
+            or action_width
+        table.insert(group, ShellActionButton:new{
+            key = action.key,
+            text = action.text,
+            icon = action.icon,
+            active = action.active == true,
+            dim = action.dim == true,
+            enabled = action.enabled ~= false,
             width = current_width,
             callback = function()
-                if tab.callback then
-                    tab.callback(tab.key)
+                if action.callback then
+                    action.callback(action.key)
                 end
             end,
         })
@@ -246,7 +256,6 @@ function HomeShell:init()
         fullscreen = true,
         align = "center",
         title = self.title,
-        subtitle = self.subtitle,
         title_h_padding = Size.padding.large,
         button_padding = Screen:scaleBySize(11),
         left_icon = self.left_icon,
@@ -254,13 +263,10 @@ function HomeShell:init()
             self:onLeftButtonTap()
         end,
         show_parent = self,
-        close_callback = function()
-            self:onClose()
-        end,
     }
 
     local body_height = math.max(
-        self.dimen.h - self.title_bar:getHeight() - TAB_BAR_HEIGHT,
+        self.dimen.h - self.title_bar:getHeight() - BOTTOM_BAR_HEIGHT,
         0
     )
     self.body_width = self.dimen.w
@@ -282,7 +288,7 @@ function HomeShell:init()
                 },
                 self:buildContent(),
             },
-            self:buildTabBar(),
+            self:buildBottomBar(),
         },
     }
 

@@ -60,13 +60,26 @@ function BookshelfPage.build(shell, plugin)
             book = record.book,
             source_title = record.source_name,
             book_subtitle_parts = subtitleParts(record),
+            action_buttons = {
+                {
+                    id = "resume",
+                    icon = "circle-play",
+                    callback = function()
+                        BookshelfFlow.resume(plugin, record)
+                    end,
+                },
+                {
+                    id = "more",
+                    icon = "ellipsis-vertical",
+                    callback = function()
+                        if type(BookshelfFlow.showDetails) == "function" then
+                            BookshelfFlow.showDetails(plugin, record)
+                        end
+                    end,
+                },
+            },
             callback = function()
                 ChaptersFlow.show(plugin, findCurrentSource(plugin, record), record.book)
-            end,
-            hold_callback = function()
-                if type(BookshelfFlow.showActions) == "function" then
-                    BookshelfFlow.showActions(plugin, record)
-                end
             end,
         }
     end

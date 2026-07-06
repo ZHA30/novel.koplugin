@@ -1,6 +1,5 @@
 local _ = require("novel.i18n")
 local BookshelfSupport = require("novel.ui.bookshelf.bookshelfsupport")
-local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DetailFlow = require("novel.ui.detail.flow")
 local Dialog = require("novel.ui.widget.dialog")
@@ -39,29 +38,6 @@ local function findCurrentSource(plugin, record)
         end
     end
     return record.source
-end
-
-local function showBookInfo(record)
-    local book = record.book or {}
-    local lines = {
-        bookTitle(book),
-    }
-    if book.author and book.author ~= "" then
-        table.insert(lines, _("Author: ") .. book.author)
-    end
-    if record.source_name and record.source_name ~= "" then
-        table.insert(lines, _("Source: ") .. record.source_name)
-    end
-    if record.current and record.current.chapter and record.current.chapter.title then
-        table.insert(lines, _("Current chapter: ") .. record.current.chapter.title)
-    elseif record.current and record.current.chapter_title then
-        table.insert(lines, _("Current chapter: ") .. record.current.chapter_title)
-    end
-    if book.bookUrl and book.bookUrl ~= "" then
-        table.insert(lines, "")
-        table.insert(lines, book.bookUrl)
-    end
-    Dialog.message(table.concat(lines, "\n"))
 end
 
 local function applySwitch(plugin, record, candidate)
@@ -141,7 +117,7 @@ local function resumeRecord(plugin, record)
     local source = findCurrentSource(plugin, record)
     local current = record.current
     if not current or not current.chapter then
-        ChaptersFlow.show(plugin, source, record.book)
+        ChaptersFlow.resume(plugin, source, record.book, 1)
         return
     end
     local chapter_position = current.chapter_position or 1
@@ -237,101 +213,51 @@ local function switchRecord(plugin, record)
     end)
 end
 
-local function recordActions(plugin, record)
+local function bookshelfDetailButtons(plugin, record)
     return {
         {
-            text = _("Resume"),
-            callback = function()
-                resumeRecord(plugin, record)
-            end,
-        },
-        {
-            text = _("Refresh"),
-            callback = function()
-                refreshRecord(plugin, record)
-            end,
-        },
-        {
-            text = _("Switch source"),
-            callback = function()
-                switchRecord(plugin, record)
-            end,
-        },
-        {
-            text = _("Chapters"),
-            callback = function()
-                ChaptersFlow.show(plugin, findCurrentSource(plugin, record), record.book)
-            end,
-        },
-        {
-            text = _("Details"),
-            callback = function()
-                DetailFlow.show(plugin, findCurrentSource(plugin, record), record.book)
-            end,
-        },
-        {
-            text = _("Book info"),
-            callback = function()
-                showBookInfo(record)
-            end,
-        },
-        {
-            text = _("Remove from bookshelf"),
-            callback = function()
-                confirmRemove(plugin, record)
-            end,
+            {
+                icon = "rotate-cw",
+                callback = function()
+                    refreshRecord(plugin, record)
+                end,
+            },
+            {
+                icon = "arrow-left-right",
+                callback = function()
+                    switchRecord(plugin, record)
+                end,
+            },
+            {
+                icon = "trash-2",
+                callback = function()
+                    confirmRemove(plugin, record)
+                end,
+            },
         },
     }
 end
 
-local function showActions(plugin, record)
-    Dialog.closeWidget(plugin, "bookshelf_actions_dialog")
-    local actions = recordActions(plugin, record)
-    local actions_dialog
-
-    local function actionButton(action)
-        return {
-            text = action.text,
-            callback = function()
-                Dialog.closeWidget(plugin, "bookshelf_actions_dialog")
-                action.callback()
-            end,
-        }
-    end
-
-    actions_dialog = ButtonDialog:new{
-        title = _("Book actions") .. "\n" .. bookTitle(record.book),
-        title_align = "center",
-        buttons = {
-            {
-                actionButton(actions[1]),
-                actionButton(actions[4]),
-            },
-            {
-                actionButton(actions[2]),
-                actionButton(actions[3]),
-            },
-            {
-                actionButton(actions[5]),
-                actionButton(actions[6]),
-            },
-            {},
-            {
-                actionButton(actions[7]),
-            },
-        },
-        tap_close_callback = function()
-            Dialog.clearIfOwned(plugin, "bookshelf_actions_dialog", actions_dialog)
+local function showDetails(plugin, record)
+    DetailFlow.show(plugin, findCurrentSource(plugin, record), record.book, {
+        buttons_builder = function()
+            return bookshelfDetailButtons(plugin, record)
         end,
-    }
-    Dialog.showWidget(plugin, "bookshelf_actions_dialog", actions_dialog)
+    })
 end
 
-function BookshelfFlow.showActions(plugin, record)
+function BookshelfFlow.showDetails(plugin, record)
     if not plugin or not record then
         return
     end
-    showActions(plugin, record)
+    showDetails(plugin, record)
+end
+
+function BookshelfFlow.resume(plugin, record)
+    if not plugin or not record then
+        return
+    end
+    resumeRecord(plugin, record)
 end
 
 function BookshelfFlow.close(plugin)
@@ -340,7 +266,6 @@ function BookshelfFlow.close(plugin)
     Loading.close(plugin, "bookshelf_refresh_loading")
     Loading.close(plugin, "bookshelf_switch_loading")
     Dialog.closeKeys(plugin, {
-        "bookshelf_actions_dialog",
         "bookshelf_confirm_dialog",
         "bookshelf_switch_confirm_dialog",
     })

@@ -38,6 +38,8 @@ local HomeListItem = InputContainer:extend{
     width = 0,
     callback = nil,
     hold_callback = nil,
+    action_buttons = nil,
+    action_refs = nil,
 }
 
 local function clean(value)
@@ -66,6 +68,8 @@ function HomeListItem:init()
     local item = self.item or {}
     if item.book then
         local row_height = bookRowHeight(item)
+        self.action_buttons = item.action_buttons
+        self.action_refs = {}
         self.dimen = Geom:new{
             x = 0,
             y = 0,
@@ -80,6 +84,7 @@ function HomeListItem:init()
             BookRow.build(item, {
                 width = self.width,
                 height = row_height,
+                action_refs = self.action_refs,
             }),
         }
 
@@ -242,7 +247,30 @@ function HomeListItem:init()
     }
 end
 
-function HomeListItem:onTapSelect()
+function HomeListItem:getActionAt(ges)
+    if not ges or not ges.pos or not self.dimen or type(self.action_buttons) ~= "table" then
+        return nil
+    end
+    local local_x = ges.pos.x - self.dimen.x
+    local local_y = ges.pos.y - self.dimen.y
+    for action_index = 1, #self.action_buttons do
+        local action = self.action_buttons[action_index]
+        local ref = self.action_refs and self.action_refs[action_index]
+        if ref
+            and local_x >= ref.x and local_x < ref.x + ref.w
+            and local_y >= ref.y and local_y < ref.y + ref.h then
+            return action
+        end
+    end
+    return nil
+end
+
+function HomeListItem:onTapSelect(_, ges)
+    local action = self:getActionAt(ges)
+    if action and type(action.callback) == "function" then
+        action.callback()
+        return true
+    end
     if self.callback then
         self.callback()
         return true

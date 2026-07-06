@@ -2,9 +2,9 @@ local _ = require("novel.i18n")
 local BookshelfStore = require("novel.storage.bookshelfstore")
 local DetailVisits = require("novel.ui.detail.detailvisits")
 local Dialog = require("novel.ui.widget.dialog")
+local DetailViewer = require("novel.ui.widget.detailviewer")
 local Loading = require("novel.ui.widget.loading")
 local NetworkMgr = require("ui/network/manager")
-local TextViewer = require("ui/widget/textviewer")
 local ChaptersFlow = require("novel.ui.chapters.flow")
 local Trapper = require("ui/trapper")
 
@@ -31,7 +31,14 @@ local function showUnsupported(result)
     Dialog.showUnsupported(result and result.unsupported)
 end
 
-local function buildButtons(plugin, source, result)
+local function buildButtons(plugin, source, result, options)
+    if options and type(options.buttons_builder) == "function" then
+        local buttons = options.buttons_builder(plugin, source, result)
+        if type(buttons) == "table" and #buttons > 0 then
+            return buttons
+        end
+    end
+
     local book = result.book or {}
     local bookshelf = plugin.app and plugin.app:getBookshelfStore()
         or BookshelfStore:new()
@@ -93,15 +100,21 @@ local function buildButtons(plugin, source, result)
     return { row }
 end
 
-local function showDetailViewer(plugin, source, result)
+local function showDetailViewer(plugin, source, result, options)
     local book = result.book or {}
+    options = options or {}
+    options.state = options.state or {}
     Dialog.closeWidget(plugin, "detail_viewer")
     local viewer
-    viewer = TextViewer:new{
+    viewer = DetailViewer:new{
         title = bookTitle(book),
         text = detailText(book),
-        text_type = "book_info",
-        buttons_table = buildButtons(plugin, source, result),
+        buttons_table = buildButtons(plugin, source, result, options),
+        text_font_size = tonumber(options.state.font_size) or 22,
+        on_font_size_change = function(size)
+            options.state.font_size = tonumber(size) or 22
+            DetailFlow.showLoaded(plugin, source, result, options)
+        end,
         close_callback = function()
             Dialog.clearIfOwned(plugin, "detail_viewer", viewer)
         end,
@@ -135,7 +148,7 @@ function DetailFlow.showLoaded(plugin, source, result, options)
         options.on_visited(visited_book)
     end
 
-    showDetailViewer(plugin, source, result)
+    showDetailViewer(plugin, source, result, options)
 end
 
 function DetailFlow.show(plugin, source, book, options)

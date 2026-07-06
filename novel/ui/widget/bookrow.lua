@@ -3,10 +3,12 @@ local Blitbuffer = require("ffi/blitbuffer")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
 local Font = require("ui/font")
+local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local LeftContainer = require("ui/widget/container/leftcontainer")
+local Icons = require("novel.icons")
 local OverlapGroup = require("ui/widget/overlapgroup")
 local RightContainer = require("ui/widget/container/rightcontainer")
 local TextBoxWidget = require("ui/widget/textboxwidget")
@@ -20,6 +22,12 @@ local BookRow = {}
 local ROW_BASE_HEIGHT = 64
 local RIGHT_METADATA_MAX_WIDTH_RATIO = 0.36
 local SCALE_BY_SIZE = Screen:scaleBySize(1000000) * (1 / 1000000)
+local ACTION_ICON_SIZE = Screen:scaleBySize(32)
+local ACTION_BUTTON_PADDING = Screen:scaleBySize(6)
+local ACTION_BUTTON_GAP = Screen:scaleBySize(6)
+local ACTION_HIT_WIDTH = Screen:scaleBySize(60)
+local ACTION_COLUMN_METADATA_GAP = Screen:scaleBySize(10)
+local ACTION_COLUMN_RIGHT_PADDING = Screen:scaleBySize(10)
 
 local function clean(value)
     value = tostring(value or "")
@@ -169,6 +177,68 @@ local function fontSize(height, nominal, maximum)
     return font_size
 end
 
+local function buildActionColumn(entry, height, action_buttons, refs)
+    if type(action_buttons) ~= "table" or #action_buttons == 0 then
+        return nil, 0, 0
+    end
+
+    local row_items = {}
+    local row_width = 0
+    local row_height = 0
+
+    for action_index = 1, #action_buttons do
+        local action = action_buttons[action_index]
+        local button = FrameContainer:new{
+            background = Blitbuffer.COLOR_WHITE,
+            bordersize = 0,
+            padding = ACTION_BUTTON_PADDING,
+            margin = 0,
+            Icons.widget(action.icon, {
+                size = ACTION_ICON_SIZE,
+                dim = entry.dim == true,
+            }),
+        }
+        local button_size = button:getSize()
+        local slot_width = math.max(button_size.w, ACTION_HIT_WIDTH)
+        local slot_x = row_width
+        local slot = FrameContainer:new{
+            background = Blitbuffer.COLOR_WHITE,
+            bordersize = 0,
+            padding = 0,
+            margin = 0,
+            width = slot_width,
+            height = height,
+            CenterContainer:new{
+                dimen = Geom:new{ w = slot_width, h = height },
+                button,
+            },
+        }
+        slot.overlap_offset = { slot_x, 0 }
+        row_width = row_width + slot_width
+        row_height = math.max(row_height, height)
+        if refs then
+            refs[action_index] = {
+                x = slot_x,
+                y = 0,
+                w = slot_width,
+                h = height,
+            }
+        end
+        table.insert(row_items, slot)
+        if action_index < #action_buttons then
+            row_width = row_width + ACTION_BUTTON_GAP
+        end
+    end
+
+    return CenterContainer:new{
+        dimen = Geom:new{ w = row_width, h = height },
+        OverlapGroup:new{
+            dimen = Geom:new{ w = row_width, h = row_height },
+            (table.unpack or unpack)(row_items),
+        },
+    }, row_width, ACTION_COLUMN_RIGHT_PADDING
+end
+
 function BookRow.build(entry, args)
     args = args or {}
     local width = math.max(Screen:scaleBySize(40), tonumber(args.width) or 0)
@@ -179,12 +249,28 @@ function BookRow.build(entry, args)
     local right_face = Font:getFace("cfont", fontsize_info)
     local right_line_height = lineHeight(right_face)
     local side_lines, side_seen = bookSideMetadata(entry)
+    local action_column, action_width, action_right_padding = buildActionColumn(
+        entry,
+        height,
+        entry.action_buttons,
+        args.action_refs
+    )
+    if args.action_refs and action_width > 0 then
+        local action_origin_x = width - action_right_padding - action_width
+        for action_index = 1, #args.action_refs do
+            local ref = args.action_refs[action_index]
+            if ref then
+                ref.x = action_origin_x + ref.x
+            end
+        end
+    end
 
     local wright
     local wright_width = 0
     local wright_right_padding = 0
     if hasText(side_lines) then
-        local max_right_width = math.floor(width * RIGHT_METADATA_MAX_WIDTH_RATIO)
+        local reserved_right_width = action_width + action_right_padding
+        local max_right_width = math.floor((width - reserved_right_width) * RIGHT_METADATA_MAX_WIDTH_RATIO)
         for line_index = 1, #side_lines do
             wright_width = math.max(wright_width,
                 textWidth(side_lines[line_index], right_face))
@@ -205,14 +291,19 @@ function BookRow.build(entry, args)
             dimen = Geom:new{ w = wright_width, h = height },
             VerticalGroup:new(right_items),
         }
-        wright_right_padding = Screen:scaleBySize(10)
+        if action_column then
+            wright_right_padding = ACTION_COLUMN_METADATA_GAP
+        else
+            wright_right_padding = Screen:scaleBySize(10)
+        end
     end
 
     local wmain_left_padding = Screen:scaleBySize(10)
     local wmain_right_padding = Screen:scaleBySize(10)
     local wmain_width = math.max(Screen:scaleBySize(40),
         width - wmain_left_padding - wmain_right_padding
-        - wright_width - wright_right_padding)
+        - wright_width - wright_right_padding
+        - action_width - action_right_padding)
     local fontsize_title = fontSize(height, 20, 24)
     local fontsize_metadata = fontSize(height, 18, 22)
     local title_face = Font:getFace("cfont", fontsize_title)
@@ -276,13 +367,27 @@ function BookRow.build(entry, args)
             wmain,
         },
     }
-    if wright then
+    if wright or action_column then
+        local right_group = HorizontalGroup:new{}
+        if wright then
+            table.insert(right_group, wright)
+            if wright_right_padding > 0 then
+                table.insert(right_group, HorizontalSpan:new{
+                    width = wright_right_padding,
+                })
+            end
+        end
+        if action_column then
+            table.insert(right_group, action_column)
+            if action_right_padding > 0 then
+                table.insert(right_group, HorizontalSpan:new{
+                    width = action_right_padding,
+                })
+            end
+        end
         table.insert(widget, RightContainer:new{
             dimen = Geom:new{ w = width, h = height },
-            HorizontalGroup:new{
-                wright,
-                HorizontalSpan:new{ width = wright_right_padding },
-            },
+            right_group,
         })
     end
     return widget

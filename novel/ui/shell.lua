@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local ChapterListing = require("novel.ui.chapters.listing")
 local Dialog = require("novel.ui.widget.dialog")
 local HomeShell = require("novel.ui.widget.homeshell")
 local ShellPages = require("novel.ui.shellpages")
@@ -83,34 +84,102 @@ local function canNextPage(plugin, route)
     return info.has_next == true or canRemoteNextPage(route)
 end
 
+local function previousAction(plugin, route)
+    return {
+        key = "previous",
+        text = _("Previous page"),
+        icon = "arrow-left",
+        enabled = canPreviousPage(plugin, route),
+        callback = function()
+            Shell.previousPage(plugin)
+        end,
+    }
+end
+
+local function nextAction(plugin, route)
+    return {
+        key = "next",
+        text = _("Next page"),
+        icon = "arrow-right",
+        enabled = canNextPage(plugin, route),
+        callback = function()
+            Shell.nextPage(plugin)
+        end,
+    }
+end
+
+local function backAction(plugin)
+    return {
+        key = "back",
+        text = _("Back"),
+        icon = "undo-2",
+        callback = function()
+            Shell.pop(plugin)
+        end,
+    }
+end
+
+local function replaceChapterState(plugin, route, filter, sort)
+    local manifest = route and route.manifest
+    if not manifest then
+        return
+    end
+    Shell.replace(plugin, ShellRoutes.chapters{
+        tab = route.tab,
+        source = route.source or manifest.source,
+        book = route.book or manifest.book,
+        manifest = manifest,
+        filter = filter,
+        sort = sort,
+    })
+end
+
+local function chapterActions(plugin, route)
+    local manifest = route and route.manifest
+    local filter, sort = ChapterListing.resolveState(plugin, manifest, {
+        filter = route and route.filter,
+        sort = route and route.sort,
+    })
+    local unread = filter == ChapterListing.FILTER_UNREAD
+    local descending = sort == ChapterListing.SORT_DESCENDING
+    return {
+        previousAction(plugin, route),
+        nextAction(plugin, route),
+        {
+            key = "filter",
+            text = ChapterListing.filterLabel(filter),
+            icon = unread and "funnel" or "funnel-x",
+            active = unread,
+            callback = function()
+                local next_filter = unread
+                    and ChapterListing.FILTER_ALL
+                    or ChapterListing.FILTER_UNREAD
+                replaceChapterState(plugin, route, next_filter, sort)
+            end,
+        },
+        {
+            key = "sort",
+            text = ChapterListing.sortLabel(sort),
+            icon = descending
+                and "arrow-down-wide-narrow"
+                or "arrow-up-narrow-wide",
+            active = descending,
+            callback = function()
+                local next_sort = descending
+                    and ChapterListing.SORT_ASCENDING
+                    or ChapterListing.SORT_DESCENDING
+                replaceChapterState(plugin, route, filter, next_sort)
+            end,
+        },
+        backAction(plugin),
+    }
+end
+
 local function listActions(plugin, route)
     return {
-        {
-            key = "previous",
-            text = _("Previous page"),
-            icon = "arrow-left",
-            enabled = canPreviousPage(plugin, route),
-            callback = function()
-                Shell.previousPage(plugin)
-            end,
-        },
-        {
-            key = "next",
-            text = _("Next page"),
-            icon = "arrow-right",
-            enabled = canNextPage(plugin, route),
-            callback = function()
-                Shell.nextPage(plugin)
-            end,
-        },
-        {
-            key = "back",
-            text = _("Back"),
-            icon = "undo-2",
-            callback = function()
-                Shell.pop(plugin)
-            end,
-        },
+        previousAction(plugin, route),
+        nextAction(plugin, route),
+        backAction(plugin),
     }
 end
 
@@ -118,6 +187,9 @@ local function bottomActions(plugin, route, shell_widget)
     ShellSession.setListInfo(plugin, shell_widget and shell_widget.list_page_info)
     if ShellRoutes.isTopLevel(route) then
         return homeActions(plugin)
+    end
+    if route and route.key == "chapters" and route.manifest then
+        return chapterActions(plugin, route)
     end
     return listActions(plugin, route)
 end

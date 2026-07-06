@@ -44,23 +44,7 @@ function ChapterListing.sortLabel(sort)
 end
 
 local function chapterTitle(chapter)
-    if chapter.isVip then
-        return _("Locked: ") .. tostring(chapter.title or "")
-    end
     return tostring(chapter.title or "")
-end
-
-local function chapterStatus(manifest, chapter)
-    if chapter.isVolume then
-        return _("Volume")
-    elseif chapter.isVip then
-        return _("Locked")
-    elseif manifest.current_position == chapter.position then
-        return _("Current")
-    elseif chapter.downloaded then
-        return _("Downloaded")
-    end
-    return nil
 end
 
 local function matchesFilter(filter, chapter)
@@ -190,7 +174,6 @@ function ChapterListing.buildRows(manifest, filter, sort)
             table.insert(rows, {
                 position = position,
                 title = chapterTitle(chapter),
-                mandatory = chapterStatus(manifest, chapter),
                 openable = openable,
                 dim = chapter.read == true or not openable,
             })

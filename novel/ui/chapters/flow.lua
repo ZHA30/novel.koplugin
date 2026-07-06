@@ -148,18 +148,24 @@ function ChaptersFlow.show(plugin, source, book, options)
     end)
 end
 
-function ChaptersFlow.resume(plugin, source, book, position)
+function ChaptersFlow.resume(plugin, source, book, position, options)
+    local resume_options = {}
+    for key, value in pairs(options or {}) do
+        resume_options[key] = value
+    end
     position = tonumber(position)
     local manifest_store = Manifest:new()
     local manifest = ChapterListing.refreshManifest(manifest_store,
         manifest_store:loadByBook(source, book), source, book)
     if manifest and position and manifest.chapters[position] then
-        ChaptersFlow.openChapter(plugin, manifest, position)
+        ChaptersFlow.openChapter(plugin, manifest, position, {
+            from_reader = resume_options.from_reader,
+            jump = resume_options.jump,
+        })
         return
     end
-    ChaptersFlow.show(plugin, source, book, {
-        open_position = position,
-    })
+    resume_options.open_position = position
+    ChaptersFlow.show(plugin, source, book, resume_options)
 end
 
 function ChaptersFlow.showCurrent(plugin)

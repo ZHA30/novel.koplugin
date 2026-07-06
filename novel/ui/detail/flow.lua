@@ -108,6 +108,11 @@ local function buildButtons(plugin, source, result, options)
     local bookshelf = plugin.app and plugin.app:getBookshelfStore()
         or BookshelfStore:new()
     local in_bookshelf = bookshelf:has(source, book)
+    local function notifyBookshelfChanged(changed_book, added)
+        if options and type(options.on_bookshelf_changed) == "function" then
+            options.on_bookshelf_changed(changed_book or book, added)
+        end
+    end
     local row = {
         {
             text = _("Chapters"),
@@ -122,7 +127,8 @@ local function buildButtons(plugin, source, result, options)
                 local updated_record, err = bookshelf:add(source, book)
                 if updated_record then
                     result.book = updated_record.book or book
-                    DetailFlow.showLoaded(plugin, source, result)
+                    notifyBookshelfChanged(result.book, true)
+                    DetailFlow.showLoaded(plugin, source, result, options)
                     Dialog.message(in_bookshelf
                         and _("Bookshelf info updated.")
                         or _("Added to bookshelf."))
@@ -140,7 +146,8 @@ local function buildButtons(plugin, source, result, options)
             text = _("Remove"),
             callback = function()
                 bookshelf:remove(source, book)
-                DetailFlow.showLoaded(plugin, source, result)
+                notifyBookshelfChanged(book, false)
+                DetailFlow.showLoaded(plugin, source, result, options)
                 Dialog.message(_("Removed from bookshelf."))
             end,
         })

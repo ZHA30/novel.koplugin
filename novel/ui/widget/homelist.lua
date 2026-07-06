@@ -288,61 +288,189 @@ end
 
 local HomeList = {}
 
-function HomeList.new(_, args)
-    args = args or {}
-    local dimen = args.dimen
-    local items = args.items or {}
-    local content_width = dimen.w - ScrollableContainer:getScrollbarWidth()
-    local content = VerticalGroup:new{
-        align = "left",
-    }
+local function appendEntries(content, entries)
+    for index = 1, #entries do
+        local entry = entries[index]
+        table.insert(content, entry.row)
+        table.insert(content, entry.separator)
+    end
+end
 
+local function separatorFor(item, next_item, content_width)
+    local current_left, current_right = separatorInsets(item)
+    local next_left, next_right = separatorInsets(next_item or item)
+    local left_inset = math.max(current_left, next_left)
+    local right_inset = math.max(current_right, next_right)
+    local separator = LineWidget:new{
+        dimen = Geom:new{
+            w = math.max(
+                Screen:scaleBySize(40),
+                content_width - left_inset - right_inset
+            ),
+            h = Size.line.thin,
+        },
+        background = Blitbuffer.COLOR_GRAY_5,
+    }
+    return HorizontalGroup:new{
+        HorizontalSpan:new{
+            width = left_inset,
+        },
+        separator,
+        HorizontalSpan:new{
+            width = right_inset,
+        },
+    }
+end
+
+local function buildEntries(items, content_width)
+    local entries = {}
     for index = 1, #items do
         local item = items[index]
-        table.insert(content, HomeListItem:new{
+        local row = HomeListItem:new{
             item = item,
             width = content_width,
             callback = item.callback,
             hold_callback = item.hold_callback,
-        })
-        local next_item = items[index + 1] or item
-        local current_left, current_right = separatorInsets(item)
-        local next_left, next_right = separatorInsets(next_item)
-        local left_inset = math.max(current_left, next_left)
-        local right_inset = math.max(current_right, next_right)
-        local separator = LineWidget:new{
-            dimen = Geom:new{
-                w = math.max(
-                    Screen:scaleBySize(40),
-                    content_width - left_inset - right_inset
-                ),
-                h = Size.line.thin,
-            },
-            background = Blitbuffer.COLOR_GRAY_5,
         }
-        table.insert(content, HorizontalGroup:new{
-            HorizontalSpan:new{
-                width = left_inset,
+        local separator = separatorFor(item, items[index + 1], content_width)
+        table.insert(entries, {
+            row = row,
+            separator = separator,
+            height = row:getSize().h + separator:getSize().h,
+        })
+    end
+    return entries
+end
+
+local function paginateEntries(entries, height)
+    local pages = {}
+    local page = {}
+    local page_height = 0
+    height = math.max(1, tonumber(height) or 1)
+
+    for index = 1, #entries do
+        local entry = entries[index]
+        if #page > 0 and page_height + entry.height > height then
+            table.insert(pages, page)
+            page = {}
+            page_height = 0
+        end
+        table.insert(page, entry)
+        page_height = page_height + entry.height
+    end
+
+    if #page > 0 or #pages == 0 then
+        table.insert(pages, page)
+    end
+    return pages
+end
+
+local function normalizedPage(page, total_pages)
+    total_pages = math.max(1, tonumber(total_pages) or 1)
+    if page == "last" then
+        return total_pages
+    end
+    page = math.floor(tonumber(page) or 1)
+    if page < 1 then
+        return 1
+    end
+    if page > total_pages then
+        return total_pages
+    end
+    return page
+end
+
+local function isNextPageSwipe(direction)
+    return direction == "north"
+        or direction == "west"
+        or direction == "northeast"
+        or direction == "northwest"
+end
+
+local function isPreviousPageSwipe(direction)
+    return direction == "south"
+        or direction == "east"
+        or direction == "southeast"
+        or direction == "southwest"
+end
+
+function HomeList.new(_, args)
+    args = args or {}
+    local dimen = args.dimen
+    local items = args.items or {}
+    local paginate = args.paginate == true
+    local content_width = paginate
+        and dimen.w
+        or dimen.w - ScrollableContainer:getScrollbarWidth()
+    local entries = buildEntries(items, content_width)
+    local content = VerticalGroup:new{
+        align = "left",
+    }
+
+    if not paginate then
+        appendEntries(content, entries)
+        local widget = ScrollableContainer:new{
+            dimen = dimen,
+            show_parent = args.show_parent,
+            CenterContainer:new{
+                dimen = Geom:new{
+                    w = content_width,
+                    h = content:getSize().h,
+                },
+                content,
             },
-            separator,
-            HorizontalSpan:new{
-                width = right_inset,
-            },
+        }
+        widget.is_home_scrollable = true
+        return widget
+    end
+
+    local pages = paginateEntries(entries, dimen.h)
+    local current_page = normalizedPage(args.page, #pages)
+    appendEntries(content, pages[current_page] or {})
+
+    if type(args.on_page_info) == "function" then
+        args.on_page_info({
+            current_page = current_page,
+            total_pages = #pages,
+            total_items = #items,
+            has_previous = current_page > 1,
+            has_next = current_page < #pages,
         })
     end
 
-    local widget = ScrollableContainer:new{
-        dimen = dimen,
-        show_parent = args.show_parent,
-        CenterContainer:new{
-            dimen = Geom:new{
-                w = content_width,
-                h = content:getSize().h,
-            },
-            content,
+    local widget = InputContainer:new{
+        dimen = Geom:new{
+            w = dimen.w,
+            h = dimen.h,
         },
+        content,
     }
-    widget.is_home_scrollable = true
+    if Device:isTouchDevice() then
+        widget.ges_events = {
+            Swipe = {
+                GestureRange:new{
+                    ges = "swipe",
+                    range = widget.dimen,
+                },
+            },
+        }
+        widget.onSwipe = function(_, ...)
+            local ges = select(2, ...)
+            if not ges then
+                return false
+            end
+            if isNextPageSwipe(ges.direction)
+                and type(args.next_page_callback) == "function" then
+                return args.next_page_callback() == true
+            end
+            if isPreviousPageSwipe(ges.direction)
+                and type(args.previous_page_callback) == "function" then
+                return args.previous_page_callback() == true
+            end
+            return false
+        end
+    end
+    widget.is_home_paginated = true
     return widget
 end
 

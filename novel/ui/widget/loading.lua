@@ -1,5 +1,5 @@
 local _ = require("novel.i18n")
-local TrapWidget = require("ui/widget/trapwidget")
+local LoadingTrap = require("novel.ui.widget.loadingtrap")
 local UIManager = require("ui/uimanager")
 
 local Loading = {}
@@ -79,7 +79,8 @@ local function hasRefs(widget)
     return false
 end
 
-function Loading.show(owner, key)
+function Loading.show(owner, key, options)
+    options = options or {}
     local existing = owner and key and owner[key]
     if isShown(existing) then
         addRef(owner, key, existing)
@@ -94,8 +95,10 @@ function Loading.show(owner, key)
     local widget = active_widget
     if not isShown(widget) then
         clearRefsForWidget(widget)
-        widget = TrapWidget:new{
+        widget = LoadingTrap:new{
             text = _("Loading..."),
+            dismissable = options.dismissable ~= false,
+            flush_events_on_show = options.flush_events_on_show ~= false,
         }
         active_widget = widget
         UIManager:show(widget)

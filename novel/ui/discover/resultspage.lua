@@ -76,18 +76,6 @@ function DiscoverResultsPage.build(shell, plugin, route, runtime)
         })
     end
 
-    if route.loading_more then
-        table.insert(items, {
-            title = _("Loading more..."),
-            dim = true,
-        })
-    elseif route.no_more_source_pages then
-        table.insert(items, {
-            title = _("No more results."),
-            dim = true,
-        })
-    end
-
     return ContentBuilder.buildList(shell, items)
 end
 

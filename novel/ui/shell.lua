@@ -52,7 +52,7 @@ local function homeActions(plugin)
     }
 end
 
-local function canPage(route)
+local function canRemotePage(route)
     return route
         and route.key == "discover_results"
         and route.source ~= nil
@@ -61,12 +61,26 @@ local function canPage(route)
         and route.loading_more ~= true
 end
 
-local function canPreviousPage(route)
-    return canPage(route) and (tonumber(route.current_page) or 1) > 1
+local function canRemotePreviousPage(route)
+    return canRemotePage(route) and (tonumber(route.current_page) or 1) > 1
 end
 
-local function canNextPage(route)
-    return canPage(route) and route.no_more_source_pages ~= true
+local function canRemoteNextPage(route)
+    return canRemotePage(route) and route.no_more_source_pages ~= true
+end
+
+local function listInfo(plugin)
+    return ShellSession.listInfo(plugin) or {}
+end
+
+local function canPreviousPage(plugin, route)
+    local info = listInfo(plugin)
+    return info.has_previous == true or canRemotePreviousPage(route)
+end
+
+local function canNextPage(plugin, route)
+    local info = listInfo(plugin)
+    return info.has_next == true or canRemoteNextPage(route)
 end
 
 local function listActions(plugin, route)
@@ -75,7 +89,7 @@ local function listActions(plugin, route)
             key = "previous",
             text = _("Previous page"),
             icon = "arrow-left",
-            enabled = canPreviousPage(route),
+            enabled = canPreviousPage(plugin, route),
             callback = function()
                 Shell.previousPage(plugin)
             end,
@@ -84,7 +98,7 @@ local function listActions(plugin, route)
             key = "next",
             text = _("Next page"),
             icon = "arrow-right",
-            enabled = canNextPage(route),
+            enabled = canNextPage(plugin, route),
             callback = function()
                 Shell.nextPage(plugin)
             end,
@@ -100,7 +114,8 @@ local function listActions(plugin, route)
     }
 end
 
-local function bottomActions(plugin, route)
+local function bottomActions(plugin, route, shell_widget)
+    ShellSession.setListInfo(plugin, shell_widget and shell_widget.list_page_info)
     if ShellRoutes.isTopLevel(route) then
         return homeActions(plugin)
     end
@@ -147,11 +162,22 @@ function Shell.show(plugin, options)
     end
 
     local page = currentPage(plugin)
+    ShellSession.setListInfo(plugin, nil)
     local home = HomeShell:new{
         title = ShellRoutes.title(page),
         active_tab = ShellSession.activeTab(plugin),
         tabs = homeActions(plugin),
-        bottom_actions = bottomActions(plugin, page),
+        list_page = ShellSession.listPage(plugin),
+        paginate_lists = not ShellRoutes.isTopLevel(page),
+        previous_page_callback = function()
+            return Shell.previousPage(plugin)
+        end,
+        next_page_callback = function()
+            return Shell.nextPage(plugin)
+        end,
+        bottom_actions_builder = function(shell_widget)
+            return bottomActions(plugin, page, shell_widget)
+        end,
         content_builder = function(shell_widget)
             return buildContent(shell_widget, plugin, page)
         end,
@@ -209,20 +235,36 @@ end
 
 function Shell.previousPage(plugin)
     local route = Shell.currentRoute(plugin)
-    if not canPreviousPage(route) then
+    local info = listInfo(plugin)
+    if info.has_previous then
+        ShellSession.setListPage(plugin, (tonumber(info.current_page) or 1) - 1)
+        scheduleRender(plugin)
+        return true
+    end
+    if not canRemotePreviousPage(route) then
         return false
     end
     local DiscoverFlow = require("novel.ui.discover.flow")
-    return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) - 1)
+    return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) - 1, {
+        list_page_anchor = "last",
+    })
 end
 
 function Shell.nextPage(plugin)
     local route = Shell.currentRoute(plugin)
-    if not canNextPage(route) then
+    local info = listInfo(plugin)
+    if info.has_next then
+        ShellSession.setListPage(plugin, (tonumber(info.current_page) or 1) + 1)
+        scheduleRender(plugin)
+        return true
+    end
+    if not canRemoteNextPage(route) then
         return false
     end
     local DiscoverFlow = require("novel.ui.discover.flow")
-    return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) + 1)
+    return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) + 1, {
+        list_page_anchor = "last",
+    })
 end
 
 function Shell.currentRoute(plugin)

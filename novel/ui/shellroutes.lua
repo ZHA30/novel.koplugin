@@ -83,6 +83,8 @@ function ShellRoutes.discoverResults(args)
         loading = args.loading == true,
         loading_more = args.loading_more == true,
         error = args.error,
+        list_page = args.list_page,
+        list_page_anchor = args.list_page_anchor,
     }
 end
 

@@ -71,6 +71,13 @@ function ContentBuilder.buildList(shell, items)
         },
         show_parent = shell,
         items = items,
+        page = shell.list_page,
+        paginate = shell.paginate_lists,
+        previous_page_callback = shell.previous_page_callback,
+        next_page_callback = shell.next_page_callback,
+        on_page_info = function(info)
+            shell.list_page_info = info
+        end,
     }
 end
 

@@ -130,7 +130,12 @@ local HomeShell = InputContainer:extend{
     title = "",
     active_tab = "bookshelf",
     tabs = nil,
+    list_page = 1,
+    paginate_lists = false,
+    previous_page_callback = nil,
+    next_page_callback = nil,
     bottom_actions = nil,
+    bottom_actions_builder = nil,
     content_builder = nil,
     left_icon = nil,
     left_callback = nil,
@@ -271,6 +276,10 @@ function HomeShell:init()
     )
     self.body_width = self.dimen.w
     self.body_height = body_height
+    local content = self:buildContent()
+    if type(self.bottom_actions_builder) == "function" then
+        self.bottom_actions = self.bottom_actions_builder(self)
+    end
 
     self[1] = FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
@@ -286,7 +295,7 @@ function HomeShell:init()
                     w = self.dimen.w,
                     h = body_height,
                 },
-                self:buildContent(),
+                content,
             },
             self:buildBottomBar(),
         },

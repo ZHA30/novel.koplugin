@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
 
@@ -38,6 +39,14 @@ end
 function Dialog.message(message)
     UIManager:show(InfoMessage:new{
         text = message,
+    })
+end
+
+function Dialog.confirm(message, ok_text, callback)
+    UIManager:show(ConfirmBox:new{
+        text = message,
+        ok_text = ok_text,
+        ok_callback = callback,
     })
 end
 

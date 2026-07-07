@@ -318,6 +318,18 @@ function ChapterListing.setRowsSelected(plugin, manifest, rows, selected)
     end
 end
 
+function ChapterListing.positionsForRows(manifest, rows)
+    local positions = {}
+    for row_index = 1, #(rows or {}) do
+        local row = rows[row_index]
+        if row.openable and selectable(manifest, row.position) then
+            table.insert(positions, row.position)
+        end
+    end
+    table.sort(positions)
+    return positions
+end
+
 function ChapterListing.selectedPositions(plugin, manifest)
     local map = selectionMap(plugin, manifest)
     local positions = {}
@@ -327,6 +339,19 @@ function ChapterListing.selectedPositions(plugin, manifest)
     for position, selected in pairs(map) do
         if selected == true and selectable(manifest, position) then
             table.insert(positions, tonumber(position))
+        end
+    end
+    table.sort(positions)
+    return positions
+end
+
+function ChapterListing.selectedPositionsForRows(plugin, manifest, rows)
+    local positions = {}
+    for row_index = 1, #(rows or {}) do
+        local row = rows[row_index]
+        if row.openable
+            and ChapterListing.isSelected(plugin, manifest, row.position) then
+            table.insert(positions, row.position)
         end
     end
     table.sort(positions)

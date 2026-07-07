@@ -167,24 +167,31 @@ local function resumeChapter(plugin, route)
     })
 end
 
-local function markSelectedRead(plugin, route, manifest, filter, sort,
-    selected_positions)
-    if #selected_positions == 0 then
+local function markReadState(plugin, route, manifest, filter, sort, positions,
+    read)
+    if #positions == 0 then
         return
     end
     local manifest_store = Manifest:new()
     local current_manifest = manifest_store:load(manifest.book_id) or manifest
     local updated_manifest, err = manifest_store:markReadMany(
         current_manifest,
-        selected_positions,
-        true
+        positions,
+        read
     )
     if not updated_manifest then
         Dialog.message(Dialog.failureMessage(err))
         return
     end
-    ChapterListing.clearSelected(plugin, updated_manifest)
+    ChapterListing.setSelectionMode(plugin, updated_manifest, false)
     replaceChapterManifest(plugin, route, updated_manifest, filter, sort)
+end
+
+local function confirmChapterAction(message_template, count, ok_text, callback)
+    if count <= 0 then
+        return
+    end
+    Dialog.confirm(string.format(message_template, count), ok_text, callback)
 end
 
 local function chapterTopActions(plugin, route)
@@ -195,21 +202,56 @@ local function chapterTopActions(plugin, route)
     local rows = ChapterListing.buildRows(manifest, filter, sort)
     local selection = ChapterListing.selectionStateForRows(plugin, manifest, rows)
     local selection_mode = ChapterListing.isSelectionMode(plugin, manifest)
-    local selected_positions = ChapterListing.selectedPositions(plugin, manifest)
+    local action_positions = selection_mode
+        and ChapterListing.selectedPositionsForRows(plugin, manifest, rows)
+        or ChapterListing.positionsForRows(manifest, rows)
+    local has_action_scope = #action_positions > 0
     return {
         {
             key = "mark_read",
             text = _("Mark as read"),
             icon = "check-check",
-            enabled = #selected_positions > 0,
+            enabled = has_action_scope,
             callback = function()
-                markSelectedRead(
-                    plugin,
-                    route,
-                    manifest,
-                    filter,
-                    sort,
-                    selected_positions
+                confirmChapterAction(
+                    _("Mark %d chapters as read?"),
+                    #action_positions,
+                    _("Mark as read"),
+                    function()
+                        markReadState(
+                            plugin,
+                            route,
+                            manifest,
+                            filter,
+                            sort,
+                            action_positions,
+                            true
+                        )
+                    end
+                )
+            end,
+        },
+        {
+            key = "mark_unread",
+            text = _("Mark as unread"),
+            icon = "check-check-off",
+            enabled = has_action_scope,
+            callback = function()
+                confirmChapterAction(
+                    _("Mark %d chapters as unread?"),
+                    #action_positions,
+                    _("Mark as unread"),
+                    function()
+                        markReadState(
+                            plugin,
+                            route,
+                            manifest,
+                            filter,
+                            sort,
+                            action_positions,
+                            false
+                        )
+                    end
                 )
             end,
         },
@@ -217,18 +259,32 @@ local function chapterTopActions(plugin, route)
             key = "download",
             text = _("Download"),
             icon = "arrow-down-to-line",
-            enabled = #selected_positions > 0,
+            enabled = has_action_scope,
             callback = function()
-                Dialog.message(_("Download is not implemented."))
+                confirmChapterAction(
+                    _("Download %d chapters?"),
+                    #action_positions,
+                    _("Download"),
+                    function()
+                        Dialog.message(_("Download is not implemented."))
+                    end
+                )
             end,
         },
         {
             key = "delete",
             text = _("Delete"),
             icon = "trash-2",
-            enabled = #selected_positions > 0,
+            enabled = has_action_scope,
             callback = function()
-                Dialog.message(_("Delete is not implemented."))
+                confirmChapterAction(
+                    _("Delete %d chapters?"),
+                    #action_positions,
+                    _("Delete"),
+                    function()
+                        Dialog.message(_("Delete is not implemented."))
+                    end
+                )
             end,
         },
         {
@@ -242,6 +298,16 @@ local function chapterTopActions(plugin, route)
                     plugin,
                     manifest,
                     not selection_mode
+                )
+                Shell.replace(plugin, route)
+            end,
+            hold_callback = function()
+                ChapterListing.setSelectionMode(plugin, manifest, true)
+                ChapterListing.setRowsSelected(
+                    plugin,
+                    manifest,
+                    rows,
+                    not selection.all_selected
                 )
                 Shell.replace(plugin, route)
             end,

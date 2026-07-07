@@ -93,14 +93,29 @@ msgstr "继续"
 msgid "Mark as read"
 msgstr "标记为已读"
 
+msgid "Mark as unread"
+msgstr "标记为未读"
+
+msgid "Mark %d chapters as read?"
+msgstr "将 %d 个章节标为已读？"
+
+msgid "Mark %d chapters as unread?"
+msgstr "将 %d 个章节标为未读？"
+
 msgid "Download"
 msgstr "下载"
+
+msgid "Download %d chapters?"
+msgstr "下载 %d 个章节？"
 
 msgid "Download is not implemented."
 msgstr "下载功能尚未实现。"
 
 msgid "Delete"
 msgstr "删除"
+
+msgid "Delete %d chapters?"
+msgstr "删除 %d 个章节？"
 
 msgid "Delete is not implemented."
 msgstr "删除功能尚未实现。"

@@ -143,6 +143,7 @@ local ShellTopActionButton = InputContainer:extend{
     width = TOP_ACTION_SIZE,
     height = TOP_BAR_HEIGHT,
     callback = nil,
+    hold_callback = nil,
 }
 
 function ShellTopActionButton:init()
@@ -176,11 +177,26 @@ function ShellTopActionButton:init()
             },
         },
     }
+    if self.hold_callback then
+        self.ges_events.HoldSelect = {
+            GestureRange:new{
+                ges = "hold",
+                range = self.dimen,
+            },
+        }
+    end
 end
 
 function ShellTopActionButton:onTapSelect()
     if self.enabled ~= false and self.callback then
         self.callback(self.key)
+    end
+    return true
+end
+
+function ShellTopActionButton:onHoldSelect()
+    if self.enabled ~= false and self.hold_callback then
+        self.hold_callback(self.key)
     end
     return true
 end
@@ -229,6 +245,9 @@ function HomeShell:buildTopActions()
                     action.callback(action.key)
                 end
             end,
+            hold_callback = action.hold_callback and function()
+                action.hold_callback(action.key)
+            end or nil,
         })
     end
     return group

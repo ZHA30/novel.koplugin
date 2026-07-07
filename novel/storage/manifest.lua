@@ -295,7 +295,7 @@ function Manifest:markRead(manifest, position, read)
         return false
     end
     chapter.read = read ~= false
-    chapter.read_at = now()
+    chapter.read_at = chapter.read and now() or nil
     self:save(manifest)
     return true
 end
@@ -316,7 +316,7 @@ function Manifest:markReadMany(manifest, positions, read)
             local chapter = manifest.chapters and manifest.chapters[position]
             if chapter then
                 chapter.read = read_value
-                chapter.read_at = timestamp
+                chapter.read_at = read_value and timestamp or nil
                 changed = changed + 1
             end
         end

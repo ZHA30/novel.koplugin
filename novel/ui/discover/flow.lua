@@ -54,6 +54,15 @@ local function resultRoute(source, group, page, result, options)
     }
 end
 
+local function showResultRoute(plugin, source, group, route)
+    local current = Shell.currentRoute(plugin)
+    if DiscoverResultSet.sameRoute(current, source, group) then
+        Shell.replace(plugin, route)
+    else
+        Shell.push(plugin, route)
+    end
+end
+
 local function appendUnsupported(existing, added)
     local merged = {}
     for index = 1, #(existing or {}) do
@@ -119,17 +128,6 @@ function DiscoverFlow.loadPage(plugin, page, options)
 
     if append_next_page then
         route.loading_more = true
-    else
-        Shell.replace(plugin, ShellRoutes.discoverResults{
-            tab = route.tab,
-            source = source,
-            source_name = route.source_name,
-            group = group,
-            first_page = page,
-            current_page = page,
-            loading = true,
-            list_page = 1,
-        })
     end
 
     invalidate(plugin)
@@ -150,31 +148,18 @@ function DiscoverFlow.loadPage(plugin, page, options)
         end
 
         if not completed then
-            if append_next_page then
-                Shell.replace(plugin, ShellRoutes.discoverResults{
-                    tab = current.tab,
-                    source = current.source,
-                    source_name = current.source_name,
-                    group = current.group,
-                    books = current.books or current_books,
-                    unsupported = current.unsupported or current_unsupported,
-                    first_page = first_page,
-                    current_page = current_page,
-                    no_more_source_pages = current.no_more_source_pages == true,
-                    error = _("Discover canceled."),
-                })
-            else
-                Shell.replace(plugin, ShellRoutes.discoverResults{
-                    tab = current.tab,
-                    source = current.source,
-                    source_name = current.source_name,
-                    group = current.group,
-                    first_page = page,
-                    current_page = page,
-                    error = _("Discover canceled."),
-                    list_page = 1,
-                })
-            end
+            Shell.replace(plugin, ShellRoutes.discoverResults{
+                tab = current.tab,
+                source = current.source,
+                source_name = current.source_name,
+                group = current.group,
+                books = current.books or current_books,
+                unsupported = current.unsupported or current_unsupported,
+                first_page = first_page,
+                current_page = current_page,
+                no_more_source_pages = current.no_more_source_pages == true,
+                error = _("Discover canceled."),
+            })
             return
         end
 
@@ -183,31 +168,18 @@ function DiscoverFlow.loadPage(plugin, page, options)
             result = DiscoverService.run(source, group, page)
         end
         if not result or not result.ok then
-            if append_next_page then
-                Shell.replace(plugin, ShellRoutes.discoverResults{
-                    tab = current.tab,
-                    source = current.source,
-                    source_name = current.source_name,
-                    group = current.group,
-                    books = current.books or current_books,
-                    unsupported = current.unsupported or current_unsupported,
-                    first_page = first_page,
-                    current_page = current_page,
-                    no_more_source_pages = current.no_more_source_pages == true,
-                    error = _("Discover failed: ") .. Dialog.errorText(result),
-                })
-            else
-                Shell.replace(plugin, ShellRoutes.discoverResults{
-                    tab = current.tab,
-                    source = current.source,
-                    source_name = current.source_name,
-                    group = current.group,
-                    first_page = page,
-                    current_page = page,
-                    error = _("Discover failed: ") .. Dialog.errorText(result),
-                    list_page = 1,
-                })
-            end
+            Shell.replace(plugin, ShellRoutes.discoverResults{
+                tab = current.tab,
+                source = current.source,
+                source_name = current.source_name,
+                group = current.group,
+                books = current.books or current_books,
+                unsupported = current.unsupported or current_unsupported,
+                first_page = first_page,
+                current_page = current_page,
+                no_more_source_pages = current.no_more_source_pages == true,
+                error = _("Discover failed: ") .. Dialog.errorText(result),
+            })
             return
         end
 
@@ -257,7 +229,7 @@ end
 function DiscoverFlow.showResults(plugin, source, group, page, result, options)
     options = options or {}
     if not result or not result.ok then
-        Shell.replace(plugin, ShellRoutes.discoverResults{
+        showResultRoute(plugin, source, group, ShellRoutes.discoverResults{
             tab = options.tab or "discover",
             source = source,
             source_name = sourceTitle(source),
@@ -272,12 +244,7 @@ function DiscoverFlow.showResults(plugin, source, group, page, result, options)
     local route = resultRoute(source, group, page, result, {
         tab = options.tab or "discover",
     })
-    local current = currentResultsRoute(plugin)
-    if DiscoverResultSet.sameRoute(current, source, group) then
-        Shell.replace(plugin, route)
-    else
-        Shell.push(plugin, route)
-    end
+    showResultRoute(plugin, source, group, route)
 end
 
 function DiscoverFlow.start(plugin, source, group, page, options)
@@ -291,22 +258,6 @@ function DiscoverFlow.start(plugin, source, group, page, options)
         DiscoverFlow.start(plugin, source, group, page, options)
     end) then
         return
-    end
-
-    local loading_route = ShellRoutes.discoverResults{
-        tab = options.tab or "discover",
-        source = source,
-        source_name = sourceTitle(source),
-        group = group,
-        first_page = page,
-        current_page = page,
-        loading = true,
-    }
-    local current = currentResultsRoute(plugin)
-    if DiscoverResultSet.sameRoute(current, source, group) then
-        Shell.replace(plugin, loading_route)
-    else
-        Shell.push(plugin, loading_route)
     end
 
     invalidate(plugin)
@@ -323,7 +274,7 @@ function DiscoverFlow.start(plugin, source, group, page, options)
             return
         end
         if not completed then
-            Shell.replace(plugin, ShellRoutes.discoverResults{
+            showResultRoute(plugin, source, group, ShellRoutes.discoverResults{
                 tab = options.tab or "discover",
                 source = source,
                 source_name = sourceTitle(source),

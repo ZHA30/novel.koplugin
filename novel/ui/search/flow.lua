@@ -52,6 +52,15 @@ local function resultRoute(source, keyword, page, result, options)
     }
 end
 
+local function showResultRoute(plugin, source, keyword, route)
+    local current = Shell.currentRoute(plugin)
+    if SearchSupport.sameResultRoute(current, source, keyword) then
+        Shell.replace(plugin, route)
+    else
+        Shell.push(plugin, route)
+    end
+end
+
 local function appendUnsupported(existing, added)
     local merged = {}
     for index = 1, #(existing or {}) do
@@ -109,7 +118,7 @@ function SearchFlow.showResults(plugin, source, keyword, result, options)
     options = options or {}
     local page = tonumber(options.page) or 1
     if not result or not result.ok then
-        Shell.replace(plugin, ShellRoutes.searchResults{
+        showResultRoute(plugin, source, keyword, ShellRoutes.searchResults{
             tab = options.tab or "discover",
             source = source,
             source_name = SearchSupport.sourceTitle(source),
@@ -126,12 +135,7 @@ function SearchFlow.showResults(plugin, source, keyword, result, options)
     local route = resultRoute(source, keyword, page, result, {
         tab = options.tab or "discover",
     })
-    local current = Shell.currentRoute(plugin)
-    if SearchSupport.sameResultRoute(current, source, keyword) then
-        Shell.replace(plugin, route)
-    else
-        Shell.push(plugin, route)
-    end
+    showResultRoute(plugin, source, keyword, route)
 end
 
 function SearchFlow.loadNextPage(plugin)
@@ -189,17 +193,6 @@ function SearchFlow.loadPage(plugin, page, options)
 
     if append_next_page then
         route.loading_more = true
-    else
-        Shell.replace(plugin, ShellRoutes.searchResults{
-            tab = route.tab,
-            source = source,
-            source_name = route.source_name,
-            keyword = keyword,
-            first_page = page,
-            current_page = page,
-            loading = true,
-            list_page = 1,
-        })
     end
 
     invalidate(plugin)
@@ -224,62 +217,34 @@ function SearchFlow.loadPage(plugin, page, options)
             return
         end
         if not completed then
-            if append_next_page then
-                Shell.replace(plugin, ShellRoutes.searchResults{
-                    tab = current.tab,
-                    source = current.source,
-                    source_name = current.source_name,
-                    keyword = current.keyword,
-                    books = current.books or current_books,
-                    unsupported = current.unsupported or current_unsupported,
-                    first_page = first_page,
-                    current_page = current_page,
-                    no_more_source_pages = current.no_more_source_pages == true,
-                    error = _("Search canceled."),
-                })
-            else
-                Shell.replace(plugin, ShellRoutes.searchResults{
-                    tab = current.tab,
-                    source = current.source,
-                    source_name = current.source_name,
-                    keyword = current.keyword,
-                    first_page = page,
-                    current_page = page,
-                    no_more_source_pages = true,
-                    error = _("Search canceled."),
-                    list_page = 1,
-                })
-            end
+            Shell.replace(plugin, ShellRoutes.searchResults{
+                tab = current.tab,
+                source = current.source,
+                source_name = current.source_name,
+                keyword = current.keyword,
+                books = current.books or current_books,
+                unsupported = current.unsupported or current_unsupported,
+                first_page = first_page,
+                current_page = current_page,
+                no_more_source_pages = current.no_more_source_pages == true,
+                error = _("Search canceled."),
+            })
             return
         end
 
         if not result or not result.ok then
-            if append_next_page then
-                Shell.replace(plugin, ShellRoutes.searchResults{
-                    tab = current.tab,
-                    source = current.source,
-                    source_name = current.source_name,
-                    keyword = current.keyword,
-                    books = current.books or current_books,
-                    unsupported = current.unsupported or current_unsupported,
-                    first_page = first_page,
-                    current_page = current_page,
-                    no_more_source_pages = current.no_more_source_pages == true,
-                    error = _("Search failed: ") .. Dialog.errorText(result),
-                })
-            else
-                Shell.replace(plugin, ShellRoutes.searchResults{
-                    tab = current.tab,
-                    source = current.source,
-                    source_name = current.source_name,
-                    keyword = current.keyword,
-                    first_page = page,
-                    current_page = page,
-                    no_more_source_pages = true,
-                    error = _("Search failed: ") .. Dialog.errorText(result),
-                    list_page = 1,
-                })
-            end
+            Shell.replace(plugin, ShellRoutes.searchResults{
+                tab = current.tab,
+                source = current.source,
+                source_name = current.source_name,
+                keyword = current.keyword,
+                books = current.books or current_books,
+                unsupported = current.unsupported or current_unsupported,
+                first_page = first_page,
+                current_page = current_page,
+                no_more_source_pages = current.no_more_source_pages == true,
+                error = _("Search failed: ") .. Dialog.errorText(result),
+            })
             return
         end
 
@@ -337,22 +302,6 @@ function SearchFlow.start(plugin, source, keyword, options)
         return
     end
 
-    local loading_route = ShellRoutes.searchResults{
-        tab = options.tab or "discover",
-        source = source,
-        source_name = SearchSupport.sourceTitle(source),
-        keyword = keyword,
-        first_page = 1,
-        current_page = 1,
-        loading = true,
-    }
-    local current = Shell.currentRoute(plugin)
-    if SearchSupport.sameResultRoute(current, source, keyword) then
-        Shell.replace(plugin, loading_route)
-    else
-        Shell.push(plugin, loading_route)
-    end
-
     invalidate(plugin)
     local request_id = plugin.search_request_id
 
@@ -372,7 +321,7 @@ function SearchFlow.start(plugin, source, keyword, options)
             return
         end
         if not completed then
-            Shell.replace(plugin, ShellRoutes.searchResults{
+            showResultRoute(plugin, source, keyword, ShellRoutes.searchResults{
                 tab = options.tab or "discover",
                 source = source,
                 source_name = SearchSupport.sourceTitle(source),

@@ -16,10 +16,6 @@ local function routeWith(route, patch)
 end
 
 function DiscoverResultsPage.build(shell, plugin, route, runtime)
-    if route.loading and #(route.books or {}) == 0 then
-        return ContentBuilder.buildStatusContent(shell, _("Loading"), _("Loading results..."))
-    end
-
     if route.error and #(route.books or {}) == 0 then
         return ContentBuilder.buildStatusContent(shell, _("Failed"), tostring(route.error))
     end

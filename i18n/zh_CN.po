@@ -1,6 +1,13 @@
 msgid ""
 msgstr ""
+"Project-Id-Version: koreader-novel\n"
+"PO-Revision-Date: 2026-07-07 00:00+0800\n"
+"Last-Translator: \n"
+"Language-Team: Chinese (China)\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 
 msgid "Novel"
 msgstr "小说"
@@ -29,17 +36,11 @@ msgstr "已启用"
 msgid "Ungrouped"
 msgstr "未分组"
 
-msgid "Details"
-msgstr "详情"
-
 msgid "Novel is not ready."
 msgstr "Novel 尚未就绪。"
 
 msgid "Book"
 msgstr "书籍"
-
-msgid "Source: "
-msgstr "书源："
 
 msgid "Current chapter: "
 msgstr "当前章节："
@@ -49,18 +50,6 @@ msgstr "从书架移除这本书？"
 
 msgid "Remove"
 msgstr "移除"
-
-msgid "Add"
-msgstr "加入"
-
-msgid "Update"
-msgstr "更新"
-
-msgid "Resume"
-msgstr "继续阅读"
-
-msgid "Refresh"
-msgstr "刷新"
 
 msgid "Refresh canceled."
 msgstr "刷新已取消。"
@@ -80,29 +69,17 @@ msgstr "章节数："
 msgid "Chapters"
 msgstr "目录"
 
-msgid "Book info"
-msgstr "书籍信息"
-
-msgid "Remove from bookshelf"
-msgstr "从书架移除"
-
-msgid "Update bookshelf info"
-msgstr "更新书架信息"
-
 msgid "Bookshelf info updated."
 msgstr "书架信息已更新。"
 
 msgid "Update bookshelf failed: "
 msgstr "更新书架失败："
 
-msgid "No books in bookshelf."
-msgstr "书架中没有书。"
-
 msgid "Empty"
 msgstr "空"
 
-msgid "Add to bookshelf"
-msgstr "加入书架"
+msgid "Failed"
+msgstr "失败"
 
 msgid "Removed from bookshelf."
 msgstr "已从书架移除。"
@@ -113,29 +90,11 @@ msgstr "已加入书架。"
 msgid "Add to bookshelf failed: "
 msgstr "加入书架失败："
 
-msgid "Close"
-msgstr "关闭"
-
 msgid "Unsupported rules"
 msgstr "不支持的规则"
 
-msgid "Rules"
-msgstr "规则"
-
-msgid "Author: "
-msgstr "作者："
-
-msgid "Kind: "
-msgstr "分类："
-
-msgid "Latest chapter: "
-msgstr "最新章节："
-
-msgid "Update time: "
-msgstr "更新时间："
-
-msgid "Word count: "
-msgstr "字数："
+msgid "Font size"
+msgstr "字号"
 
 msgid "Detail failed."
 msgstr "详情加载失败。"
@@ -158,9 +117,6 @@ msgstr "返回"
 msgid "Exit"
 msgstr "退出"
 
-msgid "Discover failed."
-msgstr "发现失败。"
-
 msgid "Discover failed: "
 msgstr "发现失败："
 
@@ -179,9 +135,6 @@ msgstr "没有可用的发现书源。"
 msgid "No discover categories."
 msgstr "没有发现分类。"
 
-msgid "Locked: "
-msgstr "已锁定："
-
 msgid "All"
 msgstr "全部"
 
@@ -193,24 +146,6 @@ msgstr "正序"
 
 msgid "Descending"
 msgstr "倒序"
-
-msgid "Read"
-msgstr "已读"
-
-msgid "Downloaded"
-msgstr "已下载"
-
-msgid "Volume"
-msgstr "卷"
-
-msgid "Locked"
-msgstr "已锁定"
-
-msgid "Current"
-msgstr "当前"
-
-msgid "Filter: "
-msgstr "筛选："
 
 msgid "No chapters."
 msgstr "没有章节。"
@@ -233,26 +168,23 @@ msgstr "保存章节失败："
 msgid "Loading..."
 msgstr "加载中..."
 
+msgid "Loading"
+msgstr "加载中"
+
+msgid "Loading chapters..."
+msgstr "目录加载中..."
+
 msgid "Chapter loading canceled."
 msgstr "章节加载已取消。"
 
 msgid "Chapter list loading canceled."
 msgstr "目录加载已取消。"
 
-msgid "TOC failed."
-msgstr "目录加载失败。"
-
-msgid "TOC failed: "
-msgstr "目录加载失败："
-
 msgid "No novel chapters for this document."
 msgstr "当前文档没有小说目录。"
 
 msgid "Apply switch"
 msgstr "应用换源"
-
-msgid "Book actions"
-msgstr "书籍操作"
 
 msgid "Cancel"
 msgstr "取消"
@@ -290,11 +222,11 @@ msgstr "没有已启用的可搜索书源。"
 msgid "No matching books."
 msgstr "没有匹配书籍。"
 
-msgid "No more results."
-msgstr "没有更多结果。"
-
 msgid "No results."
 msgstr "没有结果。"
+
+msgid "Last request failed"
+msgstr "上次请求失败"
 
 msgid "Rate: "
 msgstr "评分："

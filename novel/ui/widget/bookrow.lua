@@ -161,6 +161,9 @@ local function bookSubtitle(entry, side_seen)
     local parts = {}
 
     appendEntryParts(parts, seen, entry.book_subtitle_parts)
+    if entry.book_subtitle_parts_only == true then
+        return table.concat(parts, "  ")
+    end
     appendUniqueText(parts, seen, latestChapter(book))
     appendUniqueText(parts, seen, book.wordCount)
     appendUniqueText(parts, seen, book.kind)

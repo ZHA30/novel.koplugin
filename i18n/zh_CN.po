@@ -42,9 +42,6 @@ msgstr "Novel 尚未就绪。"
 msgid "Book"
 msgstr "书籍"
 
-msgid "Current chapter: "
-msgstr "当前章节："
-
 msgid "Remove book from bookshelf?"
 msgstr "从书架移除这本书？"
 

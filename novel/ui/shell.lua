@@ -34,8 +34,8 @@ local function homeActions(plugin)
         },
         {
             key = "settings",
-            text = _("Settings"),
-            icon = "settings",
+            text = _("More"),
+            icon = "circle-ellipsis",
             active = active_tab == "settings",
             dim = active_tab ~= "settings",
             callback = function()

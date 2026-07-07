@@ -21,8 +21,8 @@ msgstr "书架"
 msgid "Discover"
 msgstr "发现"
 
-msgid "Settings"
-msgstr "设置"
+msgid "More"
+msgstr "更多"
 
 msgid "Sources"
 msgstr "书源"

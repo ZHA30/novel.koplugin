@@ -153,7 +153,7 @@ function ShellRoutes.title(route)
         )
     end
     if route and route.key == "settings" then
-        return _("Settings")
+        return _("More")
     end
     if route and route.key == "sources" then
         return _("Sources")

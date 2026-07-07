@@ -16,9 +16,6 @@ function SearchSupport.sourceSubtitle(source)
     if source.bookSourceGroup and source.bookSourceGroup ~= "" then
         table.insert(parts, source.bookSourceGroup)
     end
-    if source.concurrentRate and source.concurrentRate ~= "" then
-        table.insert(parts, _("Rate: ") .. source.concurrentRate)
-    end
     return table.concat(parts, " / ")
 end
 

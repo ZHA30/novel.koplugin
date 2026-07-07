@@ -156,9 +156,6 @@ msgstr "书名匹配"
 msgid "No enabled searchable sources."
 msgstr "没有已启用的可搜索书源。"
 
-msgid "Rate: "
-msgstr "评分："
-
 msgid "Search"
 msgstr "搜索"
 
@@ -169,7 +166,7 @@ msgid "Source switched."
 msgstr "书源已切换。"
 
 msgid "Summary"
-msgstr "摘要"
+msgstr "汇总"
 
 msgid "Switch"
 msgstr "切换"

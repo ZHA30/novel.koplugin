@@ -37,7 +37,6 @@ local HomeListItem = InputContainer:extend{
     item = nil,
     width = 0,
     callback = nil,
-    hold_callback = nil,
     action_buttons = nil,
     action_refs = nil,
 }
@@ -92,12 +91,6 @@ function HomeListItem:init()
             TapSelect = {
                 GestureRange:new{
                     ges = "tap",
-                    range = self.dimen,
-                },
-            },
-            HoldSelect = {
-                GestureRange:new{
-                    ges = "hold",
                     range = self.dimen,
                 },
             },
@@ -238,12 +231,6 @@ function HomeListItem:init()
                 range = self.dimen,
             },
         },
-        HoldSelect = {
-            GestureRange:new{
-                ges = "hold",
-                range = self.dimen,
-            },
-        },
     }
 end
 
@@ -273,14 +260,6 @@ function HomeListItem:onTapSelect(_, ges)
     end
     if self.callback then
         self.callback()
-        return true
-    end
-    return false
-end
-
-function HomeListItem:onHoldSelect()
-    if self.hold_callback then
-        self.hold_callback()
         return true
     end
     return false
@@ -330,7 +309,6 @@ local function buildEntries(items, content_width)
             item = item,
             width = content_width,
             callback = item.callback,
-            hold_callback = item.hold_callback,
         }
         local separator = separatorFor(item, items[index + 1], content_width)
         table.insert(entries, {

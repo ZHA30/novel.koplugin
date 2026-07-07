@@ -232,6 +232,12 @@ local function bookshelfDetailButtons(plugin, record)
                     confirmRemove(plugin, record)
                 end,
             },
+            {
+                icon = "x",
+                callback = function()
+                    Dialog.closeWidget(plugin, "detail_viewer")
+                end,
+            },
         },
     }
 end

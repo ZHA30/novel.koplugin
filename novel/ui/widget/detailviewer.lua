@@ -140,7 +140,6 @@ function DetailButtonTable:createButton(entry, width)
         height = entry.height,
         enabled = entry.enabled,
         callback = entry.callback,
-        hold_callback = entry.hold_callback,
         bordersize = 0,
         margin = 0,
         padding = Size.padding.buttontable,
@@ -246,7 +245,7 @@ function DetailViewer:init()
         buttons = {
             {
                 {
-                    text = _("Close"),
+                    icon = "x",
                     callback = function()
                         self:onClose()
                     end,

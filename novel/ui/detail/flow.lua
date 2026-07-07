@@ -115,14 +115,14 @@ local function buildButtons(plugin, source, result, options)
     end
     local row = {
         {
-            text = _("Chapters"),
+            icon = "list",
             callback = function()
                 Dialog.closeWidget(plugin, "detail_viewer")
                 ChaptersFlow.show(plugin, source, book)
             end,
         },
         {
-            text = in_bookshelf and _("Update") or _("Add"),
+            icon = in_bookshelf and "book-check" or "book",
             callback = function()
                 local updated_record, err = bookshelf:add(source, book)
                 if updated_record then
@@ -143,7 +143,7 @@ local function buildButtons(plugin, source, result, options)
 
     if in_bookshelf then
         table.insert(row, {
-            text = _("Remove"),
+            icon = "trash-2",
             callback = function()
                 bookshelf:remove(source, book)
                 notifyBookshelfChanged(book, false)
@@ -155,7 +155,7 @@ local function buildButtons(plugin, source, result, options)
 
     if result.unsupported and #result.unsupported > 0 then
         table.insert(row, {
-            text = _("Rules") .. " (" .. tostring(#result.unsupported) .. ")",
+            icon = "funnel",
             callback = function()
                 showUnsupported(result)
             end,
@@ -163,7 +163,7 @@ local function buildButtons(plugin, source, result, options)
     end
 
     table.insert(row, {
-        text = _("Close"),
+        icon = "x",
         callback = function()
             Dialog.closeWidget(plugin, "detail_viewer")
         end,

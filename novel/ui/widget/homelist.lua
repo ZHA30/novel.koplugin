@@ -391,7 +391,28 @@ local function paginateItems(get_item, item_count, height)
     return pages
 end
 
-local function normalizedPage(page, total_pages)
+local normalizedPage
+
+local function fixedPage(item_count, height, page, item)
+    height = math.max(1, tonumber(height) or 1)
+    local entry_height = math.max(1, entryHeightFor(item or {}))
+    local items_per_page = math.max(1, math.floor(height / entry_height))
+    local total_pages = math.max(1, math.ceil(item_count / items_per_page))
+    local current_page = normalizedPage(page, total_pages)
+    if item_count == 0 then
+        return {
+            first = 1,
+            last = 0,
+        }, current_page, total_pages
+    end
+    local first = (current_page - 1) * items_per_page + 1
+    return {
+        first = first,
+        last = math.min(item_count, first + items_per_page - 1),
+    }, current_page, total_pages
+end
+
+normalizedPage = function(page, total_pages)
     total_pages = math.max(1, tonumber(total_pages) or 1)
     if page == "last" then
         return total_pages
@@ -456,9 +477,22 @@ function HomeList.new(_, args)
         return widget
     end
 
-    local pages = paginateItems(get_item, item_count, dimen.h)
-    local current_page = normalizedPage(args.page, #pages)
-    local page = pages[current_page] or {}
+    local fixed_item
+    if args.fixed_item == true then
+        fixed_item = {}
+    elseif type(args.fixed_item) == "table" then
+        fixed_item = args.fixed_item
+    end
+    local page, current_page, total_pages
+    if fixed_item then
+        page, current_page, total_pages = fixedPage(item_count, dimen.h,
+            args.page, fixed_item)
+    else
+        local pages = paginateItems(get_item, item_count, dimen.h)
+        total_pages = #pages
+        current_page = normalizedPage(args.page, total_pages)
+        page = pages[current_page] or {}
+    end
     local entries = buildEntries(get_item, item_count, content_width,
         page.first, page.last)
     appendEntries(content, entries)
@@ -466,10 +500,10 @@ function HomeList.new(_, args)
     if type(args.on_page_info) == "function" then
         args.on_page_info({
             current_page = current_page,
-            total_pages = #pages,
+            total_pages = total_pages,
             total_items = item_count,
             has_previous = current_page > 1,
-            has_next = current_page < #pages,
+            has_next = current_page < total_pages,
         })
     end
 

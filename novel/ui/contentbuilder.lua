@@ -79,6 +79,7 @@ function ContentBuilder.buildList(shell, items, options)
         items = items,
         item_count = options.item_count,
         item_at = options.item_at,
+        fixed_item = options.fixed_item,
         page = shell.list_page,
         paginate = shell.paginate_lists,
         previous_page_callback = shell.previous_page_callback,

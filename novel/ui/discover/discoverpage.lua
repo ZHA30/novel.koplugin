@@ -5,7 +5,6 @@ local Dialog = require("novel.ui.widget.dialog")
 local DiscoverFlow = require("novel.ui.discover.flow")
 local DiscoverService = require("novel.catalog.listing.discoverservice")
 local Grouping = require("novel.ui.widget.grouping")
-local SearchSupport = require("novel.ui.search.searchsupport")
 local SearchFlow = require("novel.ui.search.flow")
 
 local DiscoverPage = {}
@@ -18,10 +17,9 @@ local function categoryTitle(group)
 end
 
 function DiscoverPage.build(shell, plugin, route, runtime)
-    local source_groups, unsupported = DiscoverService.sourceGroups(
-        plugin.app:getSourceStore():list()
-    )
-    local searchable_sources = SearchSupport.searchableSources(plugin)
+    local sources = plugin.app:getSourceStore():list()
+    local source_groups, unsupported = DiscoverService.sourceGroups(sources)
+    local searchable_sources = SourceStore.searchable(sources)
     if #source_groups == 0 and #unsupported == 0 and #searchable_sources == 0 then
         return ContentBuilder.buildEmptyState(shell)
     end

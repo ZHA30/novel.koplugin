@@ -128,7 +128,7 @@ function Manifest.normalizeManifest(manifest)
         chapter.file_name = chapter.file_name
             or (chapterId(chapter, position) .. ".html")
         chapter.file_path = Manifest.chapterPath(manifest.book_id, chapter)
-        chapter.downloaded = util.pathExists(chapter.file_path) or false
+        chapter.downloaded = chapter.downloaded == true
     end
     return manifest
 end
@@ -193,8 +193,9 @@ function Manifest:ensureBook(source, book, chapters)
     for position = 1, #chapters do
         local chapter = clone(chapters[position])
         chapter.position = position
-        chapter.file_name = chapterId(chapter, position) .. ".html"
         local old = by_identity[chapterIdentity(chapter, position)]
+        chapter.file_name = old and old.file_name
+            or (chapterId(chapter, position) .. ".html")
         if old then
             chapter.read = old.read == true
             chapter.read_at = old.read_at
@@ -203,7 +204,7 @@ function Manifest:ensureBook(source, book, chapters)
             chapter.image_style = old.image_style
         end
         chapter.file_path = Manifest.chapterPath(book_id, chapter)
-        chapter.downloaded = util.pathExists(chapter.file_path) or false
+        chapter.downloaded = old and old.downloaded == true or false
         table.insert(manifest.chapters, chapter)
     end
 

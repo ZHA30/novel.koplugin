@@ -252,15 +252,11 @@ function BookshelfStore:applyRefresh(source, book, refresh)
 end
 
 function BookshelfStore:updateProgress(source, book, chapter, position, chapter_pos)
-    local record = self:get(source, book)
-    if not record then
-        return false
-    end
-
     local records = self:list()
     local key = bookKey(source, book)
     for record_index = 1, #records do
         if records[record_index].key == key then
+            local record = records[record_index]
             local timestamp = now()
             local updated_book = normalizeBook(source, book)
             local chapter_index = tonumber(position) or 1
@@ -268,17 +264,17 @@ function BookshelfStore:updateProgress(source, book, chapter, position, chapter_
             updated_book.durChapterPos = tonumber(chapter_pos) or 0
             updated_book.durChapterTitle = chapter and chapter.title or ""
             updated_book.durChapterTime = timestamp
-            records[record_index].book = updated_book
-            records[record_index].source = clone(source)
-            records[record_index].source_url = sourceUrl(source)
-            records[record_index].source_name = sourceName(source)
-            records[record_index].current = {
+            record.book = updated_book
+            record.source = clone(source)
+            record.source_url = sourceUrl(source)
+            record.source_name = sourceName(source)
+            record.current = {
                 chapter = clone(chapter),
                 chapter_position = chapter_index,
                 chapter_pos = tonumber(chapter_pos) or 0,
                 updated_time = timestamp,
             }
-            records[record_index].updated_time = timestamp
+            record.updated_time = timestamp
             self:saveAll(records)
             return true
         end

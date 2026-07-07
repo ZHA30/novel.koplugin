@@ -26,6 +26,7 @@ function ChaptersPage.build(shell, plugin, route)
 
     return ContentBuilder.buildList(shell, nil, {
         item_count = model.count,
+        fixed_item = true,
         item_at = function(index)
             local row = model.rowAt(index)
             return {

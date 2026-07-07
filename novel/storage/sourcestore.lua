@@ -8,6 +8,7 @@ local SourceStore = {
     state_path = DataStorage:getSettingsDir() .. "/novel_sources.lua",
     source_dir = (debug.getinfo(1, "S").source:match("^@(.*/)novel/storage/sourcestore%.lua$")
         or "./") .. "source",
+    signature_check_interval = 5,
 }
 SourceStore.__index = SourceStore
 
@@ -288,9 +289,17 @@ local function applyState(source, states)
 end
 
 function SourceStore:listWithErrors()
+    local timestamp = os.time()
+    if self.cache
+        and self.cache.checked_at
+        and timestamp - self.cache.checked_at < SourceStore.signature_check_interval then
+        return self.cache.sources, self.cache.errors
+    end
+
     local files = sourceFiles()
     local signature = sourceSignature(files)
     if self.cache and self.cache.signature == signature then
+        self.cache.checked_at = timestamp
         return self.cache.sources, self.cache.errors
     end
 
@@ -318,6 +327,7 @@ function SourceStore:listWithErrors()
     sortSources(sources)
     self.cache = {
         signature = signature,
+        checked_at = timestamp,
         sources = sources,
         errors = errors,
     }

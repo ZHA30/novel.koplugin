@@ -299,6 +299,9 @@ local function installCorePatches()
         installPatch("readermenu_exit_or_restart", ReaderMenu, "exitOrRestart",
             function(original)
             return function(reader_menu, callback, force, ...)
+                if callback then
+                    return original(reader_menu, callback, force, ...)
+                end
                 if ReturnController.requestCloseRestore(reader_menu.ui) then
                     reader_menu:onTapCloseMenu()
                     UIManager:nextTick(function()

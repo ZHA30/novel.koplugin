@@ -211,4 +211,147 @@ function ChapterListing.buildModel(manifest, filter, sort)
     }
 end
 
+local function selectionMap(plugin, manifest, create)
+    local book_id = manifest and manifest.book_id
+    if not plugin or not book_id then
+        return nil
+    end
+    if type(plugin.novel_chapter_selection) ~= "table" then
+        if not create then
+            return nil
+        end
+        plugin.novel_chapter_selection = {}
+    end
+    local map = plugin.novel_chapter_selection[book_id]
+    if type(map) ~= "table" then
+        if not create then
+            return nil
+        end
+        map = {}
+        plugin.novel_chapter_selection[book_id] = map
+    end
+    return map
+end
+
+local function selectionModeMap(plugin, create)
+    if not plugin then
+        return nil
+    end
+    if type(plugin.novel_chapter_selection_mode) ~= "table" then
+        if not create then
+            return nil
+        end
+        plugin.novel_chapter_selection_mode = {}
+    end
+    return plugin.novel_chapter_selection_mode
+end
+
+local function selectable(manifest, position)
+    local chapter = manifest and manifest.chapters
+        and manifest.chapters[tonumber(position)]
+    return ChapterRecord.isOpenable(chapter)
+end
+
+function ChapterListing.isSelectionMode(plugin, manifest)
+    local modes = selectionModeMap(plugin)
+    local book_id = manifest and manifest.book_id
+    return modes and book_id and modes[book_id] == true or false
+end
+
+function ChapterListing.clearSelected(plugin, manifest)
+    local book_id = manifest and manifest.book_id
+    if plugin and book_id and type(plugin.novel_chapter_selection) == "table" then
+        plugin.novel_chapter_selection[book_id] = nil
+    end
+end
+
+function ChapterListing.setSelectionMode(plugin, manifest, enabled)
+    local modes = selectionModeMap(plugin, enabled == true)
+    local book_id = manifest and manifest.book_id
+    if not modes or not book_id then
+        return false
+    end
+    if enabled == true then
+        modes[book_id] = true
+        return true
+    end
+    modes[book_id] = nil
+    ChapterListing.clearSelected(plugin, manifest)
+    return false
+end
+
+function ChapterListing.isSelected(plugin, manifest, position)
+    local map = selectionMap(plugin, manifest)
+    return map and map[tonumber(position)] == true or false
+end
+
+function ChapterListing.setSelected(plugin, manifest, position, selected)
+    position = tonumber(position)
+    if not selectable(manifest, position) then
+        return false
+    end
+    local map = selectionMap(plugin, manifest, selected == true)
+    if not map then
+        return false
+    end
+    map[position] = selected == true or nil
+    return map[position] == true
+end
+
+function ChapterListing.toggleSelected(plugin, manifest, position)
+    position = tonumber(position)
+    if not selectable(manifest, position) then
+        return false
+    end
+    local map = selectionMap(plugin, manifest, true)
+    map[position] = not map[position]
+    return map[position] == true
+end
+
+function ChapterListing.setRowsSelected(plugin, manifest, rows, selected)
+    local map = selectionMap(plugin, manifest, true)
+    for row_index = 1, #(rows or {}) do
+        local row = rows[row_index]
+        if row.openable and selectable(manifest, row.position) then
+            map[row.position] = selected == true or nil
+        end
+    end
+end
+
+function ChapterListing.selectedPositions(plugin, manifest)
+    local map = selectionMap(plugin, manifest)
+    local positions = {}
+    if not map then
+        return positions
+    end
+    for position, selected in pairs(map) do
+        if selected == true and selectable(manifest, position) then
+            table.insert(positions, tonumber(position))
+        end
+    end
+    table.sort(positions)
+    return positions
+end
+
+function ChapterListing.selectionStateForRows(plugin, manifest, rows)
+    local selectable_count = 0
+    local selected_count = 0
+    for row_index = 1, #(rows or {}) do
+        local row = rows[row_index]
+        if row.openable and selectable(manifest, row.position) then
+            selectable_count = selectable_count + 1
+            if ChapterListing.isSelected(plugin, manifest, row.position) then
+                selected_count = selected_count + 1
+            end
+        end
+    end
+    return {
+        selectable_count = selectable_count,
+        selected_count = selected_count,
+        any_selected = selected_count > 0,
+        all_selected = selectable_count > 0
+            and selected_count == selectable_count,
+    }
+end
+
 return ChapterListing

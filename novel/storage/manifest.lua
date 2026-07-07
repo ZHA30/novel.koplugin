@@ -300,6 +300,39 @@ function Manifest:markRead(manifest, position, read)
     return true
 end
 
+function Manifest:markReadMany(manifest, positions, read)
+    if type(manifest) ~= "table" or not manifest.book_id then
+        return nil, "manifest is required", 0
+    end
+
+    local changed = 0
+    local seen = {}
+    local read_value = read ~= false
+    local timestamp = now()
+    for position_index = 1, #(positions or {}) do
+        local position = tonumber(positions[position_index])
+        if position and not seen[position] then
+            seen[position] = true
+            local chapter = manifest.chapters and manifest.chapters[position]
+            if chapter then
+                chapter.read = read_value
+                chapter.read_at = timestamp
+                changed = changed + 1
+            end
+        end
+    end
+
+    if changed == 0 then
+        return self.normalizeManifest(manifest), nil, 0
+    end
+
+    local saved, err = self:save(manifest)
+    if not saved then
+        return nil, err, changed
+    end
+    return saved, nil, changed
+end
+
 function Manifest.deleteStorage()
     local ok, ffi_util = pcall(require, "ffi/util")
     if ok and ffi_util and ffi_util.purgeDir then

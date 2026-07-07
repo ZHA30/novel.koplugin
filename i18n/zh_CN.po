@@ -87,6 +87,27 @@ msgstr "上一页"
 msgid "Back"
 msgstr "返回"
 
+msgid "Continue"
+msgstr "继续"
+
+msgid "Mark as read"
+msgstr "标记为已读"
+
+msgid "Download"
+msgstr "下载"
+
+msgid "Download is not implemented."
+msgstr "下载功能尚未实现。"
+
+msgid "Delete"
+msgstr "删除"
+
+msgid "Delete is not implemented."
+msgstr "删除功能尚未实现。"
+
+msgid "Select"
+msgstr "选择"
+
 msgid "Exit"
 msgstr "退出"
 

@@ -2,6 +2,7 @@ local _ = require("novel.i18n")
 local ChapterListing = require("novel.ui.chapters.listing")
 local Dialog = require("novel.ui.widget.dialog")
 local HomeShell = require("novel.ui.widget.homeshell")
+local Manifest = require("novel.storage.manifest")
 local ShellPages = require("novel.ui.shellpages")
 local ShellRoutes = require("novel.ui.shellroutes")
 local ShellSession = require("novel.ui.shellsession")
@@ -123,27 +124,133 @@ local function backAction(plugin)
     }
 end
 
-local function replaceChapterState(plugin, route, filter, sort)
-    local manifest = route and route.manifest
-    if not manifest then
-        return
-    end
-    Shell.replace(plugin, ShellRoutes.chapters{
+local function chapterRoute(route, manifest, filter, sort)
+    return ShellRoutes.chapters{
         tab = route.tab,
         source = route.source or manifest.source,
         book = route.book or manifest.book,
         manifest = manifest,
         filter = filter,
         sort = sort,
-    })
+    }
 end
 
-local function chapterActions(plugin, route)
+local function replaceChapterManifest(plugin, route, manifest, filter, sort)
+    if not manifest then
+        return
+    end
+    Shell.replace(plugin, chapterRoute(route, manifest, filter, sort))
+end
+
+local function replaceChapterState(plugin, route, filter, sort)
+    replaceChapterManifest(plugin, route, route and route.manifest, filter, sort)
+end
+
+local function chapterState(plugin, route)
     local manifest = route and route.manifest
     local filter, sort = ChapterListing.resolveState(plugin, manifest, {
         filter = route and route.filter,
         sort = route and route.sort,
     })
+    return manifest, filter, sort
+end
+
+local function resumeChapter(plugin, route)
+    local manifest = route and route.manifest
+    if not manifest then
+        return
+    end
+    local position = tonumber(manifest.current_position) or 1
+    local ChapterOpen = require("novel.reader.chapteropen")
+    ChapterOpen.open(plugin, manifest, position, {
+        from_reader = plugin.ui and plugin.ui.document ~= nil,
+    })
+end
+
+local function markSelectedRead(plugin, route, manifest, filter, sort,
+    selected_positions)
+    if #selected_positions == 0 then
+        return
+    end
+    local manifest_store = Manifest:new()
+    local current_manifest = manifest_store:load(manifest.book_id) or manifest
+    local updated_manifest, err = manifest_store:markReadMany(
+        current_manifest,
+        selected_positions,
+        true
+    )
+    if not updated_manifest then
+        Dialog.message(Dialog.failureMessage(err))
+        return
+    end
+    ChapterListing.clearSelected(plugin, updated_manifest)
+    replaceChapterManifest(plugin, route, updated_manifest, filter, sort)
+end
+
+local function chapterTopActions(plugin, route)
+    local manifest, filter, sort = chapterState(plugin, route)
+    if not manifest then
+        return {}
+    end
+    local rows = ChapterListing.buildRows(manifest, filter, sort)
+    local selection = ChapterListing.selectionStateForRows(plugin, manifest, rows)
+    local selection_mode = ChapterListing.isSelectionMode(plugin, manifest)
+    local selected_positions = ChapterListing.selectedPositions(plugin, manifest)
+    return {
+        {
+            key = "mark_read",
+            text = _("Mark as read"),
+            icon = "check-check",
+            enabled = #selected_positions > 0,
+            callback = function()
+                markSelectedRead(
+                    plugin,
+                    route,
+                    manifest,
+                    filter,
+                    sort,
+                    selected_positions
+                )
+            end,
+        },
+        {
+            key = "download",
+            text = _("Download"),
+            icon = "arrow-down-to-line",
+            enabled = #selected_positions > 0,
+            callback = function()
+                Dialog.message(_("Download is not implemented."))
+            end,
+        },
+        {
+            key = "delete",
+            text = _("Delete"),
+            icon = "trash-2",
+            enabled = #selected_positions > 0,
+            callback = function()
+                Dialog.message(_("Delete is not implemented."))
+            end,
+        },
+        {
+            key = "select",
+            text = _("Select"),
+            icon = selection_mode and "square-check" or "square",
+            active = selection_mode,
+            enabled = selection.selectable_count > 0,
+            callback = function()
+                ChapterListing.setSelectionMode(
+                    plugin,
+                    manifest,
+                    not selection_mode
+                )
+                Shell.replace(plugin, route)
+            end,
+        },
+    }
+end
+
+local function chapterActions(plugin, route)
+    local manifest, filter, sort = chapterState(plugin, route)
     local unread = filter == ChapterListing.FILTER_UNREAD
     local descending = sort == ChapterListing.SORT_DESCENDING
     return {
@@ -173,6 +280,15 @@ local function chapterActions(plugin, route)
                     and ChapterListing.SORT_ASCENDING
                     or ChapterListing.SORT_DESCENDING
                 replaceChapterState(plugin, route, filter, next_sort)
+            end,
+        },
+        {
+            key = "continue",
+            text = _("Continue"),
+            icon = "circle-play",
+            enabled = manifest ~= nil and #(manifest.chapters or {}) > 0,
+            callback = function()
+                resumeChapter(plugin, route)
             end,
         },
         backAction(plugin),
@@ -220,6 +336,13 @@ local function bottomActions(plugin, route, shell_widget)
         return searchResultsActions(plugin, route)
     end
     return listActions(plugin, route)
+end
+
+local function topActions(plugin, route)
+    if route and route.key == "chapters" and route.manifest then
+        return chapterTopActions(plugin, route)
+    end
+    return {}
 end
 
 local function currentPage(plugin)
@@ -289,6 +412,9 @@ function Shell.show(plugin, options)
         end,
         bottom_actions_builder = function(shell_widget)
             return bottomActions(plugin, page, shell_widget)
+        end,
+        top_actions_builder = function()
+            return topActions(plugin, page)
         end,
         content_builder = function(shell_widget)
             return buildContent(shell_widget, plugin, page)

@@ -38,6 +38,10 @@ local HomeListItem = InputContainer:extend{
     item = nil,
     width = 0,
     callback = nil,
+    leading_action_callback = nil,
+    leading_action_ref = nil,
+    trailing_action_callbacks = nil,
+    trailing_action_refs = nil,
     action_buttons = nil,
     action_refs = nil,
 }
@@ -46,6 +50,29 @@ local function clean(value)
     value = tostring(value or "")
     value = value:gsub("%s+", " ")
     return value:match("^%s*(.-)%s*$") or ""
+end
+
+local function explicitBool(value, fallback)
+    if value ~= nil then
+        return value == true
+    end
+    return fallback
+end
+
+local function trailingActions(item)
+    if type(item.trailing_actions) == "table" then
+        return item.trailing_actions
+    end
+    if item.trailing_icon then
+        return {
+            {
+                icon = item.trailing_icon,
+                dim = item.trailing_icon_dim,
+                callback = item.trailing_icon_callback,
+            },
+        }
+    end
+    return {}
 end
 
 local function bookRowHeight(item)
@@ -134,16 +161,49 @@ function HomeListItem:init()
     if item.icon then
         icon_widget = Icons.widget(item.icon, {
             size = ROW_ICON_SIZE,
-            dim = dim,
+            dim = explicitBool(item.icon_dim, dim),
         })
         icon_width = ROW_ICON_SIZE + ROW_ICON_GAP
+        if type(item.icon_callback) == "function" then
+            self.leading_action_callback = item.icon_callback
+        end
+    end
+
+    local trailing_specs = trailingActions(item)
+    local trailing_icons = {}
+    local trailing_actions_width = 0
+    self.trailing_action_callbacks = {}
+    self.trailing_action_refs = {}
+    for action_index = 1, #trailing_specs do
+        local action = trailing_specs[action_index] or {}
+        if action.icon then
+            table.insert(trailing_icons, {
+                icon = Icons.widget(action.icon, {
+                    size = ROW_ICON_SIZE,
+                    dim = explicitBool(action.dim, dim),
+                }),
+                callback = action.callback,
+            })
+            trailing_actions_width = trailing_actions_width + ROW_ICON_SIZE
+            if #trailing_icons > 1 then
+                trailing_actions_width = trailing_actions_width + ROW_ICON_GAP
+            end
+        end
+    end
+
+    local right_content_width = mandatory_width
+    if mandatory_widget and #trailing_icons > 0 then
+        right_content_width = right_content_width + ROW_ICON_GAP
+    end
+    if #trailing_icons > 0 then
+        right_content_width = right_content_width + trailing_actions_width
     end
 
     local left_padding = ROW_HORIZONTAL_PADDING + (tonumber(item.indent) or 0) * ROW_INDENT
     local right_padding = ROW_HORIZONTAL_PADDING
     local text_width = math.max(
         Screen:scaleBySize(80),
-        self.width - left_padding - right_padding - icon_width - mandatory_width
+        self.width - left_padding - right_padding - icon_width - right_content_width
     )
 
     local title_widget = TextBoxWidget:new{
@@ -191,6 +251,47 @@ function HomeListItem:init()
         w = self.width,
         h = row_height,
     }
+    if self.leading_action_callback then
+        self.leading_action_ref = {
+            x = left_padding,
+            y = 0,
+            w = icon_width,
+            h = row_height,
+        }
+    end
+
+    local trailing_group
+    if #trailing_icons > 0 then
+        trailing_group = HorizontalGroup:new{}
+        local trailing_x = self.width - right_padding - trailing_actions_width
+        for action_index = 1, #trailing_icons do
+            local action = trailing_icons[action_index]
+            if type(action.callback) == "function" then
+                table.insert(self.trailing_action_callbacks, action.callback)
+                table.insert(self.trailing_action_refs, {
+                    x = trailing_x,
+                    y = 0,
+                    w = ROW_ICON_SIZE + (action_index == #trailing_icons
+                        and right_padding or ROW_ICON_GAP),
+                    h = row_height,
+                })
+            end
+            table.insert(trailing_group, CenterContainer:new{
+                dimen = Geom:new{
+                    w = ROW_ICON_SIZE,
+                    h = row_height,
+                },
+                action.icon,
+            })
+            trailing_x = trailing_x + ROW_ICON_SIZE
+            if action_index < #trailing_icons then
+                table.insert(trailing_group, HorizontalSpan:new{
+                    width = ROW_ICON_GAP,
+                })
+                trailing_x = trailing_x + ROW_ICON_GAP
+            end
+        end
+    end
 
     local left_group = HorizontalGroup:new{
         HorizontalSpan:new{
@@ -212,15 +313,25 @@ function HomeListItem:init()
             left_group,
         },
     }
-    if mandatory_widget then
+    if mandatory_widget or trailing_group then
+        local right_group = HorizontalGroup:new{}
+        if mandatory_widget then
+            table.insert(right_group, mandatory_widget)
+        end
+        if mandatory_widget and trailing_group then
+            table.insert(right_group, HorizontalSpan:new{
+                width = ROW_ICON_GAP,
+            })
+        end
+        if trailing_group then
+            table.insert(right_group, trailing_group)
+        end
+        table.insert(right_group, HorizontalSpan:new{
+            width = right_padding,
+        })
         table.insert(row, RightContainer:new{
             dimen = self.dimen:copy(),
-            HorizontalGroup:new{
-                mandatory_widget,
-                HorizontalSpan:new{
-                    width = right_padding,
-                },
-            },
+            right_group,
         })
     end
 
@@ -260,7 +371,49 @@ function HomeListItem:getActionAt(ges)
     return nil
 end
 
+function HomeListItem:getLeadingActionAt(ges)
+    local ref = self.leading_action_ref
+    if not ges or not ges.pos or not self.dimen or not ref then
+        return nil
+    end
+    local local_x = ges.pos.x - self.dimen.x
+    local local_y = ges.pos.y - self.dimen.y
+    if local_x >= ref.x and local_x < ref.x + ref.w
+        and local_y >= ref.y and local_y < ref.y + ref.h then
+        return self.leading_action_callback
+    end
+    return nil
+end
+
+function HomeListItem:getTrailingActionAt(ges)
+    if not ges or not ges.pos or not self.dimen
+        or type(self.trailing_action_refs) ~= "table" then
+        return nil
+    end
+    local local_x = ges.pos.x - self.dimen.x
+    local local_y = ges.pos.y - self.dimen.y
+    for action_index = 1, #self.trailing_action_refs do
+        local ref = self.trailing_action_refs[action_index]
+        if local_x >= ref.x and local_x < ref.x + ref.w
+            and local_y >= ref.y and local_y < ref.y + ref.h then
+            return self.trailing_action_callbacks
+                and self.trailing_action_callbacks[action_index]
+        end
+    end
+    return nil
+end
+
 function HomeListItem:onTapSelect(_, ges)
+    local leading_callback = self:getLeadingActionAt(ges)
+    if leading_callback then
+        leading_callback()
+        return true
+    end
+    local trailing_callback = self:getTrailingActionAt(ges)
+    if trailing_callback then
+        trailing_callback()
+        return true
+    end
     local action = self:getActionAt(ges)
     if action and type(action.callback) == "function" then
         action.callback()

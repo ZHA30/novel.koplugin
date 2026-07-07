@@ -130,6 +130,12 @@ function ShellRoutes.searchResults(args)
 end
 
 function ShellRoutes.title(route)
+    if route and route.key == "bookshelf" then
+        return _("Bookshelf")
+    end
+    if route and route.key == "discover" then
+        return _("Discover")
+    end
     if route and route.key == "search_sources" then
         return _("Search")
     end

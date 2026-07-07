@@ -6,12 +6,15 @@ local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
+local HorizontalSpan = require("ui/widget/horizontalspan")
 local Icons = require("novel.icons")
 local InputContainer = require("ui/widget/container/inputcontainer")
+local LeftContainer = require("ui/widget/container/leftcontainer")
 local LineWidget = require("ui/widget/linewidget")
+local RightContainer = require("ui/widget/container/rightcontainer")
 local Size = require("ui/size")
+local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
-local TitleBar = require("ui/widget/titlebar")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
@@ -20,6 +23,13 @@ local Screen = Device.screen
 local Input = Device.input
 
 local BOTTOM_BAR_HEIGHT = Screen:scaleBySize(72)
+local TOP_BAR_HEIGHT = Screen:scaleBySize(56)
+local TOP_BAR_PADDING_H = Size.padding.large
+local TOP_TITLE_SIZE = 26
+local TOP_TITLE_MIN_SIZE = 20
+local TOP_TITLE_MULTILINE_LINE_HEIGHT = 0.1
+local TOP_TITLE_MULTILINE_LINES = 2
+local TOP_ACTION_SIZE = TOP_BAR_HEIGHT
 local CONTENT_ICON_SIZE = Screen:scaleBySize(72)
 local ACTION_ICON_SIZE = Screen:scaleBySize(24)
 local ACTION_LABEL_SIZE = 14
@@ -125,6 +135,56 @@ function ShellActionButton:onTapSelect()
     return true
 end
 
+local ShellTopActionButton = InputContainer:extend{
+    key = nil,
+    icon = nil,
+    dim = false,
+    enabled = true,
+    width = TOP_ACTION_SIZE,
+    height = TOP_BAR_HEIGHT,
+    callback = nil,
+}
+
+function ShellTopActionButton:init()
+    local enabled = self.enabled ~= false
+    local icon = Icons.widget(self.icon, {
+        size = ACTION_ICON_SIZE,
+        dim = not enabled or self.dim == true,
+    })
+
+    self.dimen = Geom:new{
+        x = 0,
+        y = 0,
+        w = self.width,
+        h = self.height,
+    }
+    self[1] = FrameContainer:new{
+        background = Blitbuffer.COLOR_WHITE,
+        bordersize = 0,
+        padding = 0,
+        margin = 0,
+        CenterContainer:new{
+            dimen = self.dimen:copy(),
+            icon,
+        },
+    }
+    self.ges_events = {
+        TapSelect = {
+            GestureRange:new{
+                ges = "tap",
+                range = self.dimen,
+            },
+        },
+    }
+end
+
+function ShellTopActionButton:onTapSelect()
+    if self.enabled ~= false and self.callback then
+        self.callback(self.key)
+    end
+    return true
+end
+
 local HomeShell = InputContainer:extend{
     is_borderless = true,
     title = "",
@@ -136,6 +196,8 @@ local HomeShell = InputContainer:extend{
     next_page_callback = nil,
     bottom_actions = nil,
     bottom_actions_builder = nil,
+    top_actions = nil,
+    top_actions_builder = nil,
     content_builder = nil,
     left_icon = nil,
     left_callback = nil,
@@ -151,6 +213,131 @@ local function activeTabSpec(self)
         end
     end
     return self.tabs and self.tabs[1] or nil
+end
+
+function HomeShell:buildTopActions()
+    local group = HorizontalGroup:new{}
+    for index = 1, #(self.top_actions or {}) do
+        local action = self.top_actions[index]
+        table.insert(group, ShellTopActionButton:new{
+            key = action.key,
+            icon = action.icon,
+            dim = action.dim == true,
+            enabled = action.enabled ~= false,
+            callback = function()
+                if action.callback then
+                    action.callback(action.key)
+                end
+            end,
+        })
+    end
+    return group
+end
+
+function HomeShell:buildTopTitle(width)
+    local title_text = self.title or ""
+    if width <= 0 or title_text == "" then
+        return HorizontalSpan:new{ width = 0 }
+    end
+
+    local min_size = math.min(TOP_TITLE_MIN_SIZE, TOP_TITLE_SIZE)
+    for font_size = TOP_TITLE_SIZE, min_size, -1 do
+        local title = TextWidget:new{
+            text = title_text,
+            face = Font:getFace("cfont", font_size),
+            bold = true,
+            padding = 0,
+        }
+        if title:getSize().w <= width then
+            return title
+        end
+        title:free(true)
+    end
+
+    local multiline_size = math.min(
+        min_size,
+        TextBoxWidget:getFontSizeToFitHeight(
+            TOP_BAR_HEIGHT,
+            TOP_TITLE_MULTILINE_LINES,
+            TOP_TITLE_MULTILINE_LINE_HEIGHT,
+            "cfont",
+            true
+        )
+    )
+    local multiline_face = Font:getFace("cfont", multiline_size)
+    local line_height_px = math.floor(
+        (1 + TOP_TITLE_MULTILINE_LINE_HEIGHT) * multiline_face.size + 0.5
+    )
+
+    return TextBoxWidget:new{
+        text = title_text,
+        face = multiline_face,
+        bold = true,
+        width = width,
+        height = line_height_px * TOP_TITLE_MULTILINE_LINES,
+        line_height = TOP_TITLE_MULTILINE_LINE_HEIGHT,
+        height_overflow_show_ellipsis = true,
+        alignment = "left",
+    }
+end
+
+function HomeShell:buildTopBar()
+    local width = self.dimen.w
+    if type(self.top_actions_builder) == "function" then
+        self.top_actions = self.top_actions_builder(self)
+    end
+
+    local actions = self:buildTopActions()
+    local actions_width = actions:getSize().w
+    local action_area_width = math.min(width, actions_width + TOP_BAR_PADDING_H)
+    local title_area_width = width - action_area_width
+    local title_width = math.max(title_area_width - TOP_BAR_PADDING_H, 0)
+    local title = self:buildTopTitle(title_width)
+    local title_group = HorizontalGroup:new{}
+    if title_width > 0 then
+        table.insert(title_group, HorizontalSpan:new{
+            width = TOP_BAR_PADDING_H,
+        })
+        table.insert(title_group, title)
+    end
+
+    return FrameContainer:new{
+        background = Blitbuffer.COLOR_WHITE,
+        bordersize = 0,
+        padding = 0,
+        margin = 0,
+        VerticalGroup:new{
+            align = "left",
+            HorizontalGroup:new{
+                LeftContainer:new{
+                    dimen = Geom:new{
+                        w = title_area_width,
+                        h = TOP_BAR_HEIGHT,
+                    },
+                    title_group,
+                },
+                RightContainer:new{
+                    dimen = Geom:new{
+                        w = action_area_width,
+                        h = TOP_BAR_HEIGHT,
+                    },
+                    HorizontalGroup:new{
+                        actions,
+                        HorizontalSpan:new{
+                            width = TOP_BAR_PADDING_H,
+                        },
+                    },
+                },
+            },
+            LineWidget:new{
+                dimen = Geom:new{
+                    w = width,
+                    h = Size.line.thin,
+                },
+                background = Blitbuffer.COLOR_DARK_GRAY,
+            },
+        },
+    }
 end
 
 function HomeShell:buildContent()
@@ -256,22 +443,12 @@ function HomeShell:init()
         h = Screen:getHeight(),
     }
 
-    self.title_bar = TitleBar:new{
-        width = self.dimen.w,
-        fullscreen = true,
-        align = "center",
-        title = self.title,
-        title_h_padding = Size.padding.large,
-        button_padding = Screen:scaleBySize(11),
-        left_icon = self.left_icon,
-        left_icon_tap_callback = function()
-            self:onLeftButtonTap()
-        end,
-        show_parent = self,
-    }
+    local title_bar = self:buildTopBar()
+    self.title_bar = title_bar
 
+    local bottom_bar_height = BOTTOM_BAR_HEIGHT + Size.line.thin
     local body_height = math.max(
-        self.dimen.h - self.title_bar:getHeight() - BOTTOM_BAR_HEIGHT,
+        self.dimen.h - title_bar:getSize().h - bottom_bar_height,
         0
     )
     self.body_width = self.dimen.w
@@ -289,7 +466,7 @@ function HomeShell:init()
         radius = 0,
         VerticalGroup:new{
             align = "left",
-            self.title_bar,
+            title_bar,
             CenterContainer:new{
                 dimen = Geom:new{
                     w = self.dimen.w,

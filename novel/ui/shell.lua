@@ -19,7 +19,6 @@ local function homeActions(plugin)
             text = _("Bookshelf"),
             icon = "bookshelf",
             active = active_tab == "bookshelf",
-            dim = active_tab ~= "bookshelf",
             callback = function()
                 Shell.showTab(plugin, "bookshelf")
             end,
@@ -29,7 +28,6 @@ local function homeActions(plugin)
             text = _("Discover"),
             icon = "discover",
             active = active_tab == "discover",
-            dim = active_tab ~= "discover",
             callback = function()
                 Shell.showTab(plugin, "discover")
             end,
@@ -39,7 +37,6 @@ local function homeActions(plugin)
             text = _("More"),
             icon = "circle-ellipsis",
             active = active_tab == "settings",
-            dim = active_tab ~= "settings",
             callback = function()
                 Shell.showTab(plugin, "settings")
             end,
@@ -464,16 +461,14 @@ local function scheduleRender(plugin)
     if not plugin then
         return
     end
-    if plugin.novel_shell_render_scheduled then
-        return
-    end
+    plugin.novel_shell_render_token = (plugin.novel_shell_render_token or 0) + 1
     plugin.novel_shell_render_scheduled = true
-    local render_token = plugin.novel_shell_render_token or 0
+    local render_token = plugin.novel_shell_render_token
     UIManager:nextTick(function()
-        plugin.novel_shell_render_scheduled = nil
         if plugin.novel_shell_render_token ~= render_token then
             return
         end
+        plugin.novel_shell_render_scheduled = nil
         if plugin and plugin.app then
             if plugin.detail_viewer and UIManager:isWidgetShown(plugin.detail_viewer) then
                 plugin.novel_shell_render_pending = true
@@ -485,6 +480,11 @@ local function scheduleRender(plugin)
     end)
 end
 
+local function cancelScheduledRender(plugin)
+    plugin.novel_shell_render_scheduled = nil
+    plugin.novel_shell_render_token = (plugin.novel_shell_render_token or 0) + 1
+end
+
 local function buildContent(shell, plugin, page)
     return ShellPages.build(shell, plugin, page, Shell)
 end
@@ -493,6 +493,7 @@ function Shell.show(plugin, options)
     if not plugin or not plugin.app then
         return
     end
+    cancelScheduledRender(plugin)
     options = options or {}
     if options.active_tab then
         ShellSession.setActiveTab(plugin, options.active_tab)
@@ -532,12 +533,14 @@ function Shell.show(plugin, options)
         end,
     }
     Dialog.showWidget(plugin, "novel_home", home)
+    if options.force_repaint then
+        UIManager:forceRePaint()
+    end
 end
 
 function Shell.close(plugin)
     plugin.novel_shell_render_pending = nil
-    plugin.novel_shell_render_scheduled = nil
-    plugin.novel_shell_render_token = (plugin.novel_shell_render_token or 0) + 1
+    cancelScheduledRender(plugin)
     ShellSession.resetStack(plugin)
     Dialog.closeWidget(plugin, "novel_home")
 end
@@ -556,7 +559,8 @@ end
 function Shell.showTab(plugin, active_tab)
     ShellSession.setActiveTab(plugin, active_tab)
     ShellSession.resetStack(plugin)
-    scheduleRender(plugin)
+    cancelScheduledRender(plugin)
+    Shell.show(plugin)
 end
 
 function Shell.push(plugin, route)

@@ -35,6 +35,22 @@ local function clearRestoreAction(action)
     end
 end
 
+local function unscheduleRestoreAction()
+    if state.restore_action then
+        UIManager:unschedule(state.restore_action)
+        state.restore_action = nil
+    end
+end
+
+local function clearRestoreState()
+    unscheduleRestoreAction()
+    state.entry_context = nil
+    state.pending_restore = nil
+    state.close_request_file = nil
+    state.plugin_name = nil
+    state.restore_retry_count = 0
+end
+
 local function cloneState(snapshot)
     return ShellSession.clone(snapshot)
 end
@@ -44,6 +60,7 @@ function ReturnController.captureEntry(plugin)
         return false
     end
 
+    clearRestoreState()
     state.plugin_name = pluginKey(plugin)
     state.entry_context = {
         shell_state = ShellSession.snapshot(plugin),
@@ -95,9 +112,14 @@ function ReturnController.restoreNow(plugin)
     local pending = state.pending_restore
     state.pending_restore = nil
     state.entry_context = nil
+    state.close_request_file = nil
+    state.plugin_name = nil
+    state.restore_retry_count = 0
 
     ShellSession.restore(plugin, pending.shell_state)
-    Shell.show(plugin)
+    Shell.show(plugin, {
+        force_repaint = true,
+    })
     return true
 end
 
@@ -123,7 +145,7 @@ function ReturnController.scheduleRestoreFromLoadedPlugin()
             state.restore_action = action
             UIManager:nextTick(action)
         else
-            state.restore_retry_count = 0
+            clearRestoreState()
         end
     end
 
@@ -133,15 +155,7 @@ function ReturnController.scheduleRestoreFromLoadedPlugin()
 end
 
 function ReturnController.clear()
-    if state.restore_action then
-        UIManager:unschedule(state.restore_action)
-    end
-    state.entry_context = nil
-    state.pending_restore = nil
-    state.restore_action = nil
-    state.close_request_file = nil
-    state.plugin_name = nil
-    state.restore_retry_count = 0
+    clearRestoreState()
 end
 
 return ReturnController

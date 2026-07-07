@@ -58,7 +58,9 @@ function ActionIconButton:init()
         TapAction = {
             GestureRange:new{
                 ges = "tap",
-                range = self.dimen,
+                range = function()
+                    return self.dimen
+                end,
             },
         },
     }

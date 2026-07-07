@@ -59,7 +59,9 @@ function DetailIconButton:init()
         TapSelect = {
             GestureRange:new{
                 ges = "tap",
-                range = self.dimen,
+                range = function()
+                    return self.dimen
+                end,
             },
         },
     }

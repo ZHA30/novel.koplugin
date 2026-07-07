@@ -126,7 +126,9 @@ function HomeListItem:init()
             TapSelect = {
                 GestureRange:new{
                     ges = "tap",
-                    range = self.dimen,
+                    range = function()
+                        return self.dimen
+                    end,
                 },
             },
         }
@@ -347,7 +349,9 @@ function HomeListItem:init()
         TapSelect = {
             GestureRange:new{
                 ges = "tap",
-                range = self.dimen,
+                range = function()
+                    return self.dimen
+                end,
             },
         },
     }
@@ -672,7 +676,9 @@ function HomeList.new(_, args)
             Swipe = {
                 GestureRange:new{
                     ges = "swipe",
-                    range = widget.dimen,
+                    range = function()
+                        return widget.dimen
+                    end,
                 },
             },
         }

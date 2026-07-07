@@ -1,3 +1,5 @@
+-- luacheck: globals G_reader_settings
+
 local _ = require("novel.i18n")
 local ChapterDoc = require("novel.reader.chapterdoc")
 local ReturnController = require("novel.reader.returncontroller")

@@ -122,7 +122,9 @@ function ShellActionButton:init()
         TapSelect = {
             GestureRange:new{
                 ges = "tap",
-                range = self.dimen,
+                range = function()
+                    return self.dimen
+                end,
             },
         },
     }
@@ -173,7 +175,9 @@ function ShellTopActionButton:init()
         TapSelect = {
             GestureRange:new{
                 ges = "tap",
-                range = self.dimen,
+                range = function()
+                    return self.dimen
+                end,
             },
         },
     }
@@ -181,7 +185,9 @@ function ShellTopActionButton:init()
         self.ges_events.HoldSelect = {
             GestureRange:new{
                 ges = "hold",
-                range = self.dimen,
+                range = function()
+                    return self.dimen
+                end,
             },
         }
     end

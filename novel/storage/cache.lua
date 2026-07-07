@@ -23,6 +23,7 @@ local Cache = {
     default_max_records = 10000,
     default_max_bytes = 20 * 1024 * 1024,
     access_flush_interval = 60 * 60,
+    prune_interval = 15 * 60,
     busy_timeout = 5000,
 }
 Cache.path = Cache.legacy_path
@@ -546,17 +547,13 @@ function Cache:set(kind, key, value, options)
     }
 
     local ok = self:withDB(function(db)
-        return self:insertRecord(db, kind, key, record)
+        local inserted = self:insertRecord(db, kind, key, record)
+        if inserted and options.prune ~= false then
+            Cache.pruneIfDueDB(db, options)
+        end
+        return inserted
     end)
-    if not ok then
-        return false
-    end
-
-    if options.prune ~= false then
-        self:pruneExpired()
-        self:pruneLRU(maxRecordsForOptions(options), maxBytesForOptions(options))
-    end
-    return true
+    return ok == true
 end
 
 function Cache:invalidate(kind, key)
@@ -622,76 +619,102 @@ function Cache:invalidateByOwner(owner, kinds)
     end) or 0
 end
 
-function Cache:pruneExpired()
-    return self:withDB(function(db)
-        local timestamp = now()
-        local count = tonumber(db:rowexec(string.format([[
-            SELECT COUNT(*) FROM cache_records
+function Cache.pruneExpiredDB(db)
+    local timestamp = now()
+    local count = tonumber(db:rowexec(string.format([[
+        SELECT COUNT(*) FROM cache_records
+        WHERE schema_version != %d
+           OR value_blob IS NULL
+           OR (expires_at IS NOT NULL AND expires_at < %d);
+    ]], Cache.schema_version, timestamp))) or 0
+    if count > 0 then
+        db:exec(string.format([[
+            DELETE FROM cache_records
             WHERE schema_version != %d
                OR value_blob IS NULL
                OR (expires_at IS NOT NULL AND expires_at < %d);
-        ]], Cache.schema_version, timestamp))) or 0
-        if count > 0 then
-            db:exec(string.format([[
-                DELETE FROM cache_records
-                WHERE schema_version != %d
-                   OR value_blob IS NULL
-                   OR (expires_at IS NOT NULL AND expires_at < %d);
-            ]], Cache.schema_version, timestamp))
-        end
-        return count
+        ]], Cache.schema_version, timestamp))
+    end
+    return count
+end
+
+function Cache:pruneExpired()
+    return self:withDB(function(db)
+        return Cache.pruneExpiredDB(db)
     end) or 0
 end
 
-function Cache:pruneLRU(max_records, max_bytes)
+function Cache.pruneLRUDB(db, max_records, max_bytes)
     max_records = tonumber(max_records)
     max_bytes = tonumber(max_bytes)
     if not max_records and not max_bytes then
         return 0
     end
 
-    return self:withDB(function(db)
-        local removed = 0
-        local delete_stmt = db:prepare([[
-            DELETE FROM cache_records WHERE kind = ? AND key = ?;
+    local removed = 0
+    local delete_stmt = db:prepare([[
+        DELETE FROM cache_records WHERE kind = ? AND key = ?;
+    ]])
+
+    local function removeOldest()
+        local select_stmt = db:prepare([[
+            SELECT kind, key, blob_size FROM cache_records
+            ORDER BY last_accessed_at ASC, stored_at ASC
+            LIMIT 1;
         ]])
-
-        local function removeOldest()
-            local select_stmt = db:prepare([[
-                SELECT kind, key, blob_size FROM cache_records
-                ORDER BY last_accessed_at ASC, stored_at ASC
-                LIMIT 1;
-            ]])
-            local row = select_stmt:reset():step()
-            if not row then
-                return 0
-            end
-            delete_stmt:reset():bind(row[1], row[2]):step()
-            removed = removed + 1
-            return tonumber(row[3]) or 0
+        local row = select_stmt:reset():step()
+        if not row then
+            return 0
         end
+        delete_stmt:reset():bind(row[1], row[2]):step()
+        removed = removed + 1
+        return tonumber(row[3]) or 0
+    end
 
-        local record_count = tonumber(db:rowexec(
-            "SELECT COUNT(*) FROM cache_records;")) or 0
-        while max_records and max_records > 0 and record_count > max_records do
-            if removeOldest() == 0 and record_count <= 1 then
-                break
-            end
-            record_count = record_count - 1
+    local record_count = tonumber(db:rowexec(
+        "SELECT COUNT(*) FROM cache_records;")) or 0
+    while max_records and max_records > 0 and record_count > max_records do
+        if removeOldest() == 0 and record_count <= 1 then
+            break
         end
+        record_count = record_count - 1
+    end
 
-        local total_bytes = tonumber(db:rowexec(
-            "SELECT COALESCE(SUM(blob_size), 0) FROM cache_records;")) or 0
-        while max_bytes and max_bytes > 0 and total_bytes > max_bytes do
-            local removed_bytes = removeOldest()
-            if removed_bytes <= 0 then
-                break
-            end
-            total_bytes = total_bytes - removed_bytes
+    local total_bytes = tonumber(db:rowexec(
+        "SELECT COALESCE(SUM(blob_size), 0) FROM cache_records;")) or 0
+    while max_bytes and max_bytes > 0 and total_bytes > max_bytes do
+        local removed_bytes = removeOldest()
+        if removed_bytes <= 0 then
+            break
         end
+        total_bytes = total_bytes - removed_bytes
+    end
 
-        return removed
+    return removed
+end
+
+function Cache:pruneLRU(max_records, max_bytes)
+    return self:withDB(function(db)
+        return Cache.pruneLRUDB(db, max_records, max_bytes)
     end) or 0
+end
+
+function Cache.pruneIfDueDB(db, options)
+    options = options or {}
+    local timestamp = now()
+    local interval = tonumber(options.prune_interval) or Cache.prune_interval
+    local last_pruned = tonumber(getMeta(db, "last_pruned_at")) or 0
+    if options.prune ~= true
+        and interval > 0
+        and timestamp - last_pruned < interval then
+        return 0
+    end
+
+    local removed = Cache.pruneExpiredDB(db)
+    removed = removed + Cache.pruneLRUDB(db, maxRecordsForOptions(options),
+        maxBytesForOptions(options))
+    setMeta(db, "last_pruned_at", tostring(timestamp))
+    return removed
 end
 
 function Cache.deleteStorage()

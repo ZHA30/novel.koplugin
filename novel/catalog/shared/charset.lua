@@ -1,7 +1,20 @@
-local GB18030 = require("novel.catalog.shared.gb18030")
-local GBK = require("novel.catalog.shared.gbk")
-
 local Charset = {}
+local GB18030
+local GBK
+
+local function gbk()
+    if not GBK then
+        GBK = require("novel.catalog.shared.gbk")
+    end
+    return GBK
+end
+
+local function gb18030()
+    if not GB18030 then
+        GB18030 = require("novel.catalog.shared.gb18030")
+    end
+    return GB18030
+end
 
 local function trim(value)
     return tostring(value or ""):match("^%s*(.-)%s*$")
@@ -40,10 +53,10 @@ function Charset.toUTF8(value, charset)
 
     local normalized = normalize(charset)
     if normalized == "gbk" then
-        return GBK.toUTF8(value)
+        return gbk().toUTF8(value)
     end
     if normalized == "gb18030" then
-        return GB18030.toUTF8(value)
+        return gb18030().toUTF8(value)
     end
     return value, unsupported(charset)
 end
@@ -55,10 +68,10 @@ function Charset.fromUTF8(value, charset)
 
     local normalized = normalize(charset)
     if normalized == "gbk" then
-        return GBK.fromUTF8(value)
+        return gbk().fromUTF8(value)
     end
     if normalized == "gb18030" then
-        return GB18030.fromUTF8(value)
+        return gb18030().fromUTF8(value)
     end
     return value, unsupported(charset)
 end

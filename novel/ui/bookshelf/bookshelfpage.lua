@@ -2,7 +2,6 @@ local _ = require("novel.i18n")
 local BookshelfFlow = require("novel.ui.bookshelf.flow")
 local ChaptersFlow = require("novel.ui.chapters.flow")
 local ContentBuilder = require("novel.ui.contentbuilder")
-local Manifest = require("novel.storage.manifest")
 
 local BookshelfPage = {}
 
@@ -34,16 +33,19 @@ local function wholeNumber(value)
     return math.floor(value)
 end
 
-local function findCurrentSource(plugin, record)
-    local source_url = record.source_url or ""
+local function sourceIndex(plugin)
+    local index = {}
     local sources = plugin.app:getSourceStore():list()
-    for index = 1, #sources do
-        local source = sources[index]
-        if source.bookSourceUrl == source_url then
-            return source
-        end
+    for source_index = 1, #sources do
+        local source = sources[source_index]
+        index[source.bookSourceUrl or ""] = source
     end
-    return record.source
+    return index
+end
+
+local function findCurrentSource(sources, record)
+    local source_url = record.source_url or ""
+    return sources[source_url] or record.source
 end
 
 local function sourceTitle(record)
@@ -62,14 +64,9 @@ local function sourceTitle(record)
     return source_title
 end
 
-local function readChapterCount(record, manifest)
+local function readChapterCount(record)
     local current = record and record.current or nil
     local position = wholeNumber(current and current.chapter_position)
-    if position > 0 then
-        return position
-    end
-
-    position = wholeNumber(manifest and manifest.current_position)
     if position > 0 then
         return position
     end
@@ -82,7 +79,7 @@ local function readChapterCount(record, manifest)
     return 0
 end
 
-local function totalChapterCount(record, manifest)
+local function totalChapterCount(record)
     local book = record and record.book or {}
     local total = wholeNumber(book.totalChapterNum)
     if total > 0 then
@@ -93,16 +90,12 @@ local function totalChapterCount(record, manifest)
     if total > 0 then
         return total
     end
-    total = #(manifest and manifest.chapters or {})
-    if total > 0 then
-        return total
-    end
     return 0
 end
 
-local function subtitleSegments(record, manifest)
-    local total = totalChapterCount(record, manifest)
-    local read = readChapterCount(record, manifest)
+local function subtitleSegments(record)
+    local total = totalChapterCount(record)
+    local read = readChapterCount(record)
     if total > 0 and read > total then
         read = total
     end
@@ -132,17 +125,16 @@ function BookshelfPage.build(shell, plugin)
         return ContentBuilder.buildEmptyState(shell)
     end
 
-    local manifest_store = Manifest:new()
+    local sources = sourceIndex(plugin)
     local items = {}
     for index = 1, #records_list do
         local record = records_list[index]
-        local source = findCurrentSource(plugin, record)
-        local manifest = manifest_store:loadByBook(source, record.book)
+        local source = findCurrentSource(sources, record)
         items[index] = {
             text = title(record.book),
             book = record.book,
             source_title = record.source_name,
-            book_subtitle_segments = subtitleSegments(record, manifest),
+            book_subtitle_segments = subtitleSegments(record),
             action_buttons = {
                 {
                     id = "resume",

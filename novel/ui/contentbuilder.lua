@@ -68,7 +68,8 @@ function ContentBuilder.buildStatusContent(shell, title, message)
     )
 end
 
-function ContentBuilder.buildList(shell, items)
+function ContentBuilder.buildList(shell, items, options)
+    options = options or {}
     return HomeList:new{
         dimen = Geom:new{
             w = shell.body_width,
@@ -76,6 +77,8 @@ function ContentBuilder.buildList(shell, items)
         },
         show_parent = shell,
         items = items,
+        item_count = options.item_count,
+        item_at = options.item_at,
         page = shell.list_page,
         paginate = shell.paginate_lists,
         previous_page_callback = shell.previous_page_callback,

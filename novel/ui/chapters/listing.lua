@@ -159,28 +159,56 @@ function ChapterListing.resolveState(plugin, manifest, options)
 end
 
 function ChapterListing.buildRows(manifest, filter, sort)
+    local model = ChapterListing.buildModel(manifest, filter, sort)
     local rows = {}
+    for index = 1, model.count do
+        table.insert(rows, model.rowAt(index))
+    end
+    return rows, model.count
+end
+
+function ChapterListing.buildModel(manifest, filter, sort)
     local chapters = manifest and manifest.chapters or {}
-    local shown_count = 0
     local start_position = sort == ChapterListing.SORT_DESCENDING and #chapters or 1
     local end_position = sort == ChapterListing.SORT_DESCENDING and 1 or #chapters
     local step = sort == ChapterListing.SORT_DESCENDING and -1 or 1
+    local positions
 
-    for position = start_position, end_position, step do
-        local chapter = chapters[position]
-        if matchesFilter(filter, chapter) then
+    if filter ~= ChapterListing.FILTER_ALL then
+        positions = {}
+        for position = start_position, end_position, step do
+            local chapter = chapters[position]
+            if matchesFilter(filter, chapter) then
+                positions[#positions + 1] = position
+            end
+        end
+    end
+
+    local function positionAt(index)
+        if positions then
+            return positions[index]
+        end
+        if sort == ChapterListing.SORT_DESCENDING then
+            return #chapters - index + 1
+        end
+        return index
+    end
+
+    local count = positions and #positions or #chapters
+    return {
+        count = count,
+        rowAt = function(index)
+            local position = positionAt(index)
+            local chapter = chapters[position] or {}
             local openable = ChapterRecord.isOpenable(chapter)
-            shown_count = shown_count + 1
-            table.insert(rows, {
+            return {
                 position = position,
                 title = chapterTitle(chapter),
                 openable = openable,
                 dim = chapter.read == true or not openable,
-            })
-        end
-    end
-
-    return rows, shown_count
+            }
+        end,
+    }
 end
 
 return ChapterListing

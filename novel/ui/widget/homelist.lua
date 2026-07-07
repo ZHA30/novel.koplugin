@@ -336,18 +336,18 @@ local function entryHeightFor(item)
     return rowHeightFor(item) + Size.line.thin
 end
 
-local function buildEntries(items, content_width, start_index, end_index)
+local function buildEntries(get_item, item_count, content_width, start_index, end_index)
     local entries = {}
     start_index = math.max(1, tonumber(start_index) or 1)
-    end_index = math.min(#items, tonumber(end_index) or #items)
+    end_index = math.min(item_count, tonumber(end_index) or item_count)
     for index = start_index, end_index do
-        local item = items[index]
+        local item = get_item(index) or {}
         local row = HomeListItem:new{
             item = item,
             width = content_width,
             callback = item.callback,
         }
-        local separator = separatorFor(item, items[index + 1], content_width)
+        local separator = separatorFor(item, get_item(index + 1), content_width)
         table.insert(entries, {
             row = row,
             separator = separator,
@@ -357,14 +357,14 @@ local function buildEntries(items, content_width, start_index, end_index)
     return entries
 end
 
-local function paginateItems(items, height)
+local function paginateItems(get_item, item_count, height)
     local pages = {}
     local page_start = 1
     local page_height = 0
     height = math.max(1, tonumber(height) or 1)
 
-    for index = 1, #items do
-        local entry_height = entryHeightFor(items[index])
+    for index = 1, item_count do
+        local entry_height = entryHeightFor(get_item(index))
         if index > page_start and page_height + entry_height > height then
             table.insert(pages, {
                 first = page_start,
@@ -376,10 +376,10 @@ local function paginateItems(items, height)
         page_height = page_height + entry_height
     end
 
-    if #items > 0 then
+    if item_count > 0 then
         table.insert(pages, {
             first = page_start,
-            last = #items,
+            last = item_count,
         })
     end
     if #pages == 0 then
@@ -424,6 +424,12 @@ function HomeList.new(_, args)
     args = args or {}
     local dimen = args.dimen
     local items = args.items or {}
+    local item_count = tonumber(args.item_count) or #items
+    local get_item = type(args.item_at) == "function"
+        and args.item_at
+        or function(index)
+            return items[index]
+        end
     local paginate = args.paginate == true
     local content_width = paginate
         and dimen.w
@@ -433,7 +439,7 @@ function HomeList.new(_, args)
     }
 
     if not paginate then
-        local entries = buildEntries(items, content_width)
+        local entries = buildEntries(get_item, item_count, content_width)
         appendEntries(content, entries)
         local widget = ScrollableContainer:new{
             dimen = dimen,
@@ -450,17 +456,18 @@ function HomeList.new(_, args)
         return widget
     end
 
-    local pages = paginateItems(items, dimen.h)
+    local pages = paginateItems(get_item, item_count, dimen.h)
     local current_page = normalizedPage(args.page, #pages)
     local page = pages[current_page] or {}
-    local entries = buildEntries(items, content_width, page.first, page.last)
+    local entries = buildEntries(get_item, item_count, content_width,
+        page.first, page.last)
     appendEntries(content, entries)
 
     if type(args.on_page_info) == "function" then
         args.on_page_info({
             current_page = current_page,
             total_pages = #pages,
-            total_items = #items,
+            total_items = item_count,
             has_previous = current_page > 1,
             has_next = current_page < #pages,
         })

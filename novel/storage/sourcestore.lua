@@ -197,6 +197,7 @@ end
 function SourceStore:new()
     return setmetatable({
         settings = LuaSettings:open(SourceStore.state_path),
+        cache = nil,
     }, self)
 end
 
@@ -239,6 +240,18 @@ local function sourceFiles()
     return files
 end
 
+local function sourceSignature(files)
+    local parts = { tostring(#files) }
+    for file_index = 1, #files do
+        local path = files[file_index]
+        local attr = lfs.attributes(path) or {}
+        parts[#parts + 1] = path
+        parts[#parts + 1] = tostring(attr.modification or "")
+        parts[#parts + 1] = tostring(attr.size or "")
+    end
+    return table.concat(parts, "\n")
+end
+
 local function loadFile(path)
     local content, read_err = readFile(path)
     if not content then
@@ -275,9 +288,14 @@ local function applyState(source, states)
 end
 
 function SourceStore:listWithErrors()
+    local files = sourceFiles()
+    local signature = sourceSignature(files)
+    if self.cache and self.cache.signature == signature then
+        return self.cache.sources, self.cache.errors
+    end
+
     local sources, errors, index = {}, {}, {}
     local states = self:enabledStates()
-    local files = sourceFiles()
 
     for file_index = 1, #files do
         local imported, file_errors = loadFile(files[file_index])
@@ -298,6 +316,11 @@ function SourceStore:listWithErrors()
     end
 
     sortSources(sources)
+    self.cache = {
+        signature = signature,
+        sources = sources,
+        errors = errors,
+    }
     return sources, errors
 end
 
@@ -365,6 +388,7 @@ function SourceStore:setEnabled(book_source_url, enabled)
     states[book_source_url] = enabled == true
     self.settings:saveSetting("source_enabled", states)
     self.settings:flush()
+    self.cache = nil
     return true
 end
 

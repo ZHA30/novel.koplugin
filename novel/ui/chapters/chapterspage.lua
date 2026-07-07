@@ -19,28 +19,27 @@ function ChaptersPage.build(shell, plugin, route)
         filter = route.filter,
         sort = route.sort,
     })
-    local rows, shown_count = ChapterListing.buildRows(manifest, filter, sort)
-    if shown_count == 0 then
+    local model = ChapterListing.buildModel(manifest, filter, sort)
+    if model.count == 0 then
         return ContentBuilder.buildEmptyState(shell)
     end
 
-    local items = {}
-
-    for index = 1, #rows do
-        local row = rows[index]
-        table.insert(items, {
-            title = row.title,
-            dim = row.dim,
-            callback = row.openable and function()
-                ChapterOpen.open(plugin, manifest, row.position, {
-                    from_reader = plugin.ui and plugin.ui.document ~= nil,
-                    jump = "start",
-                })
-            end or nil,
-        })
-    end
-
-    return ContentBuilder.buildList(shell, items)
+    return ContentBuilder.buildList(shell, nil, {
+        item_count = model.count,
+        item_at = function(index)
+            local row = model.rowAt(index)
+            return {
+                title = row.title,
+                dim = row.dim,
+                callback = row.openable and function()
+                    ChapterOpen.open(plugin, manifest, row.position, {
+                        from_reader = plugin.ui and plugin.ui.document ~= nil,
+                        jump = "start",
+                    })
+                end or nil,
+            }
+        end,
+    })
 end
 
 return ChaptersPage

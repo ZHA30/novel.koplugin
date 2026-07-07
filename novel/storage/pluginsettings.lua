@@ -5,7 +5,7 @@ local PluginSettings = {
 }
 
 PluginSettings.defaults = {
-    schema_version = 2,
+    schema_version = 3,
     debug = {
         enabled = false,
         max_entries = 200,
@@ -13,11 +13,12 @@ PluginSettings.defaults = {
     cache = {
         enabled = true,
         chapter_content_enabled = true,
-        search_ttl_days = 0,
-        detail_ttl_days = 0,
-        toc_ttl_days = 0,
-        content_ttl_days = 0,
+        search_ttl_days = 1,
+        detail_ttl_days = 7,
+        toc_ttl_days = 1,
+        content_ttl_days = 14,
         max_metadata_records = 10000,
+        max_metadata_bytes = 20 * 1024 * 1024,
     },
     prefetch = {
         enabled = true,
@@ -26,9 +27,9 @@ PluginSettings.defaults = {
         timeout_seconds = 45,
     },
     storage = {
-        backend = "prototype",
+        backend = "sqlite",
         target_backend = "sqlite",
-        schema_version = 0,
+        schema_version = 1,
     },
     chapter_list = {
         books = {},
@@ -81,13 +82,36 @@ local function migrate(settings)
     end
 
     settings.cache = settings.cache or {}
-    settings.cache.chapter_content_enabled = settings.cache.chapter_content_enabled ~= false
-    settings.cache.search_ttl_days = 0
-    settings.cache.detail_ttl_days = 0
-    settings.cache.toc_ttl_days = 0
-    settings.cache.content_ttl_days = 0
-    settings.cache.max_metadata_records = settings.cache.max_metadata_records or 10000
-    settings.cleanup = nil
+    if version < 2 then
+        settings.cache.chapter_content_enabled = settings.cache.chapter_content_enabled ~= false
+        settings.cleanup = nil
+    end
+    if version < 3 then
+        settings.cache.search_ttl_days = settings.cache.search_ttl_days == 0
+            and PluginSettings.defaults.cache.search_ttl_days
+            or (settings.cache.search_ttl_days
+                or PluginSettings.defaults.cache.search_ttl_days)
+        settings.cache.detail_ttl_days = settings.cache.detail_ttl_days == 0
+            and PluginSettings.defaults.cache.detail_ttl_days
+            or (settings.cache.detail_ttl_days
+                or PluginSettings.defaults.cache.detail_ttl_days)
+        settings.cache.toc_ttl_days = settings.cache.toc_ttl_days == 0
+            and PluginSettings.defaults.cache.toc_ttl_days
+            or (settings.cache.toc_ttl_days
+                or PluginSettings.defaults.cache.toc_ttl_days)
+        settings.cache.content_ttl_days = settings.cache.content_ttl_days == 0
+            and PluginSettings.defaults.cache.content_ttl_days
+            or (settings.cache.content_ttl_days
+                or PluginSettings.defaults.cache.content_ttl_days)
+        settings.cache.max_metadata_records = settings.cache.max_metadata_records
+            or PluginSettings.defaults.cache.max_metadata_records
+        settings.cache.max_metadata_bytes = settings.cache.max_metadata_bytes
+            or PluginSettings.defaults.cache.max_metadata_bytes
+        settings.storage = settings.storage or {}
+        settings.storage.backend = "sqlite"
+        settings.storage.target_backend = "sqlite"
+        settings.storage.schema_version = PluginSettings.defaults.storage.schema_version
+    end
     settings.schema_version = PluginSettings.defaults.schema_version
     return true
 end

@@ -54,12 +54,16 @@ local function homeActions(plugin)
 end
 
 local function canRemotePage(route)
-    return route
-        and route.key == "discover_results"
-        and route.source ~= nil
-        and route.group ~= nil
-        and route.loading ~= true
-        and route.loading_more ~= true
+    if not route or route.loading == true or route.loading_more == true then
+        return false
+    end
+    if route.key == "discover_results" then
+        return route.source ~= nil and route.group ~= nil
+    end
+    if route.key == "search_results" then
+        return route.source ~= nil and route.keyword ~= nil
+    end
+    return false
 end
 
 local function canRemotePreviousPage(route)
@@ -183,6 +187,27 @@ local function listActions(plugin, route)
     }
 end
 
+local function searchResultsActions(plugin, route)
+    local actions = {
+        previousAction(plugin, route),
+        nextAction(plugin, route),
+        {
+            key = "search",
+            text = _("Search"),
+            icon = "search",
+            enabled = route and route.source ~= nil and route.loading ~= true,
+            callback = function()
+                local SearchFlow = require("novel.ui.search.flow")
+                SearchFlow.showInput(plugin, route.source, route.keyword, {
+                    tab = route.tab,
+                })
+            end,
+        },
+        backAction(plugin),
+    }
+    return actions
+end
+
 local function bottomActions(plugin, route, shell_widget)
     ShellSession.setListInfo(plugin, shell_widget and shell_widget.list_page_info)
     if ShellRoutes.isTopLevel(route) then
@@ -190,6 +215,9 @@ local function bottomActions(plugin, route, shell_widget)
     end
     if route and route.key == "chapters" and route.manifest then
         return chapterActions(plugin, route)
+    end
+    if route and route.key == "search_results" then
+        return searchResultsActions(plugin, route)
     end
     return listActions(plugin, route)
 end
@@ -332,10 +360,16 @@ function Shell.previousPage(plugin)
     if not canRemotePreviousPage(route) then
         return false
     end
-    local DiscoverFlow = require("novel.ui.discover.flow")
-    return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) - 1, {
+    local page = (tonumber(route.current_page) or 1) - 1
+    local options = {
         list_page_anchor = "last",
-    })
+    }
+    if route.key == "search_results" then
+        local SearchFlow = require("novel.ui.search.flow")
+        return SearchFlow.loadPage(plugin, page, options)
+    end
+    local DiscoverFlow = require("novel.ui.discover.flow")
+    return DiscoverFlow.loadPage(plugin, page, options)
 end
 
 function Shell.nextPage(plugin)
@@ -349,10 +383,16 @@ function Shell.nextPage(plugin)
     if not canRemoteNextPage(route) then
         return false
     end
-    local DiscoverFlow = require("novel.ui.discover.flow")
-    return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) + 1, {
+    local page = (tonumber(route.current_page) or 1) + 1
+    local options = {
         list_page = tonumber(info.current_page) or ShellSession.listPage(plugin),
-    })
+    }
+    if route.key == "search_results" then
+        local SearchFlow = require("novel.ui.search.flow")
+        return SearchFlow.loadPage(plugin, page, options)
+    end
+    local DiscoverFlow = require("novel.ui.discover.flow")
+    return DiscoverFlow.loadPage(plugin, page, options)
 end
 
 function Shell.currentRoute(plugin)

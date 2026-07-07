@@ -305,9 +305,6 @@ msgstr "从书架移除失败。"
 msgid "Search"
 msgstr "搜索"
 
-msgid "Search again"
-msgstr "重新搜索"
-
 msgid "Search canceled."
 msgstr "搜索已取消。"
 
@@ -316,9 +313,6 @@ msgstr "搜索失败。"
 
 msgid "Search failed: "
 msgstr "搜索失败："
-
-msgid "Search source"
-msgstr "搜索书源"
 
 msgid "Skipped: "
 msgstr "已跳过："

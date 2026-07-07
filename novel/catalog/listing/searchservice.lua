@@ -14,6 +14,36 @@ local addError = RequestSupport.error
 local copyUrlUnsupported = RequestSupport.copyUrlUnsupported
 local responseSummary = RequestSupport.responseSummary
 
+local function sortedFields(fields)
+    local parts = {}
+    if type(fields) ~= "table" then
+        return ""
+    end
+    for key, value in pairs(fields) do
+        table.insert(parts, tostring(key) .. "=" .. tostring(value or ""))
+    end
+    table.sort(parts)
+    return table.concat(parts, "&")
+end
+
+local function requestSignature(source, keyword, page)
+    if type(source) ~= "table" or isBlank(source.searchUrl) then
+        return nil
+    end
+    local spec = RequestSupport.requestSpec(source, source.searchUrl, {
+        page = page,
+    }, {
+        key = keyword or "",
+        page = page,
+    })
+    return table.concat({
+        tostring(spec.method or "GET"),
+        tostring(spec.url or ""),
+        tostring(spec.body or ""),
+        sortedFields(spec.fields),
+    }, "\n")
+end
+
 local function cacheKey(source, spec, keyword, options)
     return Cache.makeKey("search", {
         source = source.bookSourceUrl,
@@ -177,6 +207,15 @@ function SearchService:search(source, keyword, options)
         })
     end
     return parsed
+end
+
+function SearchService.canRequestNextPage(source, keyword, page)
+    page = tonumber(page) or 1
+    local current_signature = requestSignature(source, keyword, page)
+    local next_signature = requestSignature(source, keyword, page + 1)
+    return current_signature ~= nil
+        and next_signature ~= nil
+        and current_signature ~= next_signature
 end
 
 function SearchService.run(source, keyword, options)

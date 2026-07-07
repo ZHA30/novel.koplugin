@@ -122,17 +122,23 @@ function ShellRoutes.searchResults(args)
         keyword = args.keyword or "",
         books = args.books or {},
         unsupported = args.unsupported or {},
+        first_page = tonumber(args.first_page) or tonumber(args.current_page) or 1,
+        current_page = tonumber(args.current_page) or tonumber(args.first_page) or 1,
+        no_more_source_pages = args.no_more_source_pages == true,
         loading = args.loading == true,
+        loading_more = args.loading_more == true,
         error = args.error,
+        list_page = args.list_page,
+        list_page_anchor = args.list_page_anchor,
     }
 end
 
 function ShellRoutes.title(route)
     if route and route.key == "search_sources" then
-        return _("Search source")
+        return _("Search")
     end
     if route and route.key == "search_results" then
-        return _("Search") .. ": " .. tostring(route.keyword or "")
+        return _("Search")
     end
     if route and route.key == "bookshelf_switch_results" then
         return _("Switch source")

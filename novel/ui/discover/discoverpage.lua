@@ -31,6 +31,7 @@ function DiscoverPage.build(shell, plugin, route, runtime)
         table.insert(items, {
             title = _("Search"),
             mandatory = tostring(#searchable_sources),
+            icon = "search",
             callback = function()
                 SearchFlow.show(plugin, {
                     tab = route and route.tab or "discover",

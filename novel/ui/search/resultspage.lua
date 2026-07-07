@@ -1,20 +1,11 @@
 local _ = require("novel.i18n")
+local BookActions = require("novel.ui.widget.bookactions")
 local ContentBuilder = require("novel.ui.contentbuilder")
-local DetailFlow = require("novel.ui.detail.flow")
 local DetailVisits = require("novel.ui.detail.detailvisits")
 local Dialog = require("novel.ui.widget.dialog")
 local ShellRoutes = require("novel.ui.shellroutes")
-local SearchFlow = require("novel.ui.search.flow")
 
 local SearchResultsPage = {}
-
-local function copiedBooks(books)
-    local copied = {}
-    for index = 1, #(books or {}) do
-        copied[index] = books[index]
-    end
-    return copied
-end
 
 local function routeWith(route, patch)
     local copied = ShellRoutes.searchResults(route)
@@ -33,17 +24,8 @@ function SearchResultsPage.build(shell, plugin, route, runtime)
         return ContentBuilder.buildStatusContent(shell, _("Failed"), tostring(route.error))
     end
 
-    local items = {
-        {
-            title = _("Search again"),
-            mandatory = route.keyword,
-            callback = function()
-                SearchFlow.showInput(plugin, route.source, route.keyword, {
-                    tab = route.tab,
-                })
-            end,
-        },
-    }
+    local items = {}
+    local action_context = BookActions.context(plugin)
 
     if route.unsupported and #route.unsupported > 0 then
         table.insert(items, {
@@ -62,17 +44,10 @@ function SearchResultsPage.build(shell, plugin, route, runtime)
             book = book,
             source_title = route.source_name,
             dim = DetailVisits.isVisited(plugin, route.source, book),
-            callback = function()
-                DetailFlow.show(plugin, route.source, book, {
-                    on_visited = function(visited_book)
-                        local books = copiedBooks(route.books)
-                        books[index] = visited_book or books[index]
-                        runtime.replace(plugin, routeWith(route, {
-                            books = books,
-                        }))
-                    end,
-                })
-            end,
+            action_buttons = BookActions.buttons(runtime, plugin, route, index,
+                book, action_context, routeWith),
+            callback = BookActions.detailCallback(runtime, plugin, route, index,
+                book, routeWith),
         })
     end
 

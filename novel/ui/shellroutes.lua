@@ -99,21 +99,6 @@ function ShellRoutes.discoverResults(args)
     }
 end
 
-function ShellRoutes.bookshelfSwitchResults(args)
-    args = args or {}
-    return ShellRoutes.copy{
-        key = "bookshelf_switch_results",
-        tab = args.tab or "bookshelf",
-        record = args.record,
-        keyword = args.keyword,
-        checked = args.checked,
-        skipped = args.skipped,
-        failed = args.failed,
-        candidates = args.candidates or {},
-        apply_callback = args.apply_callback,
-    }
-end
-
 function ShellRoutes.searchSources(args)
     args = args or {}
     return ShellRoutes.copy{
@@ -154,9 +139,6 @@ function ShellRoutes.title(route)
             route.first_page,
             route.current_page
         )
-    end
-    if route and route.key == "bookshelf_switch_results" then
-        return _("Switch source")
     end
     if route and route.key == "chapters" then
         return ChapterListing.bookTitle(

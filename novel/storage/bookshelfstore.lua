@@ -86,19 +86,6 @@ local function preserveProgress(book, record)
     return book
 end
 
-local function switchProgress(record, timestamp)
-    if type(record.current) ~= "table" then
-        return nil
-    end
-    local current = clone(record.current)
-    if current.chapter and current.chapter.title then
-        current.chapter_title = current.chapter.title
-    end
-    current.chapter = nil
-    current.updated_time = timestamp
-    return current
-end
-
 local function chapterAt(chapters, position)
     if type(chapters) ~= "table" then
         return nil
@@ -262,62 +249,6 @@ function BookshelfStore:applyRefresh(source, book, refresh)
         end
     end
     return nil, "book is not in bookshelf"
-end
-
-function BookshelfStore:applySwitch(record, new_source, new_book)
-    if type(record) ~= "table" then
-        return nil, "book record is required"
-    end
-    if type(new_source) ~= "table" or type(new_book) ~= "table" then
-        return nil, "target source and book are required"
-    end
-
-    local old_key = record.key or bookKey(record.source, record.book)
-    local new_key = bookKey(new_source, new_book)
-    if old_key == "\n"
-        or (record.source_url or sourceUrl(record.source)) == ""
-        or bookUrl(record.book) == "" then
-        return nil, "source book is missing URL"
-    end
-    if sourceUrl(new_source) == "" or bookUrl(new_book) == "" then
-        return nil, "target book is missing URL"
-    end
-
-    local records = self:list()
-    local record_position
-    for record_index = 1, #records do
-        local existing = records[record_index]
-        if existing.key == new_key and existing.key ~= old_key then
-            return nil, "target book is already in bookshelf"
-        end
-        if existing.key == old_key then
-            record_position = record_index
-        end
-    end
-    if not record_position then
-        return nil, "book is not in bookshelf"
-    end
-
-    local previous_source = {
-        source_url = record.source_url or sourceUrl(record.source),
-        source_name = record.source_name or sourceName(record.source),
-        book_url = record.book and record.book.bookUrl or "",
-    }
-    local timestamp = now()
-    local stored = records[record_position]
-    stored.key = new_key
-    stored.source = clone(new_source)
-    stored.source_url = sourceUrl(new_source)
-    stored.source_name = sourceName(new_source)
-    stored.book = preserveProgress(normalizeBook(new_source, new_book), stored)
-    stored.current = switchProgress(stored, timestamp)
-    stored.updated_time = timestamp
-    stored.last_switch_time = timestamp
-    stored.previous_source = previous_source
-    stored.last_refresh_time = nil
-    stored.last_refresh_count = nil
-    self:saveAll(records)
-    return stored
 end
 
 function BookshelfStore:updateProgress(source, book, chapter, position, chapter_pos)

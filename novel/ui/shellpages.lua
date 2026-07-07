@@ -30,9 +30,6 @@ local ENTRIES = {
     search_results = {
         module = "novel.ui.search.resultspage",
     },
-    bookshelf_switch_results = {
-        module = "novel.ui.bookshelf.switchresults",
-    },
 }
 
 local function entryFor(key)

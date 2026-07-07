@@ -126,17 +126,8 @@ msgstr "加载中..."
 msgid "No novel chapters for this document."
 msgstr "当前文档没有小说目录。"
 
-msgid "Apply switch"
-msgstr "应用换源"
-
 msgid "Cancel"
 msgstr "取消"
-
-msgid "Candidates: "
-msgstr "候选数："
-
-msgid "Checked: "
-msgstr "已检查："
 
 msgid "Failed: "
 msgstr "失败："
@@ -144,35 +135,8 @@ msgstr "失败："
 msgid "Keyword"
 msgstr "关键词"
 
-msgid "Keyword: "
-msgstr "关键词："
-
-msgid "Name and author match"
-msgstr "书名和作者匹配"
-
-msgid "Name matches"
-msgstr "书名匹配"
-
 msgid "No enabled searchable sources."
 msgstr "没有已启用的可搜索书源。"
 
 msgid "Search"
 msgstr "搜索"
-
-msgid "Skipped: "
-msgstr "已跳过："
-
-msgid "Source switched."
-msgstr "书源已切换。"
-
-msgid "Summary"
-msgstr "汇总"
-
-msgid "Switch"
-msgstr "切换"
-
-msgid "Switch source"
-msgstr "切换书源"
-
-msgid "Switch this book to source?"
-msgstr "将这本书切换到该书源？"

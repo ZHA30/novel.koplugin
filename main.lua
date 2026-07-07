@@ -37,7 +37,6 @@ function Novel:onCloseWidget()
     ReaderHooks.close(self)
     Loading.closeKeys(self, {
         "bookshelf_refresh_loading",
-        "bookshelf_switch_loading",
         "chapters_loading",
         "detail_loading",
         "discover_loading",

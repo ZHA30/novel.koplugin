@@ -1,12 +1,10 @@
 local _ = require("novel.i18n")
-local BookshelfSupport = require("novel.ui.bookshelf.bookshelfsupport")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DetailFlow = require("novel.ui.detail.flow")
 local Dialog = require("novel.ui.widget.dialog")
 local Loading = require("novel.ui.widget.loading")
 local NetworkMgr = require("ui/network/manager")
 local ChaptersFlow = require("novel.ui.chapters.flow")
-local ShellRoutes = require("novel.ui.shellroutes")
 local Shell = require("novel.ui.shell")
 local Trapper = require("ui/trapper")
 
@@ -14,14 +12,6 @@ local BookshelfFlow = {}
 
 local function invalidateRefresh(plugin)
     plugin.bookshelf_refresh_request_id = (plugin.bookshelf_refresh_request_id or 0) + 1
-end
-
-local function invalidateSwitch(plugin)
-    plugin.bookshelf_switch_request_id = (plugin.bookshelf_switch_request_id or 0) + 1
-end
-
-local function sourceTitle(source)
-    return BookshelfSupport.sourceTitle(source)
 end
 
 local function findCurrentSource(plugin, record)
@@ -34,56 +24,6 @@ local function findCurrentSource(plugin, record)
         end
     end
     return record.source
-end
-
-local function applySwitch(plugin, record, candidate)
-    Dialog.closeWidget(plugin, "bookshelf_switch_confirm_dialog")
-    local confirm_dialog
-    confirm_dialog = ConfirmBox:new{
-        text = _("Switch this book to source?")
-            .. "\n\n" .. sourceTitle(candidate.source),
-        ok_text = _("Switch"),
-        ok_callback = function()
-            Dialog.clearIfOwned(plugin, "bookshelf_switch_confirm_dialog", confirm_dialog)
-            if not plugin.app then
-                Dialog.message(_("Novel is not ready."))
-                return
-            end
-            local updated_record, err = plugin.app:getBookshelfStore()
-                :applySwitch(record, candidate.source, candidate.book)
-            if not updated_record then
-                Dialog.message(Dialog.failureMessage(err))
-                return
-            end
-            Dialog.closeWidget(plugin, "bookshelf_switch_confirm_dialog")
-            Dialog.message(_("Source switched."))
-            BookshelfFlow.show(plugin)
-        end,
-        cancel_callback = function()
-            Dialog.clearIfOwned(plugin, "bookshelf_switch_confirm_dialog", confirm_dialog)
-        end,
-    }
-    Dialog.showWidget(plugin, "bookshelf_switch_confirm_dialog", confirm_dialog)
-end
-
-local function showSwitchResults(plugin, record, result)
-    if not result or not result.ok then
-        Dialog.message(Dialog.failureMessage(result))
-        return
-    end
-
-    Dialog.closeWidget(plugin, "detail_viewer")
-    Shell.push(plugin, ShellRoutes.bookshelfSwitchResults{
-        record = record,
-        keyword = result.keyword,
-        checked = result.checked,
-        skipped = result.skipped,
-        failed = result.failed,
-        candidates = result.candidates,
-        apply_callback = function(candidate)
-            applySwitch(plugin, record, candidate)
-        end,
-    })
 end
 
 local function confirmRemove(plugin, record)
@@ -171,44 +111,6 @@ local function refreshRecord(plugin, record)
     end)
 end
 
-local function switchRecord(plugin, record)
-    if not plugin.app then
-        Dialog.message(_("Novel is not ready."))
-        return
-    end
-    if NetworkMgr:willRerunWhenOnline(function()
-        switchRecord(plugin, record)
-    end) then
-        return
-    end
-
-    local sources = plugin.app:getSourceStore():list()
-    invalidateSwitch(plugin)
-    local request_id = plugin.bookshelf_switch_request_id
-
-    Trapper:wrap(function()
-        local loading_widget = Loading.show(plugin, "bookshelf_switch_loading")
-        local settings = plugin.app and plugin.app.settings
-        local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local SourceFinder = require("novel.catalog.listing.sourcefinder")
-            return SourceFinder.find(record, sources, {
-                settings = settings,
-                timeout = 5,
-            })
-        end, loading_widget)
-        Loading.close(plugin, "bookshelf_switch_loading", loading_widget)
-
-        if not plugin.app or plugin.bookshelf_switch_request_id ~= request_id then
-            return
-        end
-        if not completed then
-            Dialog.message(Dialog.canceledMessage())
-            return
-        end
-        showSwitchResults(plugin, record, result)
-    end)
-end
-
 local function bookshelfDetailButtons(plugin, record)
     return {
         {
@@ -216,12 +118,6 @@ local function bookshelfDetailButtons(plugin, record)
                 icon = "rotate-cw",
                 callback = function()
                     refreshRecord(plugin, record)
-                end,
-            },
-            {
-                icon = "arrow-left-right",
-                callback = function()
-                    switchRecord(plugin, record)
                 end,
             },
             {
@@ -264,12 +160,9 @@ end
 
 function BookshelfFlow.close(plugin)
     invalidateRefresh(plugin)
-    invalidateSwitch(plugin)
     Loading.close(plugin, "bookshelf_refresh_loading")
-    Loading.close(plugin, "bookshelf_switch_loading")
     Dialog.closeKeys(plugin, {
         "bookshelf_confirm_dialog",
-        "bookshelf_switch_confirm_dialog",
     })
     DetailFlow.close(plugin)
 end

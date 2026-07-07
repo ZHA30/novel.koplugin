@@ -38,6 +38,7 @@ function Novel:onCloseWidget()
     Loading.closeKeys(self, {
         "bookshelf_refresh_loading",
         "chapters_loading",
+        "novel_chapter_cache_loading",
         "detail_loading",
         "discover_loading",
         "search_loading",

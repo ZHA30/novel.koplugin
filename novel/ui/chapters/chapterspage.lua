@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local Blitbuffer = require("ffi/blitbuffer")
+local ChapterCache = require("novel.reader.chaptercache")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local ChapterListing = require("novel.ui.chapters.listing")
 local ContentBuilder = require("novel.ui.contentbuilder")
@@ -210,6 +211,44 @@ local function markReadState(plugin, manifest, row, runtime, route, read)
     refresh(runtime, plugin, route, updated_manifest)
 end
 
+local function finishChapterCacheAction(plugin, route, runtime, manifest, row,
+    updated_manifest)
+    updated_manifest = updated_manifest or manifest
+    ChapterListing.setSelected(plugin, updated_manifest, row.position, false)
+    refresh(runtime, plugin, route, updated_manifest)
+end
+
+local function cacheChapter(plugin, route, runtime, manifest, row, positions)
+    ChapterCache.cache(plugin, manifest, positions, {
+        on_done = function(_summary, updated_manifest)
+            finishChapterCacheAction(
+                plugin,
+                route,
+                runtime,
+                manifest,
+                row,
+                updated_manifest
+            )
+        end,
+    })
+end
+
+local function deleteChapterCache(plugin, route, runtime, manifest, row,
+    positions)
+    ChapterCache.delete(plugin, manifest, positions, {
+        on_done = function(_summary, updated_manifest)
+            finishChapterCacheAction(
+                plugin,
+                route,
+                runtime,
+                manifest,
+                row,
+                updated_manifest
+            )
+        end,
+    })
+end
+
 local function toggleSelected(plugin, manifest, row, runtime, route)
     local selected = ChapterListing.toggleSelected(plugin, manifest, row.position)
     if selected then
@@ -253,6 +292,13 @@ end
 
 local function showActions(plugin, route, runtime, manifest, row)
     local dialog
+    local row_positions = { row.position }
+    local cache_positions = ChapterCache.cacheablePositions(manifest,
+        row_positions)
+    local delete_cache_positions = ChapterCache.cachedPositions(manifest,
+        row_positions, {
+            keep_file = ChapterCache.currentFile(),
+        })
     dialog = ChapterActionDialog:new{
         title = row.title,
         actions = {
@@ -274,18 +320,32 @@ local function showActions(plugin, route, runtime, manifest, row)
             },
             {
                 icon = "arrow-down-to-line",
-                enabled = row.openable,
+                enabled = row.openable and #cache_positions > 0,
                 callback = function()
                     closeDialog(dialog)
-                    Dialog.message(_("Download is not implemented."))
+                    cacheChapter(
+                        plugin,
+                        route,
+                        runtime,
+                        manifest,
+                        row,
+                        cache_positions
+                    )
                 end,
             },
             {
                 icon = "trash-2",
-                enabled = row.openable,
+                enabled = row.openable and #delete_cache_positions > 0,
                 callback = function()
                     closeDialog(dialog)
-                    Dialog.message(_("Delete is not implemented."))
+                    deleteChapterCache(
+                        plugin,
+                        route,
+                        runtime,
+                        manifest,
+                        row,
+                        delete_cache_positions
+                    )
                 end,
             },
         },
@@ -345,6 +405,7 @@ function ChaptersPage.build(shell, plugin, route, runtime)
             local row = model.rowAt(index)
             return {
                 title = row.title,
+                mandatory = row.downloaded_label,
                 dim = row.dim,
                 trailing_actions = trailingActions(
                     plugin,

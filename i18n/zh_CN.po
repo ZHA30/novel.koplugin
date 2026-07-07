@@ -102,23 +102,50 @@ msgstr "将 %d 个章节标为已读？"
 msgid "Mark %d chapters as unread?"
 msgstr "将 %d 个章节标为未读？"
 
-msgid "Download"
-msgstr "下载"
+msgid "Cache"
+msgstr "缓存"
 
-msgid "Download %d chapters?"
-msgstr "下载 %d 个章节？"
+msgid "Downloaded"
+msgstr "已下载"
 
-msgid "Download is not implemented."
-msgstr "下载功能尚未实现。"
+msgid "Cache %d chapters?"
+msgstr "缓存 %d 个章节？"
 
-msgid "Delete"
-msgstr "删除"
+msgid "Caching..."
+msgstr "缓存中..."
 
-msgid "Delete %d chapters?"
-msgstr "删除 %d 个章节？"
+msgid "Caching (%d/%d)..."
+msgstr "缓存中(%d/%d)..."
 
-msgid "Delete is not implemented."
-msgstr "删除功能尚未实现。"
+msgid "Delete cache"
+msgstr "删除缓存"
+
+msgid "Delete cache for %d chapters?"
+msgstr "删除 %d 个章节的缓存？"
+
+msgid "Cached %d chapters."
+msgstr "已缓存 %d 个章节。"
+
+msgid "Skipped %d cached chapters."
+msgstr "已跳过 %d 个已缓存章节。"
+
+msgid "Failed to cache %d chapters."
+msgstr "%d 个章节缓存失败。"
+
+msgid "No chapters to cache."
+msgstr "没有需要缓存的章节。"
+
+msgid "Deleted cache for %d chapters."
+msgstr "已删除 %d 个章节的缓存。"
+
+msgid "Current chapter cache was kept."
+msgstr "当前打开章节的缓存已保留。"
+
+msgid "Failed to delete cache for %d chapters."
+msgstr "%d 个章节缓存删除失败。"
+
+msgid "No cached chapters to delete."
+msgstr "没有可删除的章节缓存。"
 
 msgid "Select"
 msgstr "选择"

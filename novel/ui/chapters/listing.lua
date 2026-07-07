@@ -205,6 +205,8 @@ function ChapterListing.buildModel(manifest, filter, sort)
                 position = position,
                 title = chapterTitle(chapter),
                 openable = openable,
+                downloaded_label = openable and chapter.downloaded == true
+                    and _("Downloaded") or nil,
                 dim = chapter.read == true or not openable,
             }
         end,

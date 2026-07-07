@@ -84,6 +84,10 @@ function Loading.show(owner, key, options)
     local existing = owner and key and owner[key]
     if isShown(existing) then
         addRef(owner, key, existing)
+        if options.text and existing.setText then
+            existing:setText(options.text)
+            UIManager:forceRePaint()
+        end
         return existing
     end
 
@@ -96,7 +100,7 @@ function Loading.show(owner, key, options)
     if not isShown(widget) then
         clearRefsForWidget(widget)
         widget = LoadingTrap:new{
-            text = _("Loading..."),
+            text = options.text or _("Loading..."),
             dismissable = options.dismissable ~= false,
             flush_events_on_show = options.flush_events_on_show ~= false,
         }
@@ -110,6 +114,15 @@ function Loading.show(owner, key, options)
         addRef(owner, key, widget)
     end
     return widget
+end
+
+function Loading.update(owner, key, text, widget)
+    local loading = widget or (owner and key and owner[key])
+    if not isShown(loading) or not loading.setText then
+        return
+    end
+    loading:setText(text)
+    UIManager:forceRePaint()
 end
 
 function Loading.close(owner, key, widget)

@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local ChapterCache = require("novel.reader.chaptercache")
 local ChapterListing = require("novel.ui.chapters.listing")
 local Dialog = require("novel.ui.widget.dialog")
 local HomeShell = require("novel.ui.widget.homeshell")
@@ -187,6 +188,13 @@ local function markReadState(plugin, route, manifest, filter, sort, positions,
     replaceChapterManifest(plugin, route, updated_manifest, filter, sort)
 end
 
+local function finishChapterCacheAction(plugin, route, manifest, filter, sort,
+    updated_manifest)
+    updated_manifest = updated_manifest or manifest
+    ChapterListing.setSelectionMode(plugin, updated_manifest, false)
+    replaceChapterManifest(plugin, route, updated_manifest, filter, sort)
+end
+
 local function confirmChapterAction(message_template, count, ok_text, callback)
     if count <= 0 then
         return
@@ -206,6 +214,17 @@ local function chapterTopActions(plugin, route)
         and ChapterListing.selectedPositionsForRows(plugin, manifest, rows)
         or ChapterListing.positionsForRows(manifest, rows)
     local has_action_scope = #action_positions > 0
+    local cache_positions = ChapterCache.cacheablePositions(
+        manifest,
+        action_positions
+    )
+    local delete_cache_positions = ChapterCache.cachedPositions(
+        manifest,
+        action_positions,
+        {
+            keep_file = ChapterCache.currentFile(),
+        }
+    )
     return {
         {
             key = "mark_read",
@@ -256,33 +275,55 @@ local function chapterTopActions(plugin, route)
             end,
         },
         {
-            key = "download",
-            text = _("Download"),
+            key = "cache",
+            text = _("Cache"),
             icon = "arrow-down-to-line",
-            enabled = has_action_scope,
+            enabled = #cache_positions > 0,
             callback = function()
                 confirmChapterAction(
-                    _("Download %d chapters?"),
-                    #action_positions,
-                    _("Download"),
+                    _("Cache %d chapters?"),
+                    #cache_positions,
+                    _("Cache"),
                     function()
-                        Dialog.message(_("Download is not implemented."))
+                        ChapterCache.cache(plugin, manifest, cache_positions, {
+                            on_done = function(_summary, updated_manifest)
+                                finishChapterCacheAction(
+                                    plugin,
+                                    route,
+                                    manifest,
+                                    filter,
+                                    sort,
+                                    updated_manifest
+                                )
+                            end,
+                        })
                     end
                 )
             end,
         },
         {
-            key = "delete",
-            text = _("Delete"),
+            key = "delete_cache",
+            text = _("Delete cache"),
             icon = "trash-2",
-            enabled = has_action_scope,
+            enabled = #delete_cache_positions > 0,
             callback = function()
                 confirmChapterAction(
-                    _("Delete %d chapters?"),
-                    #action_positions,
-                    _("Delete"),
+                    _("Delete cache for %d chapters?"),
+                    #delete_cache_positions,
+                    _("Delete cache"),
                     function()
-                        Dialog.message(_("Delete is not implemented."))
+                        ChapterCache.delete(plugin, manifest, delete_cache_positions, {
+                            on_done = function(_summary, updated_manifest)
+                                finishChapterCacheAction(
+                                    plugin,
+                                    route,
+                                    manifest,
+                                    filter,
+                                    sort,
+                                    updated_manifest
+                                )
+                            end,
+                        })
                     end
                 )
             end,

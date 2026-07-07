@@ -109,6 +109,7 @@ local function deleteChapterFiles(manifest, options, summary)
             seen_paths[path] = true
             if removeChapterFile(path, manifest.book_id, keep_file, summary) then
                 chapter.downloaded = false
+                chapter.downloaded_at = nil
                 chapter.content_type = nil
                 chapter.image_style = nil
                 changed = true
@@ -134,6 +135,65 @@ local function deleteChapterFiles(manifest, options, summary)
     if changed then
         Manifest:new():save(manifest)
     end
+end
+
+function CacheCleanup.deleteChapterCache(manifest, positions, options)
+    options = options or {}
+    manifest = Manifest.normalizeManifest(manifest)
+    if not manifest or not manifest.book_id then
+        return {
+            ok = false,
+            error = {
+                kind = "manifest",
+                message = "book cache not found",
+            },
+        }
+    end
+
+    local summary = newSummary(manifest.book_id)
+    summary.positions_requested = #(positions or {})
+    if not lfs then
+        summary.ok = false
+        summary.error = {
+            kind = "filesystem",
+            message = "filesystem module is not available",
+        }
+        return summary
+    end
+
+    local changed = false
+    local seen = {}
+    for position_index = 1, #(positions or {}) do
+        local position = tonumber(positions[position_index])
+        if position and not seen[position] then
+            seen[position] = true
+            local chapter = manifest.chapters and manifest.chapters[position]
+            local path = chapter and chapter.file_path
+            if path and removeChapterFile(path, manifest.book_id,
+                options.keep_file, summary) then
+                chapter.downloaded = false
+                chapter.downloaded_at = nil
+                chapter.content_type = nil
+                chapter.image_style = nil
+                changed = true
+            end
+        end
+    end
+
+    if changed then
+        local saved, err = Manifest:new():save(manifest)
+        if not saved then
+            summary.ok = false
+            summary.error = {
+                kind = "manifest",
+                message = err,
+            }
+        else
+            manifest = saved
+        end
+    end
+    summary.manifest = manifest
+    return summary
 end
 
 function CacheCleanup.deleteManifestCache(manifest, options)

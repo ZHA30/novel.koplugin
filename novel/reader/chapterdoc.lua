@@ -63,13 +63,28 @@ function ChapterDoc.expectedContentType(manifest)
     return ContentType.typeForRule(rule and rule.content)
 end
 
+function ChapterDoc.expectedImageStyle(manifest)
+    local rule = manifest and manifest.source and manifest.source.ruleContent
+    return ContentType.normalizeImageStyle(rule and rule.imageStyle)
+end
+
 function ChapterDoc.contentIsCurrent(manifest, chapter)
     return ContentType.isCurrent(ChapterDoc.expectedContentType(manifest),
         chapter and chapter.content_type)
+        and ContentType.normalizeImageStyle(chapter and chapter.image_style)
+            == ChapterDoc.expectedImageStyle(manifest)
 end
 
-function ChapterDoc.html(chapter, content, content_type)
+local function imageStyleCss(image_style)
+    if ContentType.normalizeImageStyle(image_style) == ContentType.image_full then
+        return "img{display:block;width:100%;max-width:100%;height:auto;margin:0 auto;}"
+    end
+    return "img{display:block;max-width:100%;height:auto;margin:0 auto;}"
+end
+
+function ChapterDoc.html(chapter, content, content_type, options)
     chapter = chapter or {}
+    options = options or {}
     content_type = ContentType.normalizeType(content_type)
     local body = content_type == ContentType.html and htmlBody(content)
         or textBody(content)
@@ -84,7 +99,7 @@ function ChapterDoc.html(chapter, content, content_type)
         "body{line-height:1.8;margin:5%;}",
         "h1{font-size:1.25em;line-height:1.4;margin:0 0 1.2em 0;}",
         "p{margin:0 0 0.9em 0;}",
-        "img{max-width:100%;height:auto;}",
+        imageStyleCss(options.image_style),
         "</style>",
         "</head>",
         "<body>",

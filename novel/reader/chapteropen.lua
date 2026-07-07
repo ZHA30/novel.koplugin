@@ -244,9 +244,14 @@ function ChapterOpen.open(plugin, manifest, position, options)
             return
         end
 
-        local html = ChapterDoc.html(chapter, result.text, result.content_type)
+        local image_style = result.image_style
+            or ChapterDoc.expectedImageStyle(manifest)
+        local html = ChapterDoc.html(chapter, result.text, result.content_type, {
+            image_style = image_style,
+        })
         local file, err = manifest_store:saveChapter(manifest, position, html, {
             content_type = result.content_type,
+            image_style = image_style,
         })
         if not file then
             resetSwitch(plugin)

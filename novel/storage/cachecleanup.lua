@@ -110,6 +110,7 @@ local function deleteChapterFiles(manifest, options, summary)
             if removeChapterFile(path, manifest.book_id, keep_file, summary) then
                 chapter.downloaded = false
                 chapter.content_type = nil
+                chapter.image_style = nil
                 changed = true
             end
         end

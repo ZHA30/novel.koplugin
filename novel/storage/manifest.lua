@@ -200,6 +200,7 @@ function Manifest:ensureBook(source, book, chapters)
             chapter.read_at = old.read_at
             chapter.last_opened_at = old.last_opened_at
             chapter.content_type = old.content_type
+            chapter.image_style = old.image_style
         end
         chapter.file_path = Manifest.chapterPath(book_id, chapter)
         chapter.downloaded = util.pathExists(chapter.file_path) or false
@@ -271,6 +272,7 @@ function Manifest:saveChapter(manifest, position, html, options)
     chapter.downloaded = true
     chapter.downloaded_at = now()
     chapter.content_type = options.content_type or "text"
+    chapter.image_style = options.image_style or "default"
     self:save(manifest)
     return chapter.file_path
 end

@@ -1,5 +1,6 @@
 local Analyzer = require("novel.catalog.shared.analyzer")
 local Extract = require("novel.catalog.shared.extract")
+local Regex = require("novel.catalog.shared.regex")
 local RequestSupport = require("novel.catalog.shared.requestsupport")
 local SourceInfo = require("novel.catalog.shared.sourceinfo")
 local Text = require("novel.catalog.shared.text")
@@ -12,6 +13,8 @@ local sourceName = SourceInfo.title
 local sourceKey = SourceInfo.key
 local addDebug = RequestSupport.addDebug
 local addError = RequestSupport.error
+local addUnsupported = RequestSupport.addUnsupported
+local copyUnsupported = RequestSupport.copyUnsupported
 
 local function looksMalformedKind(kind)
     kind = trim(kind)
@@ -103,6 +106,86 @@ local function listRule(rule)
     return value, reverse
 end
 
+local function matchesBookUrlPattern(source, final_url, unsupported)
+    local pattern = trim(source and source.bookUrlPattern or "")
+    if pattern == "" or final_url == "" then
+        return false
+    end
+
+    local analysis = Regex.analyze(pattern)
+    if not analysis.supported then
+        addUnsupported(unsupported, source, "bookUrlPattern",
+            "unsupported_regex", pattern)
+        return false
+    end
+
+    local ok, matched = pcall(function()
+        return tostring(final_url):find(analysis.lua_pattern) ~= nil
+    end)
+    if not ok then
+        addUnsupported(unsupported, source, "bookUrlPattern",
+            "regex", pattern)
+        return false
+    end
+    return matched ~= nil
+end
+
+local function applyDetailInit(analyzer, unsupported, source, rule)
+    if type(rule) ~= "table" or trim(rule.init) == "" then
+        return
+    end
+
+    local start_index = #analyzer.unsupported + 1
+    local content = analyzer:getElement(rule.init)
+    copyUnsupported(unsupported, source, "ruleBookInfo.init",
+        analyzer.unsupported, start_index)
+    if content then
+        analyzer:setContent(content)
+    end
+end
+
+local function parseDetailBook(analyzer, unsupported, source, final_url, body)
+    local rule = source and source.ruleBookInfo
+    if type(rule) ~= "table" then
+        return nil
+    end
+
+    applyDetailInit(analyzer, unsupported, source, rule)
+    local name = Extract.text(analyzer, unsupported, source,
+        "ruleBookInfo.name", rule.name)
+    if name == "" then
+        return nil
+    end
+
+    local latest_chapter = Extract.text(analyzer, unsupported, source,
+        "ruleBookInfo.lastChapter", rule.lastChapter)
+    return {
+        name = name,
+        author = Extract.text(analyzer, unsupported, source,
+            "ruleBookInfo.author", rule.author),
+        intro = Extract.paragraphText(analyzer, unsupported, source,
+            "ruleBookInfo.intro", rule.intro),
+        kind = Extract.listText(analyzer, unsupported, source,
+            "ruleBookInfo.kind", rule.kind),
+        latestChapter = latest_chapter,
+        latestChapterTitle = latest_chapter,
+        updateTime = Extract.text(analyzer, unsupported, source,
+            "ruleBookInfo.updateTime", rule.updateTime),
+        bookUrl = final_url,
+        tocUrl = Extract.url(analyzer, unsupported, source,
+            "ruleBookInfo.tocUrl", rule.tocUrl),
+        coverUrl = Extract.url(analyzer, unsupported, source,
+            "ruleBookInfo.coverUrl", rule.coverUrl),
+        wordCount = Extract.text(analyzer, unsupported, source,
+            "ruleBookInfo.wordCount", rule.wordCount),
+        origin = sourceKey(source),
+        originName = sourceName(source),
+        originOrder = source.customOrder or 0,
+        type = source.bookSourceType or 0,
+        infoHtml = body,
+    }
+end
+
 local function parseBook(analyzer, unsupported, source, rule, prefix, item, final_url)
     local name = Extract.cleanString(analyzer, unsupported, source,
         prefix .. ".name", rule.name, item)
@@ -158,6 +241,23 @@ function BookList.parse(source, rule, prefix, response, options)
 
     local book_list_rule, reverse = listRule(rule)
     if book_list_rule == "" then
+        if trim(source.bookUrlPattern) == ""
+            or matchesBookUrlPattern(source, final_url, unsupported) then
+            local book = parseDetailBook(analyzer, unsupported, source,
+                final_url, response.body)
+            if book then
+                addDebug(debug, "parse_detail", {
+                    rule = trim(source.bookUrlPattern) == ""
+                        and "ruleBookInfo" or "bookUrlPattern",
+                })
+                return {
+                    ok = true,
+                    books = { book },
+                    debug = debug,
+                    unsupported = unsupported,
+                }
+            end
+        end
         return {
             ok = false,
             books = books,
@@ -175,6 +275,23 @@ function BookList.parse(source, rule, prefix, response, options)
     addDebug(debug, options.size_event or "list_size", {
         count = #items,
     })
+
+    if #items == 0 and (trim(source.bookUrlPattern) == ""
+        or matchesBookUrlPattern(source, final_url, unsupported)) then
+        local book = parseDetailBook(analyzer, unsupported, source,
+            final_url, response.body)
+        if book then
+            addDebug(debug, "parse_detail", {
+                rule = "ruleBookInfo",
+            })
+            return {
+                ok = true,
+                books = { book },
+                debug = debug,
+                unsupported = unsupported,
+            }
+        end
+    end
 
     for item_index = 1, #items do
         analyzer:setContent(items[item_index])

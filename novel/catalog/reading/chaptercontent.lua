@@ -230,6 +230,10 @@ function ChapterContent:get(source, book, chapter, options)
         addUnsupported(unsupported, source, "ruleContent.webJs",
             "js", source.ruleContent.webJs)
     end
+    if not ContentType.supportsImageStyle(source.ruleContent.imageStyle) then
+        addUnsupported(unsupported, source, "ruleContent.imageStyle",
+            "unsupported_value", source.ruleContent.imageStyle)
+    end
 
     local first_url = initialChapterUrl(source, book, chapter)
     if first_url == "" then
@@ -258,6 +262,7 @@ function ChapterContent:get(source, book, chapter, options)
     local queue, queued, visited = {}, {}, {}
     local parts = {}
     local content_type = ContentType.typeForRule(source.ruleContent.content)
+    local image_style = ContentType.normalizeImageStyle(source.ruleContent.imageStyle)
     enqueue(queue, queued, visited, first_url)
     local max_pages = options.max_pages or DEFAULT_MAX_PAGES
 
@@ -325,6 +330,7 @@ function ChapterContent:get(source, book, chapter, options)
         ok = true,
         text = text,
         content_type = content_type,
+        image_style = image_style,
         chapter = chapter,
         book = book,
         debug = debug,

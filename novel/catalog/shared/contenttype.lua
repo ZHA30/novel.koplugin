@@ -3,6 +3,8 @@ local HtmlFormat = require("novel.catalog.shared.format")
 local ContentType = {
     text = "text",
     html = "html",
+    image_default = "default",
+    image_full = "full",
 }
 
 local function hasHtmlGetter(rule, getter)
@@ -17,6 +19,23 @@ end
 function ContentType.normalizeType(content_type)
     return content_type == ContentType.html and ContentType.html
         or ContentType.text
+end
+
+local function trim(value)
+    return tostring(value or ""):match("^%s*(.-)%s*$")
+end
+
+function ContentType.normalizeImageStyle(image_style)
+    local style = trim(image_style):upper()
+    if style == "FULL" then
+        return ContentType.image_full
+    end
+    return ContentType.image_default
+end
+
+function ContentType.supportsImageStyle(image_style)
+    local style = trim(image_style)
+    return style == "" or style:upper() == "FULL"
 end
 
 function ContentType.typeForRule(rule)

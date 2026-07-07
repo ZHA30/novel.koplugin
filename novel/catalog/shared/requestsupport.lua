@@ -77,7 +77,6 @@ function RequestSupport.requestSpec(source, rule_url, options, context)
     })
     spec.timeout = options.timeout or spec.timeout
     spec.total_timeout = options.total_timeout or spec.total_timeout
-        or (tonumber(source.respondTime) and tonumber(source.respondTime) / 1000)
     spec.max_redirects = options.max_redirects or spec.max_redirects
     return spec
 end

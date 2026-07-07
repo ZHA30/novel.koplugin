@@ -100,20 +100,30 @@ local function totalChapterCount(record, manifest)
     return 0
 end
 
-local function subtitleParts(record, manifest)
+local function subtitleSegments(record, manifest)
     local total = totalChapterCount(record, manifest)
     local read = readChapterCount(record, manifest)
     if total > 0 and read > total then
         read = total
     end
-    local parts = {
-        tostring(read) .. "/" .. tostring(total),
+    local segments = {
+        {
+            icon = "circle-check",
+            text = tostring(read),
+        },
+        {
+            icon = "list",
+            text = tostring(total),
+        },
     }
     local source = sourceTitle(record)
     if source ~= "" then
-        table.insert(parts, source)
+        table.insert(segments, {
+            icon = "sources",
+            text = source,
+        })
     end
-    return parts
+    return segments
 end
 
 function BookshelfPage.build(shell, plugin)
@@ -132,8 +142,7 @@ function BookshelfPage.build(shell, plugin)
             text = title(record.book),
             book = record.book,
             source_title = record.source_name,
-            book_subtitle_parts = subtitleParts(record, manifest),
-            book_subtitle_parts_only = true,
+            book_subtitle_segments = subtitleSegments(record, manifest),
             action_buttons = {
                 {
                     id = "resume",

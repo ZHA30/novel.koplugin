@@ -28,6 +28,8 @@ local ACTION_BUTTON_GAP = Screen:scaleBySize(6)
 local ACTION_HIT_WIDTH = Screen:scaleBySize(60)
 local ACTION_COLUMN_METADATA_GAP = Screen:scaleBySize(10)
 local ACTION_COLUMN_RIGHT_PADDING = Screen:scaleBySize(10)
+local SUBTITLE_ICON_TEXT_GAP = Screen:scaleBySize(4)
+local SUBTITLE_SEGMENT_GAP = Screen:scaleBySize(12)
 
 local function clean(value)
     value = tostring(value or "")
@@ -172,6 +174,134 @@ local function bookSubtitle(entry, side_seen)
     return table.concat(parts, "  ")
 end
 
+local function subtitleSegments(entry)
+    local normalized = {}
+    if type(entry.book_subtitle_segments) ~= "table" then
+        return nil
+    end
+    for segment_index = 1, #entry.book_subtitle_segments do
+        local segment = entry.book_subtitle_segments[segment_index] or {}
+        local icon = clean(segment.icon)
+        local text = clean(segment.text)
+        if icon ~= "" or text ~= "" then
+            table.insert(normalized, {
+                icon = icon,
+                text = text,
+            })
+        end
+    end
+    if #normalized == 0 then
+        return nil
+    end
+    return normalized
+end
+
+local function subtitleIconSize(height)
+    return math.max(1, math.floor(tonumber(height) or 0))
+end
+
+local function iconTextSegment(segment, face, width, height, options)
+    options = options or {}
+    local items = {}
+    local used_width = 0
+    local icon_size = subtitleIconSize(height)
+    if segment.icon ~= "" then
+        table.insert(items, CenterContainer:new{
+            dimen = Geom:new{
+                w = icon_size,
+                h = height,
+            },
+            Icons.widget(segment.icon, {
+                size = icon_size,
+                dim = options.dim,
+            }),
+        })
+        used_width = used_width + icon_size
+        if segment.text ~= "" then
+            table.insert(items, HorizontalSpan:new{
+                width = SUBTITLE_ICON_TEXT_GAP,
+            })
+            used_width = used_width + SUBTITLE_ICON_TEXT_GAP
+        end
+    end
+    if segment.text ~= "" then
+        local text_width = math.max(
+            Screen:scaleBySize(20),
+            width - used_width
+        )
+        table.insert(items, textBox(BD.auto(segment.text), face,
+            text_width, height, {
+                fgcolor = options.fgcolor,
+            }))
+    end
+    return HorizontalGroup:new(items)
+end
+
+local function fixedSegmentWidth(segment, face, height)
+    local width = 0
+    if segment.icon ~= "" then
+        width = width + subtitleIconSize(height)
+        if segment.text ~= "" then
+            width = width + SUBTITLE_ICON_TEXT_GAP
+        end
+    end
+    if segment.text ~= "" then
+        width = width + math.max(
+            Screen:scaleBySize(20),
+            textWidth(segment.text, face)
+        )
+    end
+    return width
+end
+
+local function buildIconSubtitle(segments, face, width, height, options)
+    local fixed_width = 0
+    local last_index = #segments
+    for segment_index = 1, last_index - 1 do
+        fixed_width = fixed_width + fixedSegmentWidth(
+            segments[segment_index],
+            face,
+            height
+        ) + SUBTITLE_SEGMENT_GAP
+    end
+    local last_width = math.max(
+        Screen:scaleBySize(20),
+        width - fixed_width
+    )
+    local items = {}
+    for segment_index = 1, last_index do
+        local segment_width
+        if segment_index == last_index then
+            segment_width = last_width
+        else
+            segment_width = fixedSegmentWidth(
+                segments[segment_index],
+                face,
+                height
+            )
+        end
+        table.insert(items, iconTextSegment(
+            segments[segment_index],
+            face,
+            segment_width,
+            height,
+            options
+        ))
+        if segment_index < last_index then
+            table.insert(items, HorizontalSpan:new{
+                width = SUBTITLE_SEGMENT_GAP,
+            })
+        end
+    end
+    return LeftContainer:new{
+        dimen = Geom:new{
+            w = width,
+            h = height,
+        },
+        HorizontalGroup:new(items),
+    }
+end
+
 local function fontSize(height, nominal, maximum)
     local font_size = math.floor(nominal * height * (1 / ROW_BASE_HEIGHT) / SCALE_BY_SIZE)
     if maximum and font_size >= maximum then
@@ -312,15 +442,17 @@ function BookRow.build(entry, args)
     local title_face = Font:getFace("cfont", fontsize_title)
     local metadata_face = Font:getFace("cfont", fontsize_metadata)
     local title = BD.auto(bookTitle(entry))
-    local subtitle = bookSubtitle(entry, side_seen)
-    if subtitle ~= "" then
+    local subtitle_segments = subtitleSegments(entry)
+    local subtitle = subtitle_segments and "" or bookSubtitle(entry, side_seen)
+    if not subtitle_segments and subtitle ~= "" then
         subtitle = BD.auto(subtitle)
     end
     local title_line_height = lineHeight(title_face)
     local subtitle_height = 0
-    if subtitle ~= "" then
+    if subtitle_segments or subtitle ~= "" then
         subtitle_height = lineHeight(metadata_face)
         if title_line_height + subtitle_height > height then
+            subtitle_segments = nil
             subtitle = ""
             subtitle_height = 0
         end
@@ -339,7 +471,18 @@ function BookRow.build(entry, args)
         fgcolor = fgcolor,
     }
     local wsubtitle
-    if subtitle ~= "" then
+    if subtitle_segments then
+        wsubtitle = buildIconSubtitle(
+            subtitle_segments,
+            metadata_face,
+            wmain_width,
+            subtitle_height,
+            {
+                fgcolor = metadata_fgcolor,
+                dim = entry.dim == true,
+            }
+        )
+    elseif subtitle ~= "" then
         wsubtitle = TextBoxWidget:new{
             text = subtitle,
             face = metadata_face,

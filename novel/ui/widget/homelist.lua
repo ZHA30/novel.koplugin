@@ -32,6 +32,7 @@ local ROW_ICON_SIZE = Screen:scaleBySize(22)
 local ROW_ICON_GAP = Screen:scaleBySize(10)
 local ROW_TEXT_GAP = Screen:scaleBySize(4)
 local ROW_BOOK_HORIZONTAL_PADDING = Screen:scaleBySize(10)
+local TEXTBOX_LINE_HEIGHT = 0.3
 
 local HomeListItem = InputContainer:extend{
     item = nil,
@@ -61,6 +62,13 @@ local function separatorInsets(item)
     local left = ROW_HORIZONTAL_PADDING + (tonumber(item.indent) or 0) * ROW_INDENT
     local right = ROW_HORIZONTAL_PADDING
     return left, right
+end
+
+local function textboxHeight(face, requested_height)
+    local line_height = math.floor(
+        (1 + TEXTBOX_LINE_HEIGHT) * face.size + 0.5
+    )
+    return math.max(requested_height, line_height)
 end
 
 function HomeListItem:init()
@@ -301,9 +309,38 @@ local function separatorFor(item, next_item, content_width)
     }
 end
 
-local function buildEntries(items, content_width)
+local function rowHeightFor(item)
+    item = item or {}
+    if item.book then
+        return bookRowHeight(item)
+    end
+
+    local title_height = textboxHeight(
+        Font:getFace("cfont", 22),
+        Screen:scaleBySize(28)
+    )
+    local subtitle_height = 0
+    if clean(item.subtitle) ~= "" then
+        subtitle_height = ROW_TEXT_GAP + textboxHeight(
+            Font:getFace("smallinfofont", 18),
+            Screen:scaleBySize(22)
+        )
+    end
+    return math.max(
+        bookRowHeight(item),
+        title_height + subtitle_height + 2 * ROW_VERTICAL_PADDING
+    )
+end
+
+local function entryHeightFor(item)
+    return rowHeightFor(item) + Size.line.thin
+end
+
+local function buildEntries(items, content_width, start_index, end_index)
     local entries = {}
-    for index = 1, #items do
+    start_index = math.max(1, tonumber(start_index) or 1)
+    end_index = math.min(#items, tonumber(end_index) or #items)
+    for index = start_index, end_index do
         local item = items[index]
         local row = HomeListItem:new{
             item = item,
@@ -320,25 +357,36 @@ local function buildEntries(items, content_width)
     return entries
 end
 
-local function paginateEntries(entries, height)
+local function paginateItems(items, height)
     local pages = {}
-    local page = {}
+    local page_start = 1
     local page_height = 0
     height = math.max(1, tonumber(height) or 1)
 
-    for index = 1, #entries do
-        local entry = entries[index]
-        if #page > 0 and page_height + entry.height > height then
-            table.insert(pages, page)
-            page = {}
+    for index = 1, #items do
+        local entry_height = entryHeightFor(items[index])
+        if index > page_start and page_height + entry_height > height then
+            table.insert(pages, {
+                first = page_start,
+                last = index - 1,
+            })
+            page_start = index
             page_height = 0
         end
-        table.insert(page, entry)
-        page_height = page_height + entry.height
+        page_height = page_height + entry_height
     end
 
-    if #page > 0 or #pages == 0 then
-        table.insert(pages, page)
+    if #items > 0 then
+        table.insert(pages, {
+            first = page_start,
+            last = #items,
+        })
+    end
+    if #pages == 0 then
+        table.insert(pages, {
+            first = 1,
+            last = 0,
+        })
     end
     return pages
 end
@@ -380,12 +428,12 @@ function HomeList.new(_, args)
     local content_width = paginate
         and dimen.w
         or dimen.w - ScrollableContainer:getScrollbarWidth()
-    local entries = buildEntries(items, content_width)
     local content = VerticalGroup:new{
         align = "left",
     }
 
     if not paginate then
+        local entries = buildEntries(items, content_width)
         appendEntries(content, entries)
         local widget = ScrollableContainer:new{
             dimen = dimen,
@@ -402,9 +450,11 @@ function HomeList.new(_, args)
         return widget
     end
 
-    local pages = paginateEntries(entries, dimen.h)
+    local pages = paginateItems(items, dimen.h)
     local current_page = normalizedPage(args.page, #pages)
-    appendEntries(content, pages[current_page] or {})
+    local page = pages[current_page] or {}
+    local entries = buildEntries(items, content_width, page.first, page.last)
+    appendEntries(content, entries)
 
     if type(args.on_page_info) == "function" then
         args.on_page_info({

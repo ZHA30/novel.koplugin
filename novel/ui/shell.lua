@@ -231,7 +231,19 @@ local function currentPage(plugin)
 end
 
 local function scheduleRender(plugin)
+    if not plugin then
+        return
+    end
+    if plugin.novel_shell_render_scheduled then
+        return
+    end
+    plugin.novel_shell_render_scheduled = true
+    local render_token = plugin.novel_shell_render_token or 0
     UIManager:nextTick(function()
+        plugin.novel_shell_render_scheduled = nil
+        if plugin.novel_shell_render_token ~= render_token then
+            return
+        end
         if plugin and plugin.app then
             if plugin.detail_viewer and UIManager:isWidgetShown(plugin.detail_viewer) then
                 plugin.novel_shell_render_pending = true
@@ -291,6 +303,8 @@ end
 
 function Shell.close(plugin)
     plugin.novel_shell_render_pending = nil
+    plugin.novel_shell_render_scheduled = nil
+    plugin.novel_shell_render_token = (plugin.novel_shell_render_token or 0) + 1
     ShellSession.resetStack(plugin)
     Dialog.closeWidget(plugin, "novel_home")
 end

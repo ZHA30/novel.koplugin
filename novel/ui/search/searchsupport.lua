@@ -22,6 +22,19 @@ function SearchSupport.sourceSubtitle(source)
     return table.concat(parts, " / ")
 end
 
+function SearchSupport.resultTitle(keyword, first_page, last_page)
+    local title = SearchSupport.trim(keyword)
+    if title == "" then
+        title = _("Search")
+    end
+    first_page = tonumber(first_page) or tonumber(last_page) or 1
+    last_page = tonumber(last_page) or first_page
+    if first_page ~= last_page then
+        return title .. " (" .. tostring(first_page) .. "-" .. tostring(last_page) .. ")"
+    end
+    return title .. " (" .. tostring(last_page) .. ")"
+end
+
 function SearchSupport.searchableSources(plugin)
     return SourceStore.searchable(plugin.app:getSourceStore():list())
 end

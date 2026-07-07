@@ -27,6 +27,7 @@ function SearchResultsPage.build(shell, plugin, route, runtime)
         table.insert(items, {
             title = _("Unsupported rules"),
             mandatory = tostring(#route.unsupported),
+            icon = "funnel",
             callback = function()
                 Dialog.showUnsupported(route.unsupported)
             end,
@@ -47,11 +48,8 @@ function SearchResultsPage.build(shell, plugin, route, runtime)
         })
     end
 
-    if #route.books == 0 then
-        table.insert(items, {
-            title = _("No results."),
-            dim = true,
-        })
+    if #items == 0 then
+        return ContentBuilder.buildStatusContent(shell, _("Empty"), _("No results."))
     end
 
     if route.error and #route.books > 0 then

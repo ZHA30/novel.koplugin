@@ -1,6 +1,7 @@
 local _ = require("novel.i18n")
 local ChapterListing = require("novel.ui.chapters.listing")
 local DiscoverResultSet = require("novel.ui.discover.resultset")
+local SearchSupport = require("novel.ui.search.searchsupport")
 
 local ShellRoutes = {}
 
@@ -62,7 +63,6 @@ function ShellRoutes.chapters(args)
         manifest = args.manifest,
         filter = args.filter,
         sort = args.sort,
-        loading = args.loading == true,
         error = args.error,
     }
 end
@@ -138,7 +138,11 @@ function ShellRoutes.title(route)
         return _("Search")
     end
     if route and route.key == "search_results" then
-        return _("Search")
+        return SearchSupport.resultTitle(
+            route.keyword,
+            route.first_page,
+            route.current_page
+        )
     end
     if route and route.key == "bookshelf_switch_results" then
         return _("Switch source")

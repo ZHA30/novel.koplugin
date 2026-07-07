@@ -168,12 +168,6 @@ msgstr "保存章节失败："
 msgid "Loading..."
 msgstr "加载中..."
 
-msgid "Loading"
-msgstr "加载中"
-
-msgid "Loading chapters..."
-msgstr "目录加载中..."
-
 msgid "Chapter loading canceled."
 msgstr "章节加载已取消。"
 

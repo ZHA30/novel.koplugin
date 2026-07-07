@@ -180,15 +180,6 @@ function ChapterListing.buildRows(manifest, filter, sort)
         end
     end
 
-    if shown_count == 0 then
-        table.insert(rows, {
-            title = _("No chapters."),
-            openable = false,
-            dim = true,
-            empty = true,
-        })
-    end
-
     return rows, shown_count
 end
 

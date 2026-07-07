@@ -39,6 +39,7 @@ function SwitchResultsPage.build(shell, plugin, route)
         table.insert(items, {
             title = _("Apply switch"),
             mandatory = candidate.source_name,
+            icon = "arrow-left-right",
             indent = 1,
             callback = function()
                 route.apply_callback(candidate)

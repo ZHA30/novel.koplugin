@@ -43,6 +43,7 @@ function DiscoverPage.build(shell, plugin, route, runtime)
         table.insert(items, {
             title = _("Unsupported rules"),
             mandatory = tostring(#unsupported),
+            icon = "funnel",
             callback = function()
                 Dialog.showUnsupported(unsupported)
             end,

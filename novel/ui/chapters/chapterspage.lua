@@ -6,10 +6,6 @@ local ChapterOpen = require("novel.reader.chapteropen")
 local ChaptersPage = {}
 
 function ChaptersPage.build(shell, plugin, route)
-    if route.loading then
-        return ContentBuilder.buildStatusContent(shell, _("Loading"), _("Loading chapters..."))
-    end
-
     if route.error then
         return ContentBuilder.buildStatusContent(shell, _("Failed"), tostring(route.error))
     end
@@ -23,7 +19,11 @@ function ChaptersPage.build(shell, plugin, route)
         filter = route.filter,
         sort = route.sort,
     })
-    local rows = ChapterListing.buildRows(manifest, filter, sort)
+    local rows, shown_count = ChapterListing.buildRows(manifest, filter, sort)
+    if shown_count == 0 then
+        return ContentBuilder.buildStatusContent(shell, _("Empty"), _("No chapters."))
+    end
+
     local items = {}
 
     for index = 1, #rows do

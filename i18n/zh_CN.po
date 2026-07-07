@@ -57,9 +57,6 @@ msgstr "章节数："
 msgid "Chapters"
 msgstr "目录"
 
-msgid "Bookshelf info updated."
-msgstr "书架信息已更新。"
-
 msgid "Empty"
 msgstr "空"
 

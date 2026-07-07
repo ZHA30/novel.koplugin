@@ -124,32 +124,29 @@ local function buildButtons(plugin, source, result, options)
         {
             icon = in_bookshelf and "book-check" or "book",
             callback = function()
+                if in_bookshelf then
+                    if bookshelf:remove(source, book) then
+                        notifyBookshelfChanged(book, false)
+                        DetailFlow.showLoaded(plugin, source, result, options)
+                        Dialog.message(_("Removed from bookshelf."))
+                    else
+                        Dialog.message(Dialog.failureMessage())
+                    end
+                    return
+                end
+
                 local updated_record, err = bookshelf:add(source, book)
                 if updated_record then
                     result.book = updated_record.book or book
                     notifyBookshelfChanged(result.book, true)
                     DetailFlow.showLoaded(plugin, source, result, options)
-                    Dialog.message(in_bookshelf
-                        and _("Bookshelf info updated.")
-                        or _("Added to bookshelf."))
+                    Dialog.message(_("Added to bookshelf."))
                 else
                     Dialog.message(Dialog.failureMessage(err))
                 end
             end,
         },
     }
-
-    if in_bookshelf then
-        table.insert(row, {
-            icon = "trash-2",
-            callback = function()
-                bookshelf:remove(source, book)
-                notifyBookshelfChanged(book, false)
-                DetailFlow.showLoaded(plugin, source, result, options)
-                Dialog.message(_("Removed from bookshelf."))
-            end,
-        })
-    end
 
     if result.unsupported and #result.unsupported > 0 then
         table.insert(row, {

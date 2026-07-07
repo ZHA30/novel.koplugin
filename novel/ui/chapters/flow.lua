@@ -74,19 +74,17 @@ function ChaptersFlow.showList(plugin, source, book, result, options)
         local existing = Manifest:new():loadByBook(source, book)
         if existing then
             ChaptersFlow.showManifest(plugin, existing, options)
-            Dialog.message(_("Chapters failed: ")
-                .. tostring(Dialog.errorText(result, _("Chapters failed."))))
+            Dialog.message(Dialog.failureMessage(result))
             return
         end
-        Dialog.message(_("Chapters failed: ")
-            .. tostring(Dialog.errorText(result, _("Chapters failed."))))
+        Dialog.message(Dialog.failureMessage(result))
         return
     end
 
     local manifest, err = Manifest:new():ensureBook(
         source, result.book or book, result.chapters or {})
     if not manifest then
-        Dialog.message(_("Chapters failed: ") .. tostring(err))
+        Dialog.message(Dialog.failureMessage(err))
         return
     end
     if options.open_position then
@@ -141,7 +139,7 @@ function ChaptersFlow.show(plugin, source, book, options)
             return
         end
         if not completed then
-            Dialog.message(_("Chapter list loading canceled."))
+            Dialog.message(Dialog.canceledMessage())
             return
         end
         ChaptersFlow.showList(plugin, source, book, result, options)

@@ -1,3 +1,4 @@
+local _ = require("novel.i18n")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
 local Font = require("ui/font")
@@ -50,6 +51,10 @@ function ContentBuilder.buildEmptyContent(shell, message)
         Font:getFace("cfont", 22),
         6
     )
+end
+
+function ContentBuilder.buildEmptyState(shell)
+    return ContentBuilder.buildEmptyContent(shell, _("Empty"))
 end
 
 function ContentBuilder.buildStatusContent(shell, title, message)

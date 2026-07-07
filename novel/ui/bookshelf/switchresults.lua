@@ -19,7 +19,7 @@ function SwitchResultsPage.build(shell, plugin, route)
 
     if not route.candidates or #route.candidates == 0 then
         table.insert(items, {
-            title = _("No matching books."),
+            title = _("Empty"),
             dim = true,
         })
         return ContentBuilder.buildList(shell, items)

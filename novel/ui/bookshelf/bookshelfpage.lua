@@ -49,7 +49,7 @@ end
 function BookshelfPage.build(shell, plugin)
     local records_list = records(plugin)
     if #records_list == 0 then
-        return ContentBuilder.buildEmptyContent(shell, _("Empty"))
+        return ContentBuilder.buildEmptyState(shell)
     end
 
     local items = {}

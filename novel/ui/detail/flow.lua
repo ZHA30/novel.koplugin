@@ -133,9 +133,7 @@ local function buildButtons(plugin, source, result, options)
                         and _("Bookshelf info updated.")
                         or _("Added to bookshelf."))
                 else
-                    Dialog.message(in_bookshelf
-                        and (_("Update bookshelf failed: ") .. tostring(err))
-                        or (_("Add to bookshelf failed: ") .. tostring(err)))
+                    Dialog.message(Dialog.failureMessage(err))
                 end
             end,
         },
@@ -214,8 +212,7 @@ function DetailFlow.showLoaded(plugin, source, result, options)
         "detail_viewer",
     })
     if not result or not result.ok then
-        Dialog.message(_("Detail failed: ")
-            .. tostring(Dialog.errorText(result, _("Detail failed."))))
+        Dialog.message(Dialog.failureMessage(result))
         return
     end
 
@@ -258,7 +255,7 @@ function DetailFlow.show(plugin, source, book, options)
             return
         end
         if not completed then
-            Dialog.message(_("Detail loading canceled."))
+            Dialog.message(Dialog.canceledMessage())
             return
         end
         DetailFlow.showLoaded(plugin, source, result, options)

@@ -48,12 +48,12 @@ function DiscoverResultsPage.build(shell, plugin, route, runtime)
     end
 
     if #items == 0 then
-        return ContentBuilder.buildStatusContent(shell, _("Empty"), _("No results."))
+        return ContentBuilder.buildEmptyState(shell)
     end
 
     if route.error then
         table.insert(items, {
-            title = _("Last request failed"),
+            title = _("Failed"),
             subtitle = tostring(route.error),
             dim = true,
         })

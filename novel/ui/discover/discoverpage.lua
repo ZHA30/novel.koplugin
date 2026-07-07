@@ -23,7 +23,7 @@ function DiscoverPage.build(shell, plugin, route, runtime)
     )
     local searchable_sources = SearchSupport.searchableSources(plugin)
     if #source_groups == 0 and #unsupported == 0 and #searchable_sources == 0 then
-        return ContentBuilder.buildEmptyContent(shell, _("No discoverable sources."))
+        return ContentBuilder.buildEmptyState(shell)
     end
 
     local items = {}
@@ -68,7 +68,7 @@ function DiscoverPage.build(shell, plugin, route, runtime)
         if not collapsed then
             if #source_group.groups == 0 then
                 table.insert(items, {
-                    title = _("No discover categories."),
+                    title = _("Empty"),
                     indent = 1,
                     dim = true,
                 })

@@ -8,7 +8,7 @@ local SearchSourcesPage = {}
 function SearchSourcesPage.build(shell, plugin, route)
     local sources = route.sources or {}
     if #sources == 0 then
-        return ContentBuilder.buildStatusContent(shell, _("Empty"), _("No enabled searchable sources."))
+        return ContentBuilder.buildEmptyState(shell)
     end
 
     local items = {}

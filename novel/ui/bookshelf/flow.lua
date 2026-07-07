@@ -52,7 +52,7 @@ local function applySwitch(plugin, record, candidate)
             local updated_record, err = plugin.app:getBookshelfStore()
                 :applySwitch(record, candidate.source, candidate.book)
             if not updated_record then
-                Dialog.message(_("Switch failed: ") .. tostring(err))
+                Dialog.message(Dialog.failureMessage(err))
                 return
             end
             Dialog.closeWidget(plugin, "bookshelf_switch_confirm_dialog")
@@ -68,8 +68,7 @@ end
 
 local function showSwitchResults(plugin, record, result)
     if not result or not result.ok then
-        Dialog.message(_("Switch failed: ")
-            .. tostring(Dialog.errorText(result, _("Switch failed."))))
+        Dialog.message(Dialog.failureMessage(result))
         return
     end
 
@@ -97,7 +96,7 @@ local function confirmRemove(plugin, record)
             local removed = plugin.app:getBookshelfStore():remove(record.source, record.book)
             Dialog.clearIfOwned(plugin, "bookshelf_confirm_dialog", confirm_dialog)
             if not removed then
-                Dialog.message(_("Remove from bookshelf failed."))
+                Dialog.message(Dialog.failureMessage())
                 return
             end
             Dialog.closeWidget(plugin, "detail_viewer")
@@ -152,19 +151,18 @@ local function refreshRecord(plugin, record)
             return
         end
         if not completed then
-            Dialog.message(_("Refresh canceled."))
+            Dialog.message(Dialog.canceledMessage())
             return
         end
         if not result or not result.ok then
-            Dialog.message(_("Refresh failed: ")
-                .. tostring(Dialog.errorText(result, _("Refresh failed."))))
+            Dialog.message(Dialog.failureMessage(result))
             return
         end
 
         local updated_record, err = plugin.app:getBookshelfStore()
             :applyRefresh(source, record.book, result)
         if not updated_record then
-            Dialog.message(_("Refresh failed: ") .. tostring(err))
+            Dialog.message(Dialog.failureMessage(err))
             return
         end
         Dialog.message(_("Book refreshed.") .. "\n"
@@ -204,7 +202,7 @@ local function switchRecord(plugin, record)
             return
         end
         if not completed then
-            Dialog.message(_("Source switch canceled."))
+            Dialog.message(Dialog.canceledMessage())
             return
         end
         showSwitchResults(plugin, record, result)

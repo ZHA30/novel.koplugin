@@ -39,7 +39,7 @@ function SourcesPage.build(shell, plugin, _route, runtime)
     local source_list = store:list()
     local groups = store:listGroups()
     if #source_list == 0 then
-        return ContentBuilder.buildEmptyContent(shell, _("No local book source files."))
+        return ContentBuilder.buildEmptyState(shell)
     end
 
     local items = {}

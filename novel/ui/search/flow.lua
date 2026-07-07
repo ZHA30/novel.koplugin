@@ -126,8 +126,7 @@ function SearchFlow.showResults(plugin, source, keyword, result, options)
             first_page = page,
             current_page = page,
             no_more_source_pages = true,
-            error = _("Search failed: ")
-                .. tostring(Dialog.errorText(result, _("Search failed."))),
+            error = Dialog.failureMessage(result),
         })
         return
     end
@@ -227,7 +226,7 @@ function SearchFlow.loadPage(plugin, page, options)
                 first_page = first_page,
                 current_page = current_page,
                 no_more_source_pages = current.no_more_source_pages == true,
-                error = _("Search canceled."),
+                error = Dialog.canceledMessage(),
             })
             return
         end
@@ -243,7 +242,7 @@ function SearchFlow.loadPage(plugin, page, options)
                 first_page = first_page,
                 current_page = current_page,
                 no_more_source_pages = current.no_more_source_pages == true,
-                error = _("Search failed: ") .. Dialog.errorText(result),
+                error = Dialog.failureMessage(result),
             })
             return
         end
@@ -327,7 +326,7 @@ function SearchFlow.start(plugin, source, keyword, options)
                 source_name = SearchSupport.sourceTitle(source),
                 keyword = keyword,
                 no_more_source_pages = true,
-                error = _("Search canceled."),
+                error = Dialog.canceledMessage(),
             })
             return
         end

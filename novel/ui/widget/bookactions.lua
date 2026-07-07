@@ -85,7 +85,7 @@ local function toggleBookshelf(runtime, plugin, route, index, book, record, stor
             updateBook(runtime, plugin, route, index, book, route_with)
             Dialog.message(_("Removed from bookshelf."))
         else
-            Dialog.message(_("Remove from bookshelf failed."))
+            Dialog.message(Dialog.failureMessage())
         end
         return
     end
@@ -96,7 +96,7 @@ local function toggleBookshelf(runtime, plugin, route, index, book, record, stor
         Dialog.message(_("Added to bookshelf."))
         return
     end
-    Dialog.message(_("Add to bookshelf failed: ") .. tostring(err))
+    Dialog.message(Dialog.failureMessage(err))
 end
 
 function BookActions.context(plugin)

@@ -27,9 +27,6 @@ msgstr "设置"
 msgid "Sources"
 msgstr "书源"
 
-msgid "No local book source files."
-msgstr "未找到本地书源文件。"
-
 msgid "Disabled"
 msgstr "已禁用"
 
@@ -54,15 +51,6 @@ msgstr "从书架移除这本书？"
 msgid "Remove"
 msgstr "移除"
 
-msgid "Refresh canceled."
-msgstr "刷新已取消。"
-
-msgid "Refresh failed: "
-msgstr "刷新失败："
-
-msgid "Refresh failed."
-msgstr "刷新失败。"
-
 msgid "Book refreshed."
 msgstr "书籍已刷新。"
 
@@ -75,14 +63,14 @@ msgstr "目录"
 msgid "Bookshelf info updated."
 msgstr "书架信息已更新。"
 
-msgid "Update bookshelf failed: "
-msgstr "更新书架失败："
-
 msgid "Empty"
 msgstr "空"
 
 msgid "Failed"
 msgstr "失败"
+
+msgid "Canceled."
+msgstr "已取消。"
 
 msgid "Removed from bookshelf."
 msgstr "已从书架移除。"
@@ -90,23 +78,11 @@ msgstr "已从书架移除。"
 msgid "Added to bookshelf."
 msgstr "已加入书架。"
 
-msgid "Add to bookshelf failed: "
-msgstr "加入书架失败："
-
 msgid "Unsupported rules"
 msgstr "不支持的规则"
 
 msgid "Font size"
 msgstr "字号"
-
-msgid "Detail failed."
-msgstr "详情加载失败。"
-
-msgid "Detail failed: "
-msgstr "详情加载失败："
-
-msgid "Detail loading canceled."
-msgstr "详情加载已取消。"
 
 msgid "Next page"
 msgstr "下一页"
@@ -120,23 +96,11 @@ msgstr "返回"
 msgid "Exit"
 msgstr "退出"
 
-msgid "Discover failed: "
-msgstr "发现失败："
-
 msgid "no result returned"
 msgstr "没有返回结果"
 
 msgid "unknown error"
 msgstr "未知错误"
-
-msgid "Discover canceled."
-msgstr "发现已取消。"
-
-msgid "No discoverable sources."
-msgstr "没有可用的发现书源。"
-
-msgid "No discover categories."
-msgstr "没有发现分类。"
 
 msgid "All"
 msgstr "全部"
@@ -150,32 +114,14 @@ msgstr "正序"
 msgid "Descending"
 msgstr "倒序"
 
-msgid "No chapters."
-msgstr "没有章节。"
-
 msgid "Chapter not found."
 msgstr "未找到章节。"
 
 msgid "Chapter cannot be opened."
 msgstr "章节无法打开。"
 
-msgid "Content failed."
-msgstr "正文加载失败。"
-
-msgid "Content failed: "
-msgstr "正文加载失败："
-
-msgid "Save chapter failed: "
-msgstr "保存章节失败："
-
 msgid "Loading..."
 msgstr "加载中..."
-
-msgid "Chapter loading canceled."
-msgstr "章节加载已取消。"
-
-msgid "Chapter list loading canceled."
-msgstr "目录加载已取消。"
 
 msgid "No novel chapters for this document."
 msgstr "当前文档没有小说目录。"
@@ -188,12 +134,6 @@ msgstr "取消"
 
 msgid "Candidates: "
 msgstr "候选数："
-
-msgid "Chapters failed."
-msgstr "目录加载失败。"
-
-msgid "Chapters failed: "
-msgstr "目录加载失败："
 
 msgid "Checked: "
 msgstr "已检查："
@@ -216,38 +156,14 @@ msgstr "书名匹配"
 msgid "No enabled searchable sources."
 msgstr "没有已启用的可搜索书源。"
 
-msgid "No matching books."
-msgstr "没有匹配书籍。"
-
-msgid "No results."
-msgstr "没有结果。"
-
-msgid "Last request failed"
-msgstr "上次请求失败"
-
 msgid "Rate: "
 msgstr "评分："
-
-msgid "Remove from bookshelf failed."
-msgstr "从书架移除失败。"
 
 msgid "Search"
 msgstr "搜索"
 
-msgid "Search canceled."
-msgstr "搜索已取消。"
-
-msgid "Search failed."
-msgstr "搜索失败。"
-
-msgid "Search failed: "
-msgstr "搜索失败："
-
 msgid "Skipped: "
 msgstr "已跳过："
-
-msgid "Source switch canceled."
-msgstr "换源已取消。"
 
 msgid "Source switched."
 msgstr "书源已切换。"
@@ -257,12 +173,6 @@ msgstr "摘要"
 
 msgid "Switch"
 msgstr "切换"
-
-msgid "Switch failed."
-msgstr "换源失败。"
-
-msgid "Switch failed: "
-msgstr "换源失败："
 
 msgid "Switch source"
 msgstr "切换书源"

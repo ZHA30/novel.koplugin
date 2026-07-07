@@ -158,7 +158,7 @@ function DiscoverFlow.loadPage(plugin, page, options)
                 first_page = first_page,
                 current_page = current_page,
                 no_more_source_pages = current.no_more_source_pages == true,
-                error = _("Discover canceled."),
+                error = Dialog.canceledMessage(),
             })
             return
         end
@@ -178,7 +178,7 @@ function DiscoverFlow.loadPage(plugin, page, options)
                 first_page = first_page,
                 current_page = current_page,
                 no_more_source_pages = current.no_more_source_pages == true,
-                error = _("Discover failed: ") .. Dialog.errorText(result),
+                error = Dialog.failureMessage(result),
             })
             return
         end
@@ -236,7 +236,7 @@ function DiscoverFlow.showResults(plugin, source, group, page, result, options)
             group = group,
             first_page = page,
             current_page = page,
-            error = _("Discover failed: ") .. Dialog.errorText(result),
+            error = Dialog.failureMessage(result),
         })
         return
     end
@@ -281,7 +281,7 @@ function DiscoverFlow.start(plugin, source, group, page, options)
                 group = group,
                 first_page = page,
                 current_page = page,
-                error = _("Discover canceled."),
+                error = Dialog.canceledMessage(),
             })
             return
         end

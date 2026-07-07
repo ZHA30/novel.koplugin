@@ -12,7 +12,7 @@ function ChaptersPage.build(shell, plugin, route)
 
     local manifest = route.manifest
     if not manifest then
-        return ContentBuilder.buildStatusContent(shell, _("Empty"), _("No chapters."))
+        return ContentBuilder.buildEmptyState(shell)
     end
 
     local filter, sort = ChapterListing.resolveState(plugin, manifest, {
@@ -21,7 +21,7 @@ function ChaptersPage.build(shell, plugin, route)
     })
     local rows, shown_count = ChapterListing.buildRows(manifest, filter, sort)
     if shown_count == 0 then
-        return ContentBuilder.buildStatusContent(shell, _("Empty"), _("No chapters."))
+        return ContentBuilder.buildEmptyState(shell)
     end
 
     local items = {}

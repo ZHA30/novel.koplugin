@@ -61,6 +61,25 @@ function Dialog.errorText(result, fallback)
     return table.concat(parts, "\n")
 end
 
+function Dialog.failureMessage(reason, fallback)
+    local detail
+    if reason == nil then
+        detail = fallback
+    elseif type(reason) == "table" then
+        detail = Dialog.errorText(reason, fallback)
+    else
+        detail = tostring(reason)
+    end
+    if detail == nil or detail == "" then
+        return _("Failed")
+    end
+    return _("Failed: ") .. detail
+end
+
+function Dialog.canceledMessage()
+    return _("Canceled.")
+end
+
 function Dialog.unsupportedText(items)
     local lines = {}
     for item_index = 1, #(items or {}) do

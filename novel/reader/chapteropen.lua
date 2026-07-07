@@ -235,13 +235,12 @@ function ChapterOpen.open(plugin, manifest, position, options)
         end
         if not completed then
             resetSwitch(plugin)
-            Dialog.message(_("Chapter loading canceled."))
+            Dialog.message(Dialog.canceledMessage())
             return
         end
         if not result or not result.ok then
             resetSwitch(plugin)
-            Dialog.message(_("Content failed: ")
-                .. tostring(Dialog.errorText(result, _("Content failed."))))
+            Dialog.message(Dialog.failureMessage(result))
             return
         end
 
@@ -251,7 +250,7 @@ function ChapterOpen.open(plugin, manifest, position, options)
         })
         if not file then
             resetSwitch(plugin)
-            Dialog.message(_("Save chapter failed: ") .. tostring(err))
+            Dialog.message(Dialog.failureMessage(err))
             return
         end
         manifest = manifest_store:load(manifest.book_id) or manifest

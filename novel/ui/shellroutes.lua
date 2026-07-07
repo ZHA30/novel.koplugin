@@ -8,10 +8,13 @@ local ShellRoutes = {}
 local TOP_LEVEL = {
     bookshelf = true,
     discover = true,
-    sources = true,
+    settings = true,
 }
 
 function ShellRoutes.normalizeTab(tab)
+    if tab == "sources" then
+        return "settings"
+    end
     if TOP_LEVEL[tab] then
         return tab
     end
@@ -46,10 +49,18 @@ function ShellRoutes.discover()
     }
 end
 
-function ShellRoutes.sources()
+function ShellRoutes.settings()
+    return {
+        key = "settings",
+        tab = "settings",
+    }
+end
+
+function ShellRoutes.sources(args)
+    args = args or {}
     return {
         key = "sources",
-        tab = "sources",
+        tab = args.tab or "settings",
     }
 end
 
@@ -158,6 +169,12 @@ function ShellRoutes.title(route)
             route.first_page,
             route.current_page
         )
+    end
+    if route and route.key == "settings" then
+        return _("Settings")
+    end
+    if route and route.key == "sources" then
+        return _("Sources")
     end
     return _("Novel")
 end

@@ -11,9 +11,12 @@ local ENTRIES = {
         module = "novel.ui.discover.discoverpage",
         default_route = ShellRoutes.discover,
     },
+    settings = {
+        module = "novel.ui.settings.settingspage",
+        default_route = ShellRoutes.settings,
+    },
     sources = {
         module = "novel.ui.sources.sourcespage",
-        default_route = ShellRoutes.sources,
     },
     chapters = {
         module = "novel.ui.chapters.chapterspage",

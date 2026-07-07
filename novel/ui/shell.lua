@@ -33,13 +33,13 @@ local function homeActions(plugin)
             end,
         },
         {
-            key = "sources",
-            text = _("Sources"),
-            icon = "sources",
-            active = active_tab == "sources",
-            dim = active_tab ~= "sources",
+            key = "settings",
+            text = _("Settings"),
+            icon = "settings",
+            active = active_tab == "settings",
+            dim = active_tab ~= "settings",
             callback = function()
-                Shell.showTab(plugin, "sources")
+                Shell.showTab(plugin, "settings")
             end,
         },
         {

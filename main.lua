@@ -2,7 +2,6 @@ local _ = dofile((debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "i18
 local AppContext = require("novel.appcontext")
 local BookshelfFlow = require("novel.ui.bookshelf.flow")
 local DiscoverFlow = require("novel.ui.discover.flow")
-local Dialog = require("novel.ui.widget.dialog")
 local Loading = require("novel.ui.widget.loading")
 local ReaderHooks = require("novel.reader.readerhooks")
 local SearchFlow = require("novel.ui.search.flow")
@@ -79,10 +78,6 @@ end
 
 function Novel:onShowNovelMenu()
     Shell.show(self)
-end
-
-function Novel.showUnderDevelopment(message)
-    Dialog.message(message)
 end
 
 return Novel

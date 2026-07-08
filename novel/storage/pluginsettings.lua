@@ -5,10 +5,9 @@ local PluginSettings = {
 }
 
 PluginSettings.defaults = {
-    schema_version = 3,
+    schema_version = 4,
     debug = {
         enabled = false,
-        max_entries = 200,
     },
     cache = {
         enabled = true,
@@ -25,11 +24,6 @@ PluginSettings.defaults = {
         lookahead = 1,
         initial_delay = 0.8,
         timeout_seconds = 45,
-    },
-    storage = {
-        backend = "sqlite",
-        target_backend = "sqlite",
-        schema_version = 1,
     },
     chapter_list = {
         books = {},
@@ -107,10 +101,13 @@ local function migrate(settings)
             or PluginSettings.defaults.cache.max_metadata_records
         settings.cache.max_metadata_bytes = settings.cache.max_metadata_bytes
             or PluginSettings.defaults.cache.max_metadata_bytes
-        settings.storage = settings.storage or {}
-        settings.storage.backend = "sqlite"
-        settings.storage.target_backend = "sqlite"
-        settings.storage.schema_version = PluginSettings.defaults.storage.schema_version
+    end
+    if version < 4 then
+        settings.cleanup = nil
+        settings.storage = nil
+        if type(settings.debug) == "table" then
+            settings.debug.max_entries = nil
+        end
     end
     settings.schema_version = PluginSettings.defaults.schema_version
     return true

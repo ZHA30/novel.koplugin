@@ -9,26 +9,9 @@ local logger = require("logger")
 local Log = {}
 Log.__index = Log
 
-local function appendEntry(entries, settings, level, message, context)
-    table.insert(entries, {
-        level = level,
-        message = message,
-        context = context,
-        time = os.time(),
-    })
-
-    local max_entries = settings.debug.max_entries or 200
-    while #entries > max_entries do
-        table.remove(entries, 1)
-    end
-
-    logger.dbg("Novel:", level, message)
-end
-
 function Log:new(settings)
     return setmetatable({
         settings = settings,
-        entries = {},
     }, self)
 end
 
@@ -42,7 +25,7 @@ function Log:append(level, message, context)
     if not self:isEnabled() then
         return
     end
-    appendEntry(self.entries, self.settings, level, message, context)
+    logger.dbg("Novel:", level, message, context)
 end
 
 function Log:debug(message, context)

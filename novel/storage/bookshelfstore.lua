@@ -24,6 +24,27 @@ local function clone(value)
     return copy
 end
 
+local function sameValue(left, right)
+    if type(left) ~= type(right) then
+        return false
+    end
+    if type(left) ~= "table" then
+        return left == right
+    end
+
+    for key, value in pairs(left) do
+        if not sameValue(value, right[key]) then
+            return false
+        end
+    end
+    for key, _ in pairs(right) do
+        if left[key] == nil then
+            return false
+        end
+    end
+    return true
+end
+
 local function sourceUrl(source)
     return SourceInfo.key(source)
 end
@@ -84,6 +105,18 @@ local function preserveProgress(book, record)
     book.durChapterPos = old_book.durChapterPos or book.durChapterPos
     book.durChapterTime = old_book.durChapterTime or book.durChapterTime
     return book
+end
+
+local function sameBook(left, right)
+    left = left or {}
+    right = right or {}
+    for field_index = 1, #BookRecord.fields do
+        local field = BookRecord.fields[field_index]
+        if not sameValue(left[field], right[field]) then
+            return false
+        end
+    end
+    return true
 end
 
 local function chapterAt(chapters, position)
@@ -192,6 +225,34 @@ function BookshelfStore:add(source, book)
     table.insert(records, record)
     self:saveAll(records)
     return record
+end
+
+function BookshelfStore:updateExisting(source, book)
+    local records = self:list()
+    local key = bookKey(source, book)
+    local next_source = clone(source)
+    local next_source_url = sourceUrl(source)
+    local next_source_name = sourceName(source)
+    for record_index = 1, #records do
+        local record = records[record_index]
+        if record.key == key then
+            local updated_book = preserveProgress(normalizeBook(source, book), record)
+            local changed = not sameBook(record.book, updated_book)
+                or record.source_url ~= next_source_url
+                or record.source_name ~= next_source_name
+                or not sameValue(record.source, next_source)
+            if not changed then
+                return record, false
+            end
+            record.source = next_source
+            record.source_url = next_source_url
+            record.source_name = next_source_name
+            record.book = updated_book
+            self:saveAll(records)
+            return record, true
+        end
+    end
+    return nil, false
 end
 
 function BookshelfStore:remove(source, book)

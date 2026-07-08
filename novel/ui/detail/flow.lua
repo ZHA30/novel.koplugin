@@ -45,6 +45,13 @@ local function showUnsupported(result)
     Dialog.showUnsupported(result and result.unsupported)
 end
 
+local function persistBookshelfBook(plugin, source, book)
+    if not plugin or not plugin.app or type(book) ~= "table" then
+        return
+    end
+    plugin.app:getBookshelfStore():updateExisting(source, book)
+end
+
 local function normalizeFontSize(size)
     size = tonumber(size)
     if not size then
@@ -208,6 +215,7 @@ end
 
 local function showResolvedDetail(plugin, source, result, detail_text, options)
     local visited_book = result.book or {}
+    persistBookshelfBook(plugin, source, visited_book)
     DetailVisits.markVisited(plugin, source, visited_book)
     if options and type(options.on_visited) == "function" then
         options.on_visited(visited_book)

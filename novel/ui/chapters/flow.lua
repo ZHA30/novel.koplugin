@@ -44,6 +44,13 @@ local function currentMatchesManifest(plugin, manifest)
         and current.manifest.book_id == manifest.book_id
 end
 
+local function persistBookshelfBook(plugin, source, book)
+    if not plugin or not plugin.app or type(book) ~= "table" then
+        return
+    end
+    plugin.app:getBookshelfStore():updateExisting(source, book)
+end
+
 function ChaptersFlow.showManifest(plugin, manifest, options)
     local route = manifestRoute(plugin, manifest, options)
     local current = Shell.currentRoute(plugin)
@@ -88,6 +95,7 @@ function ChaptersFlow.showList(plugin, source, book, result, options)
         Dialog.message(Dialog.failureMessage(err))
         return
     end
+    persistBookshelfBook(plugin, source, manifest.book or result.book or book)
     if options.open_position then
         ChaptersFlow.openChapter(plugin, manifest, options.open_position, {
             from_reader = options.from_reader,

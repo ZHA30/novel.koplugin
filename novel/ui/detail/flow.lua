@@ -29,6 +29,18 @@ local function detailText(book)
     return book.intro or ""
 end
 
+local function copyTable(value)
+    local copy = {}
+    for key, item in pairs(value or {}) do
+        copy[key] = item
+    end
+    return copy
+end
+
+local function hasDetailText(book)
+    return tostring(detailText(book)):match("%S") ~= nil
+end
+
 local function showUnsupported(result)
     Dialog.showUnsupported(result and result.unsupported)
 end
@@ -167,7 +179,7 @@ local function buildButtons(plugin, source, result, options)
     return { row }
 end
 
-local function showDetailViewer(plugin, source, result, options)
+local function showDetailViewer(plugin, source, result, detail_text, options)
     local book = result.book or {}
     options = options or {}
     options.state = options.state or {}
@@ -175,7 +187,7 @@ local function showDetailViewer(plugin, source, result, options)
     local viewer
     viewer = DetailViewer:new{
         title = bookTitle(book),
-        text = detailText(book),
+        text = detail_text or detailText(book),
         buttons_table = buildButtons(plugin, source, result, options),
         text_font_size = currentFontSize(plugin, options),
         on_font_size_change = function(size, owner)
@@ -194,6 +206,36 @@ local function showDetailViewer(plugin, source, result, options)
     Dialog.showWidget(plugin, "detail_viewer", viewer)
 end
 
+local function showResolvedDetail(plugin, source, result, detail_text, options)
+    local visited_book = result.book or {}
+    DetailVisits.markVisited(plugin, source, visited_book)
+    if options and type(options.on_visited) == "function" then
+        options.on_visited(visited_book)
+    end
+
+    showDetailViewer(plugin, source, result, detail_text, options)
+end
+
+local function fallbackDetailText(book, reason)
+    if hasDetailText(book) then
+        return detailText(book)
+    end
+    return Dialog.failureMessage(reason)
+end
+
+local function showFallbackDetail(plugin, source, book, reason, options)
+    options = options or {}
+    local fallback_book = copyTable(book)
+    options.fallback_detail_text = fallbackDetailText(fallback_book, reason)
+    local fallback_result = {
+        ok = true,
+        book = fallback_book,
+        unsupported = type(reason) == "table" and reason.unsupported or nil,
+    }
+    showResolvedDetail(plugin, source, fallback_result,
+        options.fallback_detail_text, options)
+end
+
 function DetailFlow.close(plugin)
     invalidate(plugin)
     Loading.close(plugin, "detail_loading")
@@ -209,17 +251,16 @@ function DetailFlow.showLoaded(plugin, source, result, options)
         "detail_viewer",
     })
     if not result or not result.ok then
-        Dialog.message(Dialog.failureMessage(result))
+        showFallbackDetail(plugin, source,
+            (options and options.fallback_book) or (result and result.book) or {},
+            result, options)
         return
     end
-
-    local visited_book = result.book or {}
-    DetailVisits.markVisited(plugin, source, visited_book)
-    if options and type(options.on_visited) == "function" then
-        options.on_visited(visited_book)
+    if hasDetailText(result.book) and options then
+        options.fallback_detail_text = nil
     end
-
-    showDetailViewer(plugin, source, result, options)
+    showResolvedDetail(plugin, source, result,
+        options and options.fallback_detail_text or nil, options)
 end
 
 function DetailFlow.show(plugin, source, book, options)
@@ -227,10 +268,13 @@ function DetailFlow.show(plugin, source, book, options)
         return
     end
     book = book or {}
+    options = options or {}
+    options.fallback_book = options.fallback_book or book
     local has_info_html = book.infoHtml ~= nil and book.infoHtml ~= ""
     if not has_info_html and NetworkMgr:willRerunWhenOnline(function()
-        DetailFlow.show(plugin, source, book)
+        DetailFlow.show(plugin, source, book, options)
     end) then
+        showFallbackDetail(plugin, source, book, nil, options)
         return
     end
 

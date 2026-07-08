@@ -96,9 +96,11 @@ function ChapterDoc.html(chapter, content, content_type, options)
         '<meta charset="utf-8"/>',
         "<title>", escapeHtml(chapter.title), "</title>",
         "<style>",
-        "body{line-height:1.8;margin:5%;}",
-        "h1{font-size:1.25em;line-height:1.4;margin:0 0 1.2em 0;}",
-        "p{margin:0 0 0.9em 0;}",
+        "body{margin:0;padding:0;}",
+        "h1{font-size:1.25em;margin:0 0 1.2em 0;"
+            .. "page-break-before:auto;page-break-after:avoid;"
+            .. "page-break-inside:avoid;}",
+        "p{margin:0;text-indent:2em;}",
         imageStyleCss(options.image_style),
         "</style>",
         "</head>",

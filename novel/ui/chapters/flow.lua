@@ -140,6 +140,9 @@ function ChaptersFlow.show(plugin, source, book, options)
             return
         end
         if not completed then
+            if existing then
+                ChaptersFlow.showManifest(plugin, existing, options)
+            end
             Dialog.message(Dialog.canceledMessage())
             return
         end

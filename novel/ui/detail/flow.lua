@@ -296,7 +296,8 @@ function DetailFlow.show(plugin, source, book, options)
             return
         end
         if not completed then
-            Dialog.message(Dialog.canceledMessage())
+            showFallbackDetail(plugin, source,
+                options.fallback_book or book, Dialog.canceledMessage(), options)
             return
         end
         DetailFlow.showLoaded(plugin, source, result, options)

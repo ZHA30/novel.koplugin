@@ -7,6 +7,7 @@ local NetworkMgr = require("ui/network/manager")
 local ChapterOpen = require("novel.reader.chapteropen")
 local ShellRoutes = require("novel.ui.shellroutes")
 local Shell = require("novel.ui.shell")
+local ShellSession = require("novel.ui.shellsession")
 local Trapper = require("ui/trapper")
 
 local ChaptersFlow = {}
@@ -174,6 +175,7 @@ function ChaptersFlow.showCurrent(plugin)
         Dialog.message(_("No novel chapters for this document."))
         return
     end
+    ShellSession.resetStack(plugin)
     ChaptersFlow.showManifest(plugin, current_chapter.manifest)
 end
 

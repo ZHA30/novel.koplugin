@@ -597,7 +597,12 @@ end
 
 function Shell.pop(plugin)
     ShellSession.pop(plugin)
-    scheduleRender(plugin)
+    local stack = ShellSession.stack(plugin)
+    if #stack == 0 and plugin and plugin.ui and plugin.ui.document then
+        Shell.close(plugin)
+    else
+        scheduleRender(plugin)
+    end
 end
 
 function Shell.previousPage(plugin)

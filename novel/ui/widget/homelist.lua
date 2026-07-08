@@ -37,6 +37,7 @@ local TEXTBOX_LINE_HEIGHT = 0.3
 local HomeListItem = InputContainer:extend{
     item = nil,
     width = 0,
+    row_height = nil,
     callback = nil,
     leading_action_callback = nil,
     leading_action_ref = nil,
@@ -82,6 +83,10 @@ local function bookRowHeight(item)
     return ROW_MIN_HEIGHT
 end
 
+local function requestedRowHeight(row_height)
+    return math.max(0, math.floor(tonumber(row_height) or 0))
+end
+
 local function separatorInsets(item)
     if item.book then
         return ROW_BOOK_HORIZONTAL_PADDING, ROW_BOOK_HORIZONTAL_PADDING
@@ -101,7 +106,10 @@ end
 function HomeListItem:init()
     local item = self.item or {}
     if item.book then
-        local row_height = bookRowHeight(item)
+        local row_height = math.max(
+            bookRowHeight(item),
+            requestedRowHeight(self.row_height)
+        )
         self.action_buttons = item.action_buttons
         self.action_refs = {}
         self.dimen = Geom:new{
@@ -244,7 +252,8 @@ function HomeListItem:init()
 
     local row_height = math.max(
         bookRowHeight(item),
-        content:getSize().h + 2 * ROW_VERTICAL_PADDING
+        content:getSize().h + 2 * ROW_VERTICAL_PADDING,
+        requestedRowHeight(self.row_height)
     )
 
     self.dimen = Geom:new{
@@ -436,7 +445,9 @@ local function appendEntries(content, entries)
     for index = 1, #entries do
         local entry = entries[index]
         table.insert(content, entry.row)
-        table.insert(content, entry.separator)
+        if entry.separator then
+            table.insert(content, entry.separator)
+        end
     end
 end
 
@@ -493,7 +504,8 @@ local function entryHeightFor(item)
     return rowHeightFor(item) + Size.line.thin
 end
 
-local function buildEntries(get_item, item_count, content_width, start_index, end_index)
+local function buildEntries(get_item, item_count, content_width, start_index,
+    end_index, row_height_at, omit_last_separator)
     local entries = {}
     start_index = math.max(1, tonumber(start_index) or 1)
     end_index = math.min(item_count, tonumber(end_index) or item_count)
@@ -502,58 +514,54 @@ local function buildEntries(get_item, item_count, content_width, start_index, en
         local row = HomeListItem:new{
             item = item,
             width = content_width,
+            row_height = row_height_at and row_height_at(index),
             callback = item.callback,
         }
-        local separator = separatorFor(item, get_item(index + 1), content_width)
+        local separator
+        if index < end_index or not omit_last_separator then
+            separator = separatorFor(item, get_item(index + 1), content_width)
+        end
         table.insert(entries, {
             row = row,
             separator = separator,
-            height = row:getSize().h + separator:getSize().h,
+            height = row:getSize().h + (separator and separator:getSize().h or 0),
         })
     end
     return entries
 end
 
-local function paginateItems(get_item, item_count, height)
-    local pages = {}
-    local page_start = 1
-    local page_height = 0
-    height = math.max(1, tonumber(height) or 1)
-
-    for index = 1, item_count do
-        local entry_height = entryHeightFor(get_item(index))
-        if index > page_start and page_height + entry_height > height then
-            table.insert(pages, {
-                first = page_start,
-                last = index - 1,
-            })
-            page_start = index
-            page_height = 0
-        end
-        page_height = page_height + entry_height
-    end
-
-    if item_count > 0 then
-        table.insert(pages, {
-            first = page_start,
-            last = item_count,
-        })
-    end
-    if #pages == 0 then
-        table.insert(pages, {
-            first = 1,
-            last = 0,
-        })
-    end
-    return pages
-end
-
 local normalizedPage
 
-local function fixedPage(item_count, height, page, item)
+local function maxEntryHeight(get_item, item_count)
+    local entry_height = 0
+    for index = 1, item_count do
+        entry_height = math.max(entry_height, entryHeightFor(get_item(index)))
+    end
+    return math.max(1, entry_height)
+end
+
+local function fixedPageLayout(height, min_entry_height)
     height = math.max(1, tonumber(height) or 1)
-    local entry_height = math.max(1, entryHeightFor(item or {}))
-    local items_per_page = math.max(1, math.floor(height / entry_height))
+    min_entry_height = math.max(1, tonumber(min_entry_height) or 1)
+    local min_row_height = math.max(1, min_entry_height - Size.line.thin)
+    local items_per_page = math.max(1,
+        math.floor((height + Size.line.thin) / min_entry_height))
+    local separator_height = math.max(0, items_per_page - 1) * Size.line.thin
+    local rows_height = math.max(items_per_page, height - separator_height)
+    local row_height = math.max(
+        min_row_height,
+        math.floor(rows_height / items_per_page)
+    )
+    local remainder = math.max(0, rows_height - row_height * items_per_page)
+    return {
+        items_per_page = items_per_page,
+        row_height = row_height,
+        remainder = remainder,
+    }
+end
+
+local function fixedPage(item_count, page, layout)
+    local items_per_page = layout.items_per_page
     local total_pages = math.max(1, math.ceil(item_count / items_per_page))
     local current_page = normalizedPage(page, total_pages)
     if item_count == 0 then
@@ -567,6 +575,27 @@ local function fixedPage(item_count, height, page, item)
         first = first,
         last = math.min(item_count, first + items_per_page - 1),
     }, current_page, total_pages
+end
+
+local function pageItemCount(page)
+    local first = tonumber(page and page.first) or 1
+    local last = tonumber(page and page.last) or 0
+    return math.max(0, last - first + 1)
+end
+
+local function fixedRowHeightAt(layout, page)
+    if not layout or pageItemCount(page) < layout.items_per_page then
+        return nil
+    end
+    local first = tonumber(page and page.first) or 1
+    return function(index)
+        local row = index - first + 1
+        local row_height = layout.row_height
+        if row > 0 and row <= layout.remainder then
+            row_height = row_height + 1
+        end
+        return row_height
+    end
 end
 
 normalizedPage = function(page, total_pages)
@@ -641,17 +670,20 @@ function HomeList.new(_, args)
         fixed_item = args.fixed_item
     end
     local page, current_page, total_pages
+    local fixed_layout
     if fixed_item then
-        page, current_page, total_pages = fixedPage(item_count, dimen.h,
-            args.page, fixed_item)
+        fixed_layout = fixedPageLayout(dimen.h, entryHeightFor(fixed_item))
+        page, current_page, total_pages = fixedPage(item_count, args.page,
+            fixed_layout)
     else
-        local pages = paginateItems(get_item, item_count, dimen.h)
-        total_pages = #pages
-        current_page = normalizedPage(args.page, total_pages)
-        page = pages[current_page] or {}
+        fixed_layout = fixedPageLayout(dimen.h,
+            maxEntryHeight(get_item, item_count))
+        page, current_page, total_pages = fixedPage(item_count, args.page,
+            fixed_layout)
     end
+    local row_height_at = fixedRowHeightAt(fixed_layout, page)
     local entries = buildEntries(get_item, item_count, content_width,
-        page.first, page.last)
+        page.first, page.last, row_height_at, row_height_at ~= nil)
     appendEntries(content, entries)
 
     if type(args.on_page_info) == "function" then

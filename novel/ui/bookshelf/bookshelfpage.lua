@@ -2,6 +2,7 @@ local _ = require("novel.i18n")
 local BookshelfFlow = require("novel.ui.bookshelf.flow")
 local ChaptersFlow = require("novel.ui.chapters.flow")
 local ContentBuilder = require("novel.ui.contentbuilder")
+local Manifest = require("novel.storage.manifest")
 
 local BookshelfPage = {}
 
@@ -93,22 +94,49 @@ local function totalChapterCount(record)
     return 0
 end
 
+local function downloadedChapterCount(record)
+    if not record or not record.source or not record.book then
+        return 0
+    end
+    local manifest = Manifest:loadByBook(record.source, record.book)
+    if not manifest or not manifest.chapters then
+        return 0
+    end
+    local count = 0
+    for position = 1, #manifest.chapters do
+        if manifest.chapters[position].downloaded then
+            count = count + 1
+        end
+    end
+    return count
+end
+
 local function subtitleSegments(record)
     local total = totalChapterCount(record)
     local read = readChapterCount(record)
     if total > 0 and read > total then
         read = total
     end
-    local segments = {
-        {
+    local segments = {}
+    if total > 0 or read > 0 then
+        table.insert(segments, {
             icon = "circle-check",
             text = tostring(read),
-        },
-        {
+        })
+    end
+    local downloaded = downloadedChapterCount(record)
+    if downloaded > 0 then
+        table.insert(segments, {
+            icon = "arrow-down-to-line",
+            text = tostring(downloaded),
+        })
+    end
+    if total > 0 then
+        table.insert(segments, {
             icon = "list",
             text = tostring(total),
-        },
-    }
+        })
+    end
     local source = sourceTitle(record)
     if source ~= "" then
         table.insert(segments, {

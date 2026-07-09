@@ -150,6 +150,15 @@ msgstr "没有可删除的章节缓存。"
 msgid "Select"
 msgstr "选择"
 
+msgid "Filter"
+msgstr "筛选"
+
+msgid "Clear"
+msgstr "清除"
+
+msgid "Apply"
+msgstr "确定"
+
 msgid "Exit"
 msgstr "退出"
 
@@ -158,9 +167,6 @@ msgstr "没有返回结果"
 
 msgid "unknown error"
 msgstr "未知错误"
-
-msgid "All"
-msgstr "全部"
 
 msgid "Unread"
 msgstr "未读"

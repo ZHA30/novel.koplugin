@@ -3,11 +3,23 @@ local ChapterRecord = require("novel.reader.chapterrecord")
 
 local ChapterListing = {}
 
-ChapterListing.FILTER_ALL = "all"
-ChapterListing.FILTER_UNREAD = "unread"
-
 ChapterListing.SORT_ASCENDING = "ascending"
 ChapterListing.SORT_DESCENDING = "descending"
+
+local FILTER_FIELDS = {
+    {
+        key = "unread",
+        text = function()
+            return _("Unread")
+        end,
+    },
+    {
+        key = "downloaded",
+        text = function()
+            return _("Downloaded")
+        end,
+    },
+}
 
 function ChapterListing.refreshManifest(manifest_store, manifest, source, book)
     if not manifest or not source then
@@ -29,11 +41,8 @@ function ChapterListing.manifestTitle(manifest)
     return ChapterListing.bookTitle(manifest and manifest.book)
 end
 
-function ChapterListing.filterLabel(filter)
-    if filter == ChapterListing.FILTER_UNREAD then
-        return _("Unread")
-    end
-    return _("All")
+function ChapterListing.filterLabel()
+    return _("Filter")
 end
 
 function ChapterListing.sortLabel(sort)
@@ -47,18 +56,104 @@ local function chapterTitle(chapter)
     return tostring(chapter.title or "")
 end
 
-local function matchesFilter(filter, chapter)
-    if filter == ChapterListing.FILTER_UNREAD then
-        return chapter.read ~= true and ChapterRecord.isOpenable(chapter)
+local function filterValue(value)
+    if value == true then
+        return true
+    end
+    if value == false then
+        return false
+    end
+    return nil
+end
+
+local function filterMatchesValue(actual, expected)
+    return expected == nil or actual == expected
+end
+
+local function cloneFilter(filter)
+    local copy = {}
+    filter = ChapterListing.normalizeFilter(filter)
+    for field_index = 1, #FILTER_FIELDS do
+        local key = FILTER_FIELDS[field_index].key
+        copy[key] = filter[key]
+    end
+    return copy
+end
+
+function ChapterListing.filterFields()
+    local fields = {}
+    for field_index = 1, #FILTER_FIELDS do
+        local field = FILTER_FIELDS[field_index]
+        fields[field_index] = {
+            key = field.key,
+            text = field.text(),
+        }
+    end
+    return fields
+end
+
+function ChapterListing.normalizeFilter(filter)
+    if type(filter) ~= "table" then
+        return {}
+    end
+
+    local normalized = {}
+    for field_index = 1, #FILTER_FIELDS do
+        local key = FILTER_FIELDS[field_index].key
+        normalized[key] = filterValue(filter[key])
+    end
+    return normalized
+end
+
+function ChapterListing.copyFilter(filter)
+    return cloneFilter(filter)
+end
+
+function ChapterListing.hasActiveFilter(filter)
+    filter = ChapterListing.normalizeFilter(filter)
+    for field_index = 1, #FILTER_FIELDS do
+        if filter[FILTER_FIELDS[field_index].key] ~= nil then
+            return true
+        end
+    end
+    return false
+end
+
+function ChapterListing.filtersEqual(left, right)
+    left = ChapterListing.normalizeFilter(left)
+    right = ChapterListing.normalizeFilter(right)
+    for field_index = 1, #FILTER_FIELDS do
+        local key = FILTER_FIELDS[field_index].key
+        if left[key] ~= right[key] then
+            return false
+        end
     end
     return true
 end
 
-function ChapterListing.normalizeFilter(filter)
-    if filter == ChapterListing.FILTER_UNREAD then
-        return ChapterListing.FILTER_UNREAD
+local function filterNeedsStorageUpdate(stored, filter)
+    if type(stored) ~= "table" and stored ~= nil then
+        return true
     end
-    return ChapterListing.FILTER_ALL
+    if not ChapterListing.filtersEqual(stored, filter) then
+        return true
+    end
+    if not ChapterListing.hasActiveFilter(filter) then
+        return stored ~= nil
+    end
+    return false
+end
+
+local function matchesFilter(filter, chapter)
+    filter = ChapterListing.normalizeFilter(filter)
+    if not ChapterListing.hasActiveFilter(filter) then
+        return true
+    end
+    if not ChapterRecord.isOpenable(chapter) then
+        return false
+    end
+    return filterMatchesValue(chapter.read ~= true, filter.unread)
+        and filterMatchesValue(chapter.downloaded == true, filter.downloaded)
 end
 
 function ChapterListing.normalizeSort(sort)
@@ -110,8 +205,12 @@ local function saveBookState(plugin, book_id, filter, sort)
     end
 
     local changed = false
-    if state.filter ~= filter then
-        state.filter = filter
+    if filterNeedsStorageUpdate(state.filter, filter) then
+        if ChapterListing.hasActiveFilter(filter) then
+            state.filter = ChapterListing.copyFilter(filter)
+        else
+            state.filter = nil
+        end
         changed = true
     end
     if state.sort ~= sort then
@@ -134,10 +233,14 @@ function ChapterListing.resolveState(plugin, manifest, options)
     local filter = options.filter
         or (book_id and plugin.novel_chapters_filter[book_id])
         or (book_state and book_state.filter)
-        or ChapterListing.FILTER_ALL
+        or {}
     filter = ChapterListing.normalizeFilter(filter)
     if book_id then
-        plugin.novel_chapters_filter[book_id] = filter
+        if ChapterListing.hasActiveFilter(filter) then
+            plugin.novel_chapters_filter[book_id] = ChapterListing.copyFilter(filter)
+        else
+            plugin.novel_chapters_filter[book_id] = nil
+        end
     end
 
     local sort = options.sort
@@ -150,7 +253,7 @@ function ChapterListing.resolveState(plugin, manifest, options)
     end
 
     if options.filter ~= nil or options.sort ~= nil
-        or (book_state and (book_state.filter ~= filter
+        or (book_state and (filterNeedsStorageUpdate(book_state.filter, filter)
             or book_state.sort ~= sort)) then
         saveBookState(plugin, book_id, filter, sort)
     end
@@ -169,12 +272,13 @@ end
 
 function ChapterListing.buildModel(manifest, filter, sort)
     local chapters = manifest and manifest.chapters or {}
+    filter = ChapterListing.normalizeFilter(filter)
     local start_position = sort == ChapterListing.SORT_DESCENDING and #chapters or 1
     local end_position = sort == ChapterListing.SORT_DESCENDING and 1 or #chapters
     local step = sort == ChapterListing.SORT_DESCENDING and -1 or 1
     local positions
 
-    if filter ~= ChapterListing.FILTER_ALL then
+    if ChapterListing.hasActiveFilter(filter) then
         positions = {}
         for position = start_position, end_position, step do
             local chapter = chapters[position]

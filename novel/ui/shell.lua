@@ -355,7 +355,7 @@ end
 
 local function chapterActions(plugin, route)
     local manifest, filter, sort = chapterState(plugin, route)
-    local unread = filter == ChapterListing.FILTER_UNREAD
+    local filter_active = ChapterListing.hasActiveFilter(filter)
     local descending = sort == ChapterListing.SORT_DESCENDING
     return {
         previousAction(plugin, route),
@@ -363,13 +363,16 @@ local function chapterActions(plugin, route)
         {
             key = "filter",
             text = ChapterListing.filterLabel(filter),
-            icon = unread and "funnel" or "funnel-x",
-            active = unread,
+            icon = filter_active and "funnel" or "funnel-x",
+            active = filter_active,
             callback = function()
-                local next_filter = unread
-                    and ChapterListing.FILTER_ALL
-                    or ChapterListing.FILTER_UNREAD
-                replaceChapterState(plugin, route, next_filter, sort)
+                local ChapterFilterDialog = require("novel.ui.chapters.filterdialog")
+                UIManager:show(ChapterFilterDialog:new{
+                    filter = filter,
+                    on_apply = function(next_filter)
+                        replaceChapterState(plugin, route, next_filter, sort)
+                    end,
+                })
             end,
         },
         {

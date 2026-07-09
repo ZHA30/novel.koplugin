@@ -184,12 +184,24 @@ local function addedWidgetWidth(width)
         - 2 * (Size.padding.default + Size.margin.default)
 end
 
-local function titleSeparator(width)
-    local separator = LineWidget:new{
-        background = Blitbuffer.COLOR_GRAY,
+local function buttonSeparatorWidth(width)
+    return width
+        - 2 * Size.border.window
+        - 2 * Size.padding.button
+end
+
+local function titleSeparator(content_width, separator_width)
+    local separator = CenterContainer:new{
         dimen = Geom:new{
-            w = width,
+            w = content_width,
             h = Size.line.medium,
+        },
+        LineWidget:new{
+            background = Blitbuffer.COLOR_GRAY,
+            dimen = Geom:new{
+                w = separator_width,
+                h = Size.line.medium,
+            },
         },
     }
     separator.not_focusable = true
@@ -230,7 +242,10 @@ function ChapterFilterDialog:init()
     self._added_widgets = {}
 
     local width = addedWidgetWidth(self.width)
-    table.insert(self._added_widgets, titleSeparator(width))
+    table.insert(self._added_widgets, titleSeparator(
+        width,
+        buttonSeparatorWidth(self.width)
+    ))
     local fields = ChapterListing.filterFields()
     for field_index = 1, #fields do
         local field = fields[field_index]

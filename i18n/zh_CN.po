@@ -96,17 +96,23 @@ msgstr "继续"
 msgid "Mark as read"
 msgstr "标记为已读"
 
-msgid "Mark as unread"
-msgstr "标记为未读"
-
 msgid "Mark %d chapters as read?"
 msgstr "将 %d 个章节标为已读？"
 
-msgid "Mark %d chapters as unread?"
-msgstr "将 %d 个章节标为未读？"
+msgid "Selected %d items"
+msgstr "选中 %d 项"
+
+msgid "Mark selected as read"
+msgstr "标记选中为已读"
+
+msgid "Mark selected as unread"
+msgstr "标记选中为未读"
 
 msgid "Download"
 msgstr "下载"
+
+msgid "Download selected"
+msgstr "下载选中"
 
 msgid "Download queue"
 msgstr "下载队列"
@@ -159,11 +165,8 @@ msgstr "暂停"
 msgid "Download failed"
 msgstr "下载失败"
 
-msgid "Delete"
-msgstr "删除"
-
-msgid "Delete %d chapters?"
-msgstr "删除 %d 个章节？"
+msgid "Delete selected"
+msgstr "删除选中"
 
 msgid "Deleted %d chapters."
 msgstr "已删除 %d 个章节。"
@@ -177,8 +180,11 @@ msgstr "%d 个章节删除失败。"
 msgid "No chapters to delete."
 msgstr "没有可删除的章节。"
 
-msgid "Select"
-msgstr "选择"
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Close"
+msgstr "关闭"
 
 msgid "Filter"
 msgstr "筛选"

@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local BookshelfLifecycle = require("novel.bookshelflifecycle")
+local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DetailFlow = require("novel.ui.detail.flow")
 local Dialog = require("novel.ui.widget.dialog")
@@ -8,6 +9,7 @@ local NetworkMgr = require("ui/network/manager")
 local ChaptersFlow = require("novel.ui.chapters.flow")
 local Shell = require("novel.ui.shell")
 local Trapper = require("ui/trapper")
+local UIManager = require("ui/uimanager")
 
 local BookshelfFlow = {}
 
@@ -27,6 +29,13 @@ local function findCurrentSource(plugin, record)
     return record.source
 end
 
+local function bookTitle(book)
+    if book and book.name and book.name ~= "" then
+        return book.name
+    end
+    return book and book.bookUrl or _("Book")
+end
+
 local function confirmRemove(plugin, record)
     Dialog.closeWidget(plugin, "bookshelf_confirm_dialog")
     local confirm_dialog
@@ -41,7 +50,6 @@ local function confirmRemove(plugin, record)
                 Dialog.message(Dialog.failureMessage())
                 return
             end
-            Dialog.closeWidget(plugin, "detail_viewer")
             BookshelfFlow.show(plugin)
             Dialog.message(_("Removed from bookshelf."))
         end,
@@ -113,36 +121,31 @@ local function refreshRecord(plugin, record)
     end)
 end
 
-local function bookshelfDetailButtons(plugin, record)
-    return {
-        {
+local function showActions(plugin, record)
+    UIManager:show(ChapterActionDialog:new{
+        title = bookTitle(record and record.book),
+        actions = {
             {
                 icon = "rotate-cw",
+                text = _("Refresh"),
                 callback = function()
                     refreshRecord(plugin, record)
                 end,
             },
             {
                 icon = "trash-2",
+                text = _("Remove"),
                 callback = function()
                     confirmRemove(plugin, record)
                 end,
             },
             {
                 icon = "x",
+                text = _("Close"),
                 callback = function()
-                    Dialog.closeWidget(plugin, "detail_viewer")
                 end,
             },
         },
-    }
-end
-
-local function showDetails(plugin, record)
-    DetailFlow.show(plugin, findCurrentSource(plugin, record), record.book, {
-        buttons_builder = function()
-            return bookshelfDetailButtons(plugin, record)
-        end,
     })
 end
 
@@ -150,7 +153,7 @@ function BookshelfFlow.showDetails(plugin, record)
     if not plugin or not record then
         return
     end
-    showDetails(plugin, record)
+    showActions(plugin, record)
 end
 
 function BookshelfFlow.resume(plugin, record)

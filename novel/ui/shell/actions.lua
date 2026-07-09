@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
 local ChapterCache = require("novel.reader.chaptercache")
 local ChapterDownload = require("novel.reader.chapterdownload")
 local ChapterListing = require("novel.ui.chapters.listing")
@@ -158,6 +159,130 @@ local function confirmChapterAction(message_template, count, ok_text, callback)
     Dialog.confirm(string.format(message_template, count), ok_text, callback)
 end
 
+local function countedText(label, count)
+    return string.format("%s (%d)", label, count)
+end
+
+local function showBookIntro(plugin, manifest)
+    if not manifest then
+        return
+    end
+    local DetailFlow = require("novel.ui.detail.flow")
+    DetailFlow.show(plugin, manifest.source, manifest.book, {
+        buttons_builder = function()
+            return {
+                {
+                    {
+                        icon = "x",
+                        callback = function()
+                            Dialog.closeWidget(plugin, "detail_viewer")
+                        end,
+                    },
+                },
+            }
+        end,
+    })
+end
+
+local function replaceSelectionMode(plugin, callbacks, route, manifest, enabled)
+    ChapterListing.setSelectionMode(plugin, manifest, enabled)
+    callbacks.replace(route)
+end
+
+local function showSelectedChapterActions(plugin, route, callbacks, manifest, filter, sort,
+    selected_positions)
+    local cache_positions = ChapterCache.cacheablePositions(
+        manifest,
+        selected_positions
+    )
+    local delete_cache_positions = ChapterCache.cachedPositions(
+        manifest,
+        selected_positions,
+        {
+            keep_file = ChapterCache.currentFile(),
+        }
+    )
+    UIManager:show(ChapterActionDialog:new{
+        title = string.format(_("Selected %d items"), #selected_positions),
+        actions = {
+            {
+                icon = "arrow-down-to-line",
+                text = countedText(_("Download selected"), #cache_positions),
+                enabled = #cache_positions > 0,
+                callback = function()
+                    ChapterDownload.enqueue(plugin, manifest, cache_positions, {
+                        on_done = function(_summary, updated_manifest)
+                            finishChapterCacheAction(
+                                plugin,
+                                callbacks,
+                                route,
+                                manifest,
+                                filter,
+                                sort,
+                                updated_manifest
+                            )
+                        end,
+                    })
+                end,
+            },
+            {
+                icon = "trash-2",
+                text = countedText(_("Delete selected"), #delete_cache_positions),
+                enabled = #delete_cache_positions > 0,
+                callback = function()
+                    ChapterCache.delete(plugin, manifest, delete_cache_positions, {
+                        on_done = function(_summary, updated_manifest)
+                            finishChapterCacheAction(
+                                plugin,
+                                callbacks,
+                                route,
+                                manifest,
+                                filter,
+                                sort,
+                                updated_manifest
+                            )
+                        end,
+                    })
+                end,
+            },
+            {
+                icon = "check-check",
+                text = countedText(_("Mark selected as read"), #selected_positions),
+                enabled = #selected_positions > 0,
+                callback = function()
+                    markReadState(
+                        plugin,
+                        callbacks,
+                        route,
+                        manifest,
+                        filter,
+                        sort,
+                        selected_positions,
+                        true
+                    )
+                end,
+            },
+            {
+                icon = "check-check-off",
+                text = countedText(_("Mark selected as unread"), #selected_positions),
+                enabled = #selected_positions > 0,
+                callback = function()
+                    markReadState(
+                        plugin,
+                        callbacks,
+                        route,
+                        manifest,
+                        filter,
+                        sort,
+                        selected_positions,
+                        false
+                    )
+                end,
+            },
+        },
+    })
+end
+
 local function chapterTopActions(plugin, route, callbacks)
     local manifest, filter, sort = chapterState(plugin, route)
     if not manifest then
@@ -166,25 +291,73 @@ local function chapterTopActions(plugin, route, callbacks)
     local rows = ChapterListing.buildRows(manifest, filter, sort)
     local selection = ChapterListing.selectionStateForRows(plugin, manifest, rows)
     local selection_mode = ChapterListing.isSelectionMode(plugin, manifest)
-    local action_positions = selection_mode
-        and ChapterListing.selectedPositionsForRows(plugin, manifest, rows)
-        or ChapterListing.positionsForRows(manifest, rows)
+    local filtered_positions = ChapterListing.positionsForRows(manifest, rows)
+    local selected_positions = ChapterListing.selectedPositionsForRows(
+        plugin,
+        manifest,
+        rows
+    )
+    if selection_mode then
+        return {
+            {
+                key = "selected_actions",
+                icon = "check",
+                enabled = #selected_positions > 0,
+                callback = function()
+                    showSelectedChapterActions(
+                        plugin,
+                        route,
+                        callbacks,
+                        manifest,
+                        filter,
+                        sort,
+                        selected_positions
+                    )
+                end,
+            },
+            {
+                key = "cancel_selection",
+                icon = "x",
+                callback = function()
+                    replaceSelectionMode(plugin, callbacks, route, manifest, false)
+                end,
+            },
+            {
+                key = "select_all",
+                icon = selection.all_selected and "square-check" or "square",
+                enabled = selection.selectable_count > 0,
+                callback = function()
+                    ChapterListing.setRowsSelected(
+                        plugin,
+                        manifest,
+                        rows,
+                        not selection.all_selected
+                    )
+                    callbacks.replace(route)
+                end,
+                hold_callback = function()
+                    ChapterListing.setRowsSelected(plugin, manifest, rows, true)
+                    callbacks.replace(route)
+                end,
+            },
+        }
+    end
+    local action_positions = filtered_positions
     local has_action_scope = #action_positions > 0
     local cache_positions = ChapterCache.cacheablePositions(
         manifest,
         action_positions
     )
-    local delete_cache_positions = ChapterCache.cachedPositions(
-        manifest,
-        action_positions,
-        {
-            keep_file = ChapterCache.currentFile(),
-        }
-    )
     return {
         {
-            key = "mark_read",
-            text = _("Mark as read"),
+            key = "intro",
+            icon = "info",
+            callback = function()
+                showBookIntro(plugin, manifest)
+            end,
+        },
+        {
+            key = "mark_all_read",
             icon = "check-check",
             enabled = has_action_scope,
             callback = function()
@@ -208,33 +381,7 @@ local function chapterTopActions(plugin, route, callbacks)
             end,
         },
         {
-            key = "mark_unread",
-            text = _("Mark as unread"),
-            icon = "check-check-off",
-            enabled = has_action_scope,
-            callback = function()
-                confirmChapterAction(
-                    _("Mark %d chapters as unread?"),
-                    #action_positions,
-                    _("Mark as unread"),
-                    function()
-                        markReadState(
-                            plugin,
-                            callbacks,
-                            route,
-                            manifest,
-                            filter,
-                            sort,
-                            action_positions,
-                            false
-                        )
-                    end
-                )
-            end,
-        },
-        {
-            key = "cache",
-            text = _("Download"),
+            key = "download_all",
             icon = "arrow-down-to-line",
             enabled = #cache_positions > 0,
             callback = function()
@@ -261,45 +408,11 @@ local function chapterTopActions(plugin, route, callbacks)
             end,
         },
         {
-            key = "delete_cache",
-            text = _("Delete"),
-            icon = "trash-2",
-            enabled = #delete_cache_positions > 0,
-            callback = function()
-                confirmChapterAction(
-                    _("Delete %d chapters?"),
-                    #delete_cache_positions,
-                    _("Delete"),
-                    function()
-                        ChapterCache.delete(plugin, manifest, delete_cache_positions, {
-                            on_done = function(_summary, updated_manifest)
-                                finishChapterCacheAction(
-                                    plugin,
-                                    callbacks,
-                                    route,
-                                    manifest,
-                                    filter,
-                                    sort,
-                                    updated_manifest
-                                )
-                            end,
-                        })
-                    end
-                )
-            end,
-        },
-        {
             key = "select",
-            text = _("Select"),
-            icon = selection_mode and "square-check" or "square",
-            active = selection_mode,
+            icon = "square",
             enabled = selection.selectable_count > 0,
             callback = function()
-                ChapterListing.setSelectionMode(
-                    plugin,
-                    manifest,
-                    not selection_mode
-                )
+                ChapterListing.setSelectionMode(plugin, manifest, true)
                 callbacks.replace(route)
             end,
             hold_callback = function()

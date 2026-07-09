@@ -1,8 +1,10 @@
 local _ = require("novel.i18n")
 local BookshelfFlow = require("novel.ui.bookshelf.flow")
+local ChapterRecord = require("novel.reader.chapterrecord")
 local ChaptersFlow = require("novel.ui.chapters.flow")
 local ContentBuilder = require("novel.ui.contentbuilder")
 local Manifest = require("novel.storage.manifest")
+local SourceStore = require("novel.storage.sourcestore")
 
 local BookshelfPage = {}
 
@@ -49,12 +51,18 @@ local function findCurrentSource(sources, record)
     return sources[source_url] or record.source
 end
 
-local function sourceTitle(record)
+local function sourceTitle(record, current_source)
     record = record or {}
     local book = record.book or {}
-    local source_title = clean(book.originName)
+    local source_title = clean(SourceStore.title(current_source))
     if source_title == "" then
         source_title = clean(record.source_name)
+    end
+    if source_title == "" then
+        source_title = clean(SourceStore.title(record.source))
+    end
+    if source_title == "" then
+        source_title = clean(book.originName)
     end
     if source_title == "" then
         source_title = clean(book.origin)
@@ -63,21 +71,6 @@ local function sourceTitle(record)
         source_title = clean(record.source_url)
     end
     return source_title
-end
-
-local function readChapterCount(record)
-    local current = record and record.current or nil
-    local position = wholeNumber(current and current.chapter_position)
-    if position > 0 then
-        return position
-    end
-
-    local book = record and record.book or {}
-    local index = wholeNumber(book.durChapterIndex)
-    if index > 0 or clean(book.durChapterTitle) ~= "" then
-        return index + 1
-    end
-    return 0
 end
 
 local function totalChapterCount(record)
@@ -94,41 +87,47 @@ local function totalChapterCount(record)
     return 0
 end
 
-local function downloadedChapterCount(record)
+local function chapterStats(record)
+    local stats = {
+        downloaded = 0,
+        total = 0,
+        unread = nil,
+    }
     if not record or not record.source or not record.book then
-        return 0
+        return stats
     end
     local manifest = Manifest:loadByBook(record.source, record.book)
     if not manifest or not manifest.chapters then
-        return 0
+        return stats
     end
-    local count = 0
+    stats.unread = 0
     for position = 1, #manifest.chapters do
-        if manifest.chapters[position].downloaded then
-            count = count + 1
+        local chapter = manifest.chapters[position]
+        stats.total = stats.total + 1
+        if chapter.downloaded then
+            stats.downloaded = stats.downloaded + 1
+        end
+        if ChapterRecord.isOpenable(chapter) and chapter.read ~= true then
+            stats.unread = stats.unread + 1
         end
     end
-    return count
+    return stats
 end
 
-local function subtitleSegments(record)
-    local total = totalChapterCount(record)
-    local read = readChapterCount(record)
-    if total > 0 and read > total then
-        read = total
-    end
+local function subtitleSegments(record, current_source)
+    local stats = chapterStats(record)
+    local total = stats.total > 0 and stats.total or totalChapterCount(record)
     local segments = {}
-    if total > 0 or read > 0 then
+    if stats.unread ~= nil then
         table.insert(segments, {
-            icon = "circle-check",
-            text = tostring(read),
+            icon = "check-check-off",
+            text = tostring(stats.unread),
         })
     end
-    local downloaded = downloadedChapterCount(record)
-    if downloaded > 0 then
+    if stats.downloaded > 0 then
         table.insert(segments, {
             icon = "arrow-down-to-line",
-            text = tostring(downloaded),
+            text = tostring(stats.downloaded),
         })
     end
     if total > 0 then
@@ -137,7 +136,7 @@ local function subtitleSegments(record)
             text = tostring(total),
         })
     end
-    local source = sourceTitle(record)
+    local source = sourceTitle(record, current_source)
     if source ~= "" then
         table.insert(segments, {
             icon = "sources",
@@ -162,7 +161,7 @@ function BookshelfPage.build(shell, plugin)
             text = title(record.book),
             book = record.book,
             source_title = record.source_name,
-            book_subtitle_segments = subtitleSegments(record),
+            book_subtitle_segments = subtitleSegments(record, source),
             action_buttons = {
                 {
                     id = "resume",

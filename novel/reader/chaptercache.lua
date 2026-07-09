@@ -41,7 +41,7 @@ local function deleteSummaryMessage(summary)
     local lines = {}
     if summary.chapter_files_removed > 0 then
         table.insert(lines, string.format(
-            _("Deleted %d chapters."),
+            _("Deleted %d offline chapters."),
             summary.chapter_files_removed
         ))
     end
@@ -50,12 +50,12 @@ local function deleteSummaryMessage(summary)
     end
     if summary.chapter_files_failed > 0 then
         table.insert(lines, string.format(
-            _("Failed to delete %d chapters."),
+            _("Failed to delete %d offline chapters."),
             summary.chapter_files_failed
         ))
     end
     if #lines == 0 then
-        table.insert(lines, _("No chapters to delete."))
+        table.insert(lines, _("No offline chapters to delete."))
     end
     return table.concat(lines, "\n")
 end
@@ -106,11 +106,11 @@ function ChapterCache.delete(plugin, manifest, positions, options)
         keep_file = currentFile(),
     })
     if #target_positions == 0 then
-        Dialog.message(_("No chapters to delete."))
+        Dialog.message(_("No offline chapters to delete."))
         return
     end
 
-    local summary = CacheCleanup.deleteChapterCache(manifest, target_positions, {
+    local summary = CacheCleanup.deleteOfflineChapters(manifest, target_positions, {
         keep_file = currentFile(),
     })
     local updated_manifest = summary.manifest

@@ -38,11 +38,11 @@ local function fileSize(path)
     return tonumber(attr.size) or 0
 end
 
-local function chapterCacheFile(entry)
+local function offlineChapterFile(entry)
     return entry:match("%.html$") or entry:match("%.html%.tmp%.") ~= nil
 end
 
-local function cachePathForBook(path, book_id)
+local function offlineChapterPathForBook(path, book_id)
     local prefix = Manifest.chaptersDir(book_id) .. "/"
     return type(path) == "string" and path:sub(1, #prefix) == prefix
 end
@@ -65,7 +65,7 @@ local function removeChapterFile(path, book_id, keep_file, summary)
         summary.chapter_files_kept = summary.chapter_files_kept + 1
         return false
     end
-    if not cachePathForBook(path, book_id) then
+    if not offlineChapterPathForBook(path, book_id) then
         summary.unsafe_paths_skipped = summary.unsafe_paths_skipped + 1
         return false
     end
@@ -122,7 +122,7 @@ local function deleteChapterFiles(manifest, options, summary)
         local iter, dir_obj = safeDir(chapters_dir)
         if iter then
             for entry in iter, dir_obj do
-                if entry ~= "." and entry ~= ".." and chapterCacheFile(entry) then
+                if entry ~= "." and entry ~= ".." and offlineChapterFile(entry) then
                     local path = chapters_dir .. "/" .. entry
                     if not seen_paths[path] then
                         removeChapterFile(path, manifest.book_id, keep_file, summary)
@@ -137,7 +137,7 @@ local function deleteChapterFiles(manifest, options, summary)
     end
 end
 
-function CacheCleanup.deleteChapterCache(manifest, positions, options)
+function CacheCleanup.deleteOfflineChapters(manifest, positions, options)
     options = options or {}
     manifest = Manifest.normalizeManifest(manifest)
     if not manifest or not manifest.book_id then
@@ -145,7 +145,7 @@ function CacheCleanup.deleteChapterCache(manifest, positions, options)
             ok = false,
             error = {
                 kind = "manifest",
-                message = "book cache not found",
+                message = "offline book not found",
             },
         }
     end
@@ -196,7 +196,7 @@ function CacheCleanup.deleteChapterCache(manifest, positions, options)
     return summary
 end
 
-function CacheCleanup.deleteManifestCache(manifest, options)
+function CacheCleanup.deleteOfflineBook(manifest, options)
     options = options or {}
     manifest = Manifest.normalizeManifest(manifest)
     if not manifest or not manifest.book_id then
@@ -204,7 +204,7 @@ function CacheCleanup.deleteManifestCache(manifest, options)
             ok = false,
             error = {
                 kind = "manifest",
-                message = "book cache not found",
+                message = "offline book not found",
             },
         }
     end
@@ -222,13 +222,13 @@ function CacheCleanup.deleteManifestCache(manifest, options)
     deleteChapterFiles(manifest, options, summary)
     summary.metadata_content_removed = invalidateContentCache(manifest)
 
-    logger.dbg("novel book cache deleted:", manifest.book_id,
+    logger.dbg("novel offline book deleted:", manifest.book_id,
         "chapter_files", summary.chapter_files_removed,
-        "content_records", summary.metadata_content_removed)
+        "metadata_content_records", summary.metadata_content_removed)
     return summary
 end
 
-function CacheCleanup.deleteBookCache(source, book, options)
+function CacheCleanup.deleteBookOfflineFiles(source, book, options)
     options = options or {}
     local manifest_store = Manifest:new()
     local manifest = options.manifest
@@ -238,7 +238,7 @@ function CacheCleanup.deleteBookCache(source, book, options)
     if not manifest then
         manifest = manifest_store:loadByBook(source, book)
     end
-    return CacheCleanup.deleteManifestCache(manifest, options)
+    return CacheCleanup.deleteOfflineBook(manifest, options)
 end
 
 function CacheCleanup.pruneMetadata(settings)
@@ -248,8 +248,27 @@ function CacheCleanup.pruneMetadata(settings)
     return {
         ok = true,
         metadata_expired_removed = cache:pruneExpired(),
-        metadata_lru_removed = cache:pruneLRU(cache_settings.max_metadata_records),
+        metadata_lru_removed = cache:pruneLRU(
+            cache_settings.max_metadata_records,
+            cache_settings.max_metadata_bytes
+        ),
     }
+end
+
+function CacheCleanup.clearMetadata()
+    local cache = Cache:new()
+    local summary, err = cache:clear()
+    if not summary then
+        return {
+            ok = false,
+            error = {
+                kind = "cache",
+                message = err,
+            },
+        }
+    end
+    summary.ok = true
+    return summary
 end
 
 return CacheCleanup

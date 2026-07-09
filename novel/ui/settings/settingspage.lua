@@ -15,6 +15,15 @@ function SettingsPage.build(shell, plugin, route, runtime)
     end
     local items = {
         {
+            title = _("Settings"),
+            icon = "settings",
+            callback = function()
+                runtime.push(plugin, ShellRoutes.settingsList{
+                    tab = route and route.tab or "settings",
+                })
+            end,
+        },
+        {
             title = _("Download queue"),
             mandatory = download_count,
             icon = "arrow-down-to-line",

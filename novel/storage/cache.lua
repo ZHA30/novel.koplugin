@@ -197,6 +197,14 @@ local function isFile(path)
     return lfs and lfs.attributes(path, "mode") == "file"
 end
 
+local function fileSize(path)
+    local attr = lfs and lfs.attributes(path)
+    if attr and attr.mode == "file" then
+        return tonumber(attr.size) or 0
+    end
+    return 0
+end
+
 local function encode(codec, value)
     if value == nil then
         return nil, 0
@@ -697,6 +705,44 @@ function Cache:pruneLRU(max_records, max_bytes)
     return self:withDB(function(db)
         return Cache.pruneLRUDB(db, max_records, max_bytes)
     end) or 0
+end
+
+function Cache:stats()
+    return self:withDB(function(db)
+        return {
+            record_count = tonumber(db:rowexec([[
+                SELECT COUNT(*) FROM cache_records;
+            ]])) or 0,
+            blob_bytes = tonumber(db:rowexec([[
+                SELECT COALESCE(SUM(blob_size), 0) FROM cache_records;
+            ]])) or 0,
+            file_bytes = fileSize(Cache.db_path)
+                + fileSize(Cache.db_path .. "-wal")
+                + fileSize(Cache.db_path .. "-shm"),
+        }
+    end) or {
+        record_count = 0,
+        blob_bytes = 0,
+        file_bytes = 0,
+    }
+end
+
+function Cache:clear()
+    local summary, err = self:withDB(function(db)
+        local record_count = tonumber(db:rowexec([[
+            SELECT COUNT(*) FROM cache_records;
+        ]])) or 0
+        local blob_bytes = tonumber(db:rowexec([[
+            SELECT COALESCE(SUM(blob_size), 0) FROM cache_records;
+        ]])) or 0
+        db:exec("DELETE FROM cache_records;")
+        setMeta(db, "last_pruned_at", tostring(now()))
+        return {
+            records_removed = record_count,
+            bytes_removed = blob_bytes,
+        }
+    end)
+    return summary, err
 end
 
 function Cache.pruneIfDueDB(db, options)

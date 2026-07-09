@@ -46,17 +46,17 @@ local function markReadState(plugin, manifest, row, runtime, route, read)
     refresh(runtime, plugin, route, updated_manifest)
 end
 
-local function finishChapterCacheAction(plugin, route, runtime, manifest, row,
+local function finishOfflineChapterAction(plugin, route, runtime, manifest, row,
     updated_manifest)
     updated_manifest = updated_manifest or manifest
     ChapterListing.setSelected(plugin, updated_manifest, row.position, false)
     refresh(runtime, plugin, route, updated_manifest)
 end
 
-local function cacheChapter(plugin, route, runtime, manifest, row, positions)
+local function downloadOfflineChapter(plugin, route, runtime, manifest, row, positions)
     ChapterDownload.enqueue(plugin, manifest, positions, {
         on_done = function(_summary, updated_manifest)
-            finishChapterCacheAction(
+            finishOfflineChapterAction(
                 plugin,
                 route,
                 runtime,
@@ -68,11 +68,11 @@ local function cacheChapter(plugin, route, runtime, manifest, row, positions)
     })
 end
 
-local function deleteChapterCache(plugin, route, runtime, manifest, row,
+local function deleteOfflineChapter(plugin, route, runtime, manifest, row,
     positions)
     ChapterCache.delete(plugin, manifest, positions, {
         on_done = function(_summary, updated_manifest)
-            finishChapterCacheAction(
+            finishOfflineChapterAction(
                 plugin,
                 route,
                 runtime,
@@ -94,9 +94,9 @@ end
 
 local function showActions(plugin, route, runtime, manifest, row)
     local row_positions = { row.position }
-    local cache_positions = ChapterCache.cacheablePositions(manifest,
+    local download_positions = ChapterCache.cacheablePositions(manifest,
         row_positions)
-    local delete_cache_positions = ChapterCache.cachedPositions(manifest,
+    local offline_positions = ChapterCache.cachedPositions(manifest,
         row_positions, {
             keep_file = ChapterCache.currentFile(),
         })
@@ -106,30 +106,30 @@ local function showActions(plugin, route, runtime, manifest, row)
             {
                 icon = "arrow-down-to-line",
                 text = _("Download selected"),
-                enabled = row.openable and #cache_positions > 0,
+                enabled = row.openable and #download_positions > 0,
                 callback = function()
-                    cacheChapter(
+                    downloadOfflineChapter(
                         plugin,
                         route,
                         runtime,
                         manifest,
                         row,
-                        cache_positions
+                        download_positions
                     )
                 end,
             },
             {
                 icon = "trash-2",
-                text = _("Delete selected"),
-                enabled = row.openable and #delete_cache_positions > 0,
+                text = _("Delete offline chapter"),
+                enabled = row.openable and #offline_positions > 0,
                 callback = function()
-                    deleteChapterCache(
+                    deleteOfflineChapter(
                         plugin,
                         route,
                         runtime,
                         manifest,
                         row,
-                        delete_cache_positions
+                        offline_positions
                     )
                 end,
             },

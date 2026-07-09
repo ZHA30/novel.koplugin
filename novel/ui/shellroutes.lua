@@ -56,6 +56,22 @@ function ShellRoutes.settings()
     }
 end
 
+function ShellRoutes.settingsList(args)
+    args = args or {}
+    return {
+        key = "settings_list",
+        tab = args.tab or "settings",
+    }
+end
+
+function ShellRoutes.cacheSettings(args)
+    args = args or {}
+    return {
+        key = "cache_settings",
+        tab = args.tab or "settings",
+    }
+end
+
 function ShellRoutes.sources(args)
     args = args or {}
     return {
@@ -170,6 +186,12 @@ function ShellRoutes.title(route)
     end
     if route and route.key == "settings" then
         return _("More")
+    end
+    if route and route.key == "settings_list" then
+        return _("Settings")
+    end
+    if route and route.key == "cache_settings" then
+        return _("Cache")
     end
     if route and route.key == "sources" then
         return _("Sources")

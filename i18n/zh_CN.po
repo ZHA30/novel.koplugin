@@ -24,6 +24,42 @@ msgstr "发现"
 msgid "More"
 msgstr "更多"
 
+msgid "Settings"
+msgstr "设置"
+
+msgid "Cache"
+msgstr "缓存"
+
+msgid "Current cache size"
+msgstr "当前缓存大小"
+
+msgid "Cache limit"
+msgstr "缓存限制"
+
+msgid "Set"
+msgstr "设置"
+
+msgid "Clear metadata cache"
+msgstr "清理缓存"
+
+msgid "Clear metadata cache?"
+msgstr "清理元数据缓存？"
+
+msgid "Removed %d metadata cache records."
+msgstr "已清理 %d 条元数据缓存。"
+
+msgid "1 record"
+msgstr "1 条记录"
+
+msgid "%d records"
+msgstr "%d 条记录"
+
+msgid "Records: %s; SQLite files: %s"
+msgstr "记录：%s；SQLite 文件：%s"
+
+msgid "Records: %s"
+msgstr "记录：%s"
+
 msgid "Sources"
 msgstr "书源"
 
@@ -168,20 +204,23 @@ msgstr "暂停"
 msgid "Download failed"
 msgstr "下载失败"
 
-msgid "Delete selected"
-msgstr "删除选中"
+msgid "Delete offline chapter"
+msgstr "删除离线章节"
 
-msgid "Deleted %d chapters."
-msgstr "已删除 %d 个章节。"
+msgid "Delete offline chapters"
+msgstr "删除离线章节"
+
+msgid "Deleted %d offline chapters."
+msgstr "已删除 %d 个离线章节。"
 
 msgid "Current chapter was kept."
 msgstr "当前打开章节已保留。"
 
-msgid "Failed to delete %d chapters."
-msgstr "%d 个章节删除失败。"
+msgid "Failed to delete %d offline chapters."
+msgstr "%d 个离线章节删除失败。"
 
-msgid "No chapters to delete."
-msgstr "没有可删除的章节。"
+msgid "No offline chapters to delete."
+msgstr "没有可删除的离线章节。"
 
 msgid "Refresh"
 msgstr "刷新"

@@ -146,7 +146,7 @@ local function markReadState(plugin, callbacks, route, manifest, filter, sort,
     replaceChapterManifest(callbacks, route, updated_manifest, filter, sort)
 end
 
-local function finishChapterCacheAction(plugin, callbacks, route, manifest, filter,
+local function finishOfflineChapterAction(plugin, callbacks, route, manifest, filter,
     sort, updated_manifest)
     updated_manifest = updated_manifest or manifest
     ChapterListing.setSelectionMode(plugin, updated_manifest, false)
@@ -211,11 +211,11 @@ end
 
 local function showSelectedChapterActions(plugin, route, callbacks, manifest, filter, sort,
     selected_positions)
-    local cache_positions = ChapterCache.cacheablePositions(
+    local download_positions = ChapterCache.cacheablePositions(
         manifest,
         selected_positions
     )
-    local delete_cache_positions = ChapterCache.cachedPositions(
+    local offline_positions = ChapterCache.cachedPositions(
         manifest,
         selected_positions,
         {
@@ -227,12 +227,12 @@ local function showSelectedChapterActions(plugin, route, callbacks, manifest, fi
         actions = {
             {
                 icon = "arrow-down-to-line",
-                text = countedText(_("Download selected"), #cache_positions),
-                enabled = #cache_positions > 0,
+                text = countedText(_("Download selected"), #download_positions),
+                enabled = #download_positions > 0,
                 callback = function()
-                    ChapterDownload.enqueue(plugin, manifest, cache_positions, {
+                    ChapterDownload.enqueue(plugin, manifest, download_positions, {
                         on_done = function(_summary, updated_manifest)
-                            finishChapterCacheAction(
+                            finishOfflineChapterAction(
                                 plugin,
                                 callbacks,
                                 route,
@@ -247,12 +247,12 @@ local function showSelectedChapterActions(plugin, route, callbacks, manifest, fi
             },
             {
                 icon = "trash-2",
-                text = countedText(_("Delete selected"), #delete_cache_positions),
-                enabled = #delete_cache_positions > 0,
+                text = countedText(_("Delete offline chapters"), #offline_positions),
+                enabled = #offline_positions > 0,
                 callback = function()
-                    ChapterCache.delete(plugin, manifest, delete_cache_positions, {
+                    ChapterCache.delete(plugin, manifest, offline_positions, {
                         on_done = function(_summary, updated_manifest)
-                            finishChapterCacheAction(
+                            finishOfflineChapterAction(
                                 plugin,
                                 callbacks,
                                 route,
@@ -364,7 +364,7 @@ local function chapterTopActions(plugin, route, callbacks)
     end
     local action_positions = filtered_positions
     local has_action_scope = #action_positions > 0
-    local cache_positions = ChapterCache.cacheablePositions(
+    local download_positions = ChapterCache.cacheablePositions(
         manifest,
         action_positions
     )
@@ -417,16 +417,16 @@ local function chapterTopActions(plugin, route, callbacks)
         {
             key = "download_all",
             icon = "arrow-down-to-line",
-            enabled = #cache_positions > 0,
+            enabled = #download_positions > 0,
             callback = function()
                 confirmChapterAction(
                     _("Download %d chapters?"),
-                    #cache_positions,
+                    #download_positions,
                     _("Download"),
                     function()
-                        ChapterDownload.enqueue(plugin, manifest, cache_positions, {
+                        ChapterDownload.enqueue(plugin, manifest, download_positions, {
                             on_done = function(_summary, updated_manifest)
-                                finishChapterCacheAction(
+                                finishOfflineChapterAction(
                                     plugin,
                                     callbacks,
                                     route,

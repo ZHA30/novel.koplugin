@@ -15,6 +15,12 @@ local ENTRIES = {
         module = "novel.ui.settings.settingspage",
         default_route = ShellRoutes.settings,
     },
+    settings_list = {
+        module = "novel.ui.settings.listpage",
+    },
+    cache_settings = {
+        module = "novel.ui.settings.cachepage",
+    },
     sources = {
         module = "novel.ui.sources.sourcespage",
     },

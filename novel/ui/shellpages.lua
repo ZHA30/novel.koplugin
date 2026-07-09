@@ -18,6 +18,9 @@ local ENTRIES = {
     sources = {
         module = "novel.ui.sources.sourcespage",
     },
+    downloads = {
+        module = "novel.ui.downloads.downloadspage",
+    },
     chapters = {
         module = "novel.ui.chapters.chapterspage",
     },

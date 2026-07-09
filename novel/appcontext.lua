@@ -1,5 +1,6 @@
 local BookshelfStore = require("novel.storage.bookshelfstore")
 local Cache = require("novel.storage.cache")
+local DownloadQueue = require("novel.reader.downloadqueue")
 local Manifest = require("novel.storage.manifest")
 local ReaderSettings = require("novel.reader.settings")
 local SourceStore = require("novel.storage.sourcestore")
@@ -59,9 +60,11 @@ end
 
 function AppContext:init()
     self.log:debug("app initialized")
+    DownloadQueue.init(self.plugin)
 end
 
 function AppContext:onClose()
+    DownloadQueue.close(self.plugin)
     self.closed = true
     self.source_store = nil
     self.bookshelf_store = nil
@@ -81,6 +84,7 @@ function AppContext.deleteStoredSettings()
     SourceStore.deleteStorage()
     BookshelfStore.deleteStorage()
     Cache.deleteStorage()
+    DownloadQueue.deleteStorage()
     Manifest.deleteStorage()
     ReaderSettings.deleteStorage()
 end

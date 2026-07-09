@@ -57,6 +57,9 @@ msgstr "章节数："
 msgid "Chapters"
 msgstr "目录"
 
+msgid "Chapter %d"
+msgstr "第 %d 章"
+
 msgid "Empty"
 msgstr "空"
 
@@ -105,11 +108,56 @@ msgstr "将 %d 个章节标为未读？"
 msgid "Cache"
 msgstr "缓存"
 
+msgid "Download"
+msgstr "下载"
+
+msgid "Downloads"
+msgstr "下载"
+
+msgid "Download queue"
+msgstr "下载队列"
+
 msgid "Downloaded"
 msgstr "已下载"
 
+msgid "Downloading"
+msgstr "下载中"
+
+msgid "Queued"
+msgstr "排队中"
+
+msgid "Waiting for network"
+msgstr "等待网络"
+
 msgid "Cache %d chapters?"
 msgstr "缓存 %d 个章节？"
+
+msgid "Download %d chapters?"
+msgstr "下载 %d 个章节？"
+
+msgid "Queued %d chapters for download."
+msgstr "已将 %d 个章节加入下载队列。"
+
+msgid "Selected chapters are already in the download queue."
+msgstr "所选章节已在下载队列中。"
+
+msgid "No chapters to download."
+msgstr "没有需要下载的章节。"
+
+msgid "No downloads"
+msgstr "没有下载任务"
+
+msgid "Remove this download?"
+msgstr "移除此下载任务？"
+
+msgid "Resume"
+msgstr "继续"
+
+msgid "Pause"
+msgstr "暂停"
+
+msgid "Download failed"
+msgstr "下载失败"
 
 msgid "Caching..."
 msgstr "缓存中..."

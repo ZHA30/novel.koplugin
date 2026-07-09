@@ -2,6 +2,7 @@ local _ = require("novel.i18n")
 local ChapterCache = require("novel.reader.chaptercache")
 local ChapterListing = require("novel.ui.chapters.listing")
 local Dialog = require("novel.ui.widget.dialog")
+local DownloadQueue = require("novel.reader.downloadqueue")
 local HomeShell = require("novel.ui.widget.homeshell")
 local Manifest = require("novel.storage.manifest")
 local ShellPages = require("novel.ui.shellpages")
@@ -273,14 +274,14 @@ local function chapterTopActions(plugin, route)
         },
         {
             key = "cache",
-            text = _("Cache"),
+            text = _("Download"),
             icon = "arrow-down-to-line",
             enabled = #cache_positions > 0,
             callback = function()
                 confirmChapterAction(
-                    _("Cache %d chapters?"),
+                    _("Download %d chapters?"),
                     #cache_positions,
-                    _("Cache"),
+                    _("Download"),
                     function()
                         ChapterCache.cache(plugin, manifest, cache_positions, {
                             on_done = function(_summary, updated_manifest)
@@ -410,6 +411,25 @@ local function listActions(plugin, route)
     }
 end
 
+local function downloadTopActions(plugin)
+    local summary = DownloadQueue.summary(plugin)
+    return {
+        {
+            key = "download_toggle",
+            text = summary.paused and _("Resume") or _("Pause"),
+            icon = summary.paused and "circle-play" or "square",
+            enabled = summary.total > 0,
+            callback = function()
+                if summary.paused then
+                    DownloadQueue.resume(plugin)
+                else
+                    DownloadQueue.pause(plugin)
+                end
+            end,
+        },
+    }
+end
+
 local function searchResultsActions(plugin, route)
     local actions = {
         previousAction(plugin, route),
@@ -448,6 +468,9 @@ end
 local function topActions(plugin, route)
     if route and route.key == "chapters" and route.manifest then
         return chapterTopActions(plugin, route)
+    end
+    if route and route.key == "downloads" then
+        return downloadTopActions(plugin)
     end
     return {}
 end
@@ -557,6 +580,19 @@ end
 
 function Shell.reshow(plugin)
     scheduleRender(plugin)
+end
+
+function Shell.refreshDownloadState(plugin, book_id)
+    local route = Shell.currentRoute(plugin)
+    if route and route.key == "chapters" and route.manifest
+        and route.manifest.book_id == book_id then
+        local manifest = Manifest:new():load(book_id) or route.manifest
+        Shell.replace(plugin, chapterRoute(route, manifest, route.filter, route.sort))
+        return
+    end
+    if route and (route.key == "downloads" or route.key == "settings") then
+        scheduleRender(plugin)
+    end
 end
 
 function Shell.showTab(plugin, active_tab)

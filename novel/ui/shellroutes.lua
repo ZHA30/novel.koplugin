@@ -64,6 +64,14 @@ function ShellRoutes.sources(args)
     }
 end
 
+function ShellRoutes.downloads(args)
+    args = args or {}
+    return {
+        key = "downloads",
+        tab = args.tab or "settings",
+    }
+end
+
 function ShellRoutes.chapters(args)
     args = args or {}
     return ShellRoutes.copy{
@@ -163,6 +171,9 @@ function ShellRoutes.title(route)
     end
     if route and route.key == "sources" then
         return _("Sources")
+    end
+    if route and route.key == "downloads" then
+        return _("Download queue")
     end
     return _("Novel")
 end

@@ -2,6 +2,7 @@ local _ = dofile((debug.getinfo(1, "S").source:match("^@(.*/)") or "./") .. "i18
 local AppContext = require("novel.appcontext")
 local BookshelfFlow = require("novel.ui.bookshelf.flow")
 local DiscoverFlow = require("novel.ui.discover.flow")
+local DownloadQueue = require("novel.reader.downloadqueue")
 local Loading = require("novel.ui.widget.loading")
 local ReaderHooks = require("novel.reader.readerhooks")
 local SearchFlow = require("novel.ui.search.flow")
@@ -37,7 +38,6 @@ function Novel:onCloseWidget()
     Loading.closeKeys(self, {
         "bookshelf_refresh_loading",
         "chapters_loading",
-        "novel_chapter_cache_loading",
         "detail_loading",
         "discover_loading",
         "search_loading",
@@ -57,11 +57,16 @@ function Novel:onReaderReady()
     ReaderHooks.setup(self)
 end
 
+function Novel:onNetworkConnected()
+    DownloadQueue.networkReady(self)
+end
+
 function Novel.deletePluginSettings()
     AppContext.deleteStoredSettings()
 end
 
 function Novel:stopPlugin()
+    DownloadQueue.close(self)
     ReaderHooks.stopPlugin(self)
 end
 

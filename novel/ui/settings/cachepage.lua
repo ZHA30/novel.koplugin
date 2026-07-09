@@ -17,6 +17,10 @@ local function friendlySize(bytes)
     return util.getFriendlySize(tonumber(bytes) or 0) or "0 B"
 end
 
+local function formatMB(value)
+    return string.format("%d MB", tonumber(value) or 0)
+end
+
 local function recordCountText(count)
     count = tonumber(count) or 0
     if count == 1 then
@@ -98,9 +102,9 @@ function CachePage.build(shell, plugin, route, runtime)
     local stats = Cache:new():stats()
     local file_size = friendlySize(stats.file_bytes)
     local current_subtitle = string.format(
-        _("Records: %s; SQLite files: %s"),
+        _("Records: %s; Record data: %s"),
         recordCountText(stats.record_count),
-        file_size
+        friendlySize(stats.blob_bytes)
     )
     local limit_subtitle = string.format(
         _("Records: %s"),
@@ -110,21 +114,18 @@ function CachePage.build(shell, plugin, route, runtime)
         {
             title = _("Current cache size"),
             subtitle = current_subtitle,
-            mandatory = friendlySize(stats.blob_bytes),
-            icon = "cache",
+            mandatory = file_size,
         },
         {
             title = _("Cache limit"),
             subtitle = limit_subtitle,
-            mandatory = friendlySize(cacheLimit(settings)),
-            icon = "cache",
+            mandatory = formatMB(cacheLimitMB(settings)),
             callback = function()
                 showCacheLimitDialog(plugin, route, runtime)
             end,
         },
         {
             title = _("Clear metadata cache"),
-            icon = "trash-2",
             callback = function()
                 clearCache(plugin, route, runtime)
             end,

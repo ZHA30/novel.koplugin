@@ -54,8 +54,8 @@ msgstr "1 条记录"
 msgid "%d records"
 msgstr "%d 条记录"
 
-msgid "Records: %s; SQLite files: %s"
-msgstr "记录：%s；SQLite 文件：%s"
+msgid "Records: %s; Record data: %s"
+msgstr "记录：%s；记录数据：%s"
 
 msgid "Records: %s"
 msgstr "记录：%s"

@@ -50,6 +50,7 @@ local function resultRoute(source, keyword, page, result, options)
         error = options.error,
         list_page = options.list_page,
         list_page_anchor = options.list_page_anchor,
+        list_item_anchor = options.list_item_anchor,
     }
 end
 
@@ -216,6 +217,7 @@ function SearchFlow.loadPage(plugin, page, options)
                     or not SearchService.canRequestNextPage(source, keyword, page),
                 list_page = options.list_page,
                 list_page_anchor = options.list_page_anchor,
+                list_item_anchor = options.list_item_anchor,
             })
             return
         end
@@ -233,6 +235,7 @@ function SearchFlow.loadPage(plugin, page, options)
                 or not SearchService.canRequestNextPage(source, keyword, page),
             list_page = options.list_page,
             list_page_anchor = options.list_page_anchor,
+            list_item_anchor = options.list_item_anchor,
         })
     end)
     return true

@@ -96,6 +96,7 @@ function Shell.show(plugin, options)
         active_tab = ShellSession.activeTab(plugin),
         tabs = ShellActions.home(plugin, callbacks),
         list_page = ShellSession.listPage(plugin),
+        list_item_anchor = page.list_item_anchor,
         paginate_lists = not ShellRoutes.isTopLevel(page),
         previous_page_callback = function()
             return Shell.previousPage(plugin)
@@ -251,8 +252,10 @@ function Shell.nextPage(plugin)
         return false
     end
     local page = (tonumber(route.current_page) or 1) + 1
+    local total_items = tonumber(info.total_items)
     local options = {
         list_page = tonumber(info.current_page) or ShellSession.listPage(plugin),
+        list_item_anchor = total_items and total_items + 1 or nil,
     }
     if route.key == "search_results" then
         local SearchFlow = require("novel.ui.search.flow")

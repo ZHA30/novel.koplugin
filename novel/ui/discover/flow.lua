@@ -52,6 +52,7 @@ local function resultRoute(source, group, page, result, options)
         error = options.error,
         list_page = options.list_page,
         list_page_anchor = options.list_page_anchor,
+        list_item_anchor = options.list_item_anchor,
     }
 end
 
@@ -194,6 +195,7 @@ function DiscoverFlow.loadPage(plugin, page, options)
                     or not DiscoverService.canRequestNextPage(source, group, page),
                 list_page = options.list_page,
                 list_page_anchor = options.list_page_anchor,
+                list_item_anchor = options.list_item_anchor,
             })
             return
         end
@@ -211,6 +213,7 @@ function DiscoverFlow.loadPage(plugin, page, options)
                 or not DiscoverService.canRequestNextPage(source, group, page),
             list_page = options.list_page,
             list_page_anchor = options.list_page_anchor,
+            list_item_anchor = options.list_item_anchor,
         })
     end)
     return true

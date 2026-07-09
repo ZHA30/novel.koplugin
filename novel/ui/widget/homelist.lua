@@ -577,6 +577,20 @@ local function fixedPage(item_count, page, layout)
     }, current_page, total_pages
 end
 
+local function pageForItemAnchor(item_anchor, item_count, layout)
+    local anchor = tonumber(item_anchor)
+    if not anchor or item_count <= 0 then
+        return nil
+    end
+    anchor = math.floor(anchor)
+    if anchor < 1 then
+        anchor = 1
+    elseif anchor > item_count then
+        anchor = item_count
+    end
+    return math.ceil(anchor / layout.items_per_page)
+end
+
 local function pageItemCount(page)
     local first = tonumber(page and page.first) or 1
     local last = tonumber(page and page.last) or 0
@@ -673,14 +687,14 @@ function HomeList.new(_, args)
     local fixed_layout
     if fixed_item then
         fixed_layout = fixedPageLayout(dimen.h, entryHeightFor(fixed_item))
-        page, current_page, total_pages = fixedPage(item_count, args.page,
-            fixed_layout)
     else
         fixed_layout = fixedPageLayout(dimen.h,
             maxEntryHeight(get_item, item_count))
-        page, current_page, total_pages = fixedPage(item_count, args.page,
-            fixed_layout)
     end
+    local requested_page = pageForItemAnchor(args.item_anchor, item_count,
+        fixed_layout) or args.page
+    page, current_page, total_pages = fixedPage(item_count, requested_page,
+        fixed_layout)
     local row_height_at = fixedRowHeightAt(fixed_layout, page)
     local entries = buildEntries(get_item, item_count, content_width,
         page.first, page.last, row_height_at, row_height_at ~= nil)

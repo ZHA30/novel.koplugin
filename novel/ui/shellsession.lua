@@ -139,6 +139,10 @@ function ShellSession.setListInfo(plugin, info)
     state.list_info = info
     if info and info.current_page then
         ShellSession.setListPage(plugin, info.current_page)
+        local route = ShellSession.currentRoute(plugin)
+        if route then
+            route.list_item_anchor = nil
+        end
     end
 end
 

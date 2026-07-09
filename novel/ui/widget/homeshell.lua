@@ -213,6 +213,7 @@ local HomeShell = InputContainer:extend{
     active_tab = "bookshelf",
     tabs = nil,
     list_page = 1,
+    list_item_anchor = nil,
     paginate_lists = false,
     previous_page_callback = nil,
     next_page_callback = nil,

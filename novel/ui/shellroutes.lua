@@ -104,6 +104,7 @@ function ShellRoutes.discoverResults(args)
         error = args.error,
         list_page = args.list_page,
         list_page_anchor = args.list_page_anchor,
+        list_item_anchor = args.list_item_anchor,
     }
 end
 
@@ -134,6 +135,7 @@ function ShellRoutes.searchResults(args)
         error = args.error,
         list_page = args.list_page,
         list_page_anchor = args.list_page_anchor,
+        list_item_anchor = args.list_item_anchor,
     }
 end
 

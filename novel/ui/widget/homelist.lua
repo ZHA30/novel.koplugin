@@ -691,6 +691,8 @@ function HomeList.new(_, args)
             current_page = current_page,
             total_pages = total_pages,
             total_items = item_count,
+            first = page.first,
+            last = page.last,
             has_previous = current_page > 1,
             has_next = current_page < total_pages,
         })

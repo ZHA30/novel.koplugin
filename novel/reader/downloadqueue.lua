@@ -183,13 +183,13 @@ local function collectLater(pid, read_fd)
     UIManager:scheduleIn(DownloadQueue.collect_interval, collect)
 end
 
-local function refreshShell(plugin, book_id)
+local function refreshShell(plugin, book_id, position)
     if not plugin or not plugin.app then
         return
     end
     local ok, Shell = pcall(require, "novel.ui.shell")
     if ok and Shell and type(Shell.refreshDownloadState) == "function" then
-        Shell.refreshDownloadState(plugin, book_id)
+        Shell.refreshDownloadState(plugin, book_id, position)
     end
 end
 
@@ -205,7 +205,7 @@ local function notify(plugin, item)
         if plugin.novel_download_queue.notify_token ~= token then
             return
         end
-        refreshShell(plugin, item and item.book_id)
+        refreshShell(plugin, item and item.book_id, item and item.position)
     end)
 end
 
@@ -239,6 +239,7 @@ local function finishItem(plugin, item, ok, result_or_err)
         removeItem(state, item)
         notify(plugin, {
             book_id = book_id,
+            position = item.position,
         })
         DownloadQueue.start(plugin)
         return
@@ -646,6 +647,18 @@ function DownloadQueue.statusLabel(item)
         return _("Waiting for network")
     end
     return _("Queued")
+end
+
+function DownloadQueue.chapterStatusLabel(plugin, book_id, position)
+    if not plugin or not book_id or not position then
+        return nil
+    end
+    local key = itemKey(book_id, position)
+    local item = DownloadQueue.find(plugin, key)
+    if not item or item.status == STATUS_DONE then
+        return nil
+    end
+    return DownloadQueue.statusLabel(item)
 end
 
 function DownloadQueue.find(plugin, key)

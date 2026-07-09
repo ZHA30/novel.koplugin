@@ -270,7 +270,8 @@ function ChapterListing.buildRows(manifest, filter, sort)
     return rows, model.count
 end
 
-function ChapterListing.buildModel(manifest, filter, sort)
+function ChapterListing.buildModel(manifest, filter, sort, options)
+    options = options or {}
     local chapters = manifest and manifest.chapters or {}
     filter = ChapterListing.normalizeFilter(filter)
     local start_position = sort == ChapterListing.SORT_DESCENDING and #chapters or 1
@@ -299,22 +300,63 @@ function ChapterListing.buildModel(manifest, filter, sort)
     end
 
     local count = positions and #positions or #chapters
+    local function indexOfPosition(position)
+        position = tonumber(position)
+        if not position then
+            return nil
+        end
+        if positions then
+            for index = 1, #positions do
+                if positions[index] == position then
+                    return index
+                end
+            end
+            return nil
+        end
+        if position < 1 or position > #chapters then
+            return nil
+        end
+        if sort == ChapterListing.SORT_DESCENDING then
+            return #chapters - position + 1
+        end
+        return position
+    end
     return {
         count = count,
+        indexOfPosition = indexOfPosition,
         rowAt = function(index)
             local position = positionAt(index)
             local chapter = chapters[position] or {}
             local openable = ChapterRecord.isOpenable(chapter)
+            local download_label
+            if openable and type(options.download_label_at) == "function" then
+                download_label = options.download_label_at(position)
+            end
+            local downloaded_label = download_label
+            if not downloaded_label and openable and chapter.downloaded == true then
+                downloaded_label = _("Downloaded")
+            end
             return {
                 position = position,
                 title = chapterTitle(chapter),
                 openable = openable,
-                downloaded_label = openable and chapter.downloaded == true
-                    and _("Downloaded") or nil,
+                downloaded_label = downloaded_label,
                 dim = chapter.read == true or not openable,
             }
         end,
     }
+end
+
+function ChapterListing.isPositionVisible(manifest, filter, sort, position, page_info)
+    if not page_info or not page_info.first or not page_info.last then
+        return true
+    end
+    local model = ChapterListing.buildModel(manifest, filter, sort)
+    local index = model.indexOfPosition(position)
+    if not index then
+        return false
+    end
+    return index >= page_info.first and index <= page_info.last
 end
 
 local function selectionMap(plugin, manifest, create)

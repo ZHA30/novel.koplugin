@@ -7,6 +7,7 @@ local ContentBuilder = require("novel.ui.contentbuilder")
 local ChapterOpen = require("novel.reader.chapteropen")
 local Device = require("device")
 local Dialog = require("novel.ui.widget.dialog")
+local DownloadQueue = require("novel.reader.downloadqueue")
 local Font = require("ui/font")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
@@ -393,7 +394,15 @@ function ChaptersPage.build(shell, plugin, route, runtime)
         filter = route.filter,
         sort = route.sort,
     })
-    local model = ChapterListing.buildModel(manifest, filter, sort)
+    local model = ChapterListing.buildModel(manifest, filter, sort, {
+        download_label_at = function(position)
+            return DownloadQueue.chapterStatusLabel(
+                plugin,
+                manifest.book_id,
+                position
+            )
+        end,
+    })
     if model.count == 0 then
         return ContentBuilder.buildEmptyState(shell)
     end

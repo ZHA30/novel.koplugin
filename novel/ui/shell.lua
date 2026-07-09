@@ -582,10 +582,20 @@ function Shell.reshow(plugin)
     scheduleRender(plugin)
 end
 
-function Shell.refreshDownloadState(plugin, book_id)
+function Shell.refreshDownloadState(plugin, book_id, position)
     local route = Shell.currentRoute(plugin)
     if route and route.key == "chapters" and route.manifest
         and route.manifest.book_id == book_id then
+        if position and not ChapterListing.isPositionVisible(
+            route.manifest,
+            route.filter,
+            route.sort,
+            position,
+            listInfo(plugin)
+        ) then
+            route.manifest = Manifest:new():load(book_id) or route.manifest
+            return
+        end
         local manifest = Manifest:new():load(book_id) or route.manifest
         Shell.replace(plugin, chapterRoute(route, manifest, route.filter, route.sort))
         return

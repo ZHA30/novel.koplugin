@@ -60,11 +60,19 @@ local function storageDir()
     return DownloadQueue.path:match("^(.*)/[^/]+$") or DataStorage:getDataDir()
 end
 
+local function emptyState()
+    return {
+        paused = false,
+        waiting_network = false,
+        items = {},
+    }
+end
+
 local function savedItems(items)
     local result = {}
     for index = 1, #(items or {}) do
-        local item = clone(items[index])
-        if item.status ~= STATUS_DONE then
+        local item = type(items[index]) == "table" and clone(items[index]) or nil
+        if item and item.status ~= STATUS_DONE then
             item.pid = nil
             item.read_fd = nil
             item.check = nil
@@ -78,37 +86,39 @@ local function savedItems(items)
     return result
 end
 
+local function normalizedLoadedItem(item)
+    if type(item) ~= "table" then
+        return nil, true
+    end
+    if item.status == STATUS_DONE then
+        return nil, true
+    end
+    item.key = item.key or itemKey(item.book_id, item.position)
+    item.status = item.status == STATUS_RUNNING and STATUS_QUEUED
+        or (item.status or STATUS_QUEUED)
+    item.tries = tonumber(item.tries) or 0
+    item.progress = tonumber(item.progress) or 0
+    return item, false
+end
+
 local function loadState()
     if not util.pathExists(DownloadQueue.path) then
-        return {
-            paused = false,
-            waiting_network = false,
-            items = {},
-        }
+        return emptyState()
     end
     local settings = LuaSettings:open(DownloadQueue.path)
     local state = settings:readSetting("download_queue")
     if type(state) ~= "table" then
-        return {
-            paused = false,
-            waiting_network = false,
-            items = {},
-        }
+        return emptyState()
     end
     state.waiting_network = state.waiting_network == true
     local loaded_items = state.items or {}
     state.items = {}
     local removed_done = false
     for index = 1, #loaded_items do
-        local item = loaded_items[index]
-        if item.status ~= STATUS_DONE then
-            item.key = item.key or itemKey(item.book_id, item.position)
-            item.status = item.status == STATUS_RUNNING and STATUS_QUEUED
-                or (item.status or STATUS_QUEUED)
-            item.tries = tonumber(item.tries) or 0
-            item.progress = tonumber(item.progress) or 0
+        local item, removed = normalizedLoadedItem(loaded_items[index])
+        if item then
             table.insert(state.items, item)
-        else
+        elseif removed then
             removed_done = true
         end
     end
@@ -183,16 +193,6 @@ local function collectLater(pid, read_fd)
     UIManager:scheduleIn(DownloadQueue.collect_interval, collect)
 end
 
-local function refreshShell(plugin, book_id, position)
-    if not plugin or not plugin.app then
-        return
-    end
-    local ok, Shell = pcall(require, "novel.ui.shell")
-    if ok and Shell and type(Shell.refreshDownloadState) == "function" then
-        Shell.refreshDownloadState(plugin, book_id, position)
-    end
-end
-
 local function notify(plugin, item)
     local state = queue(plugin)
     saveState(state)
@@ -205,7 +205,10 @@ local function notify(plugin, item)
         if plugin.novel_download_queue.notify_token ~= token then
             return
         end
-        refreshShell(plugin, item and item.book_id, item and item.position)
+        local listener = plugin.novel_download_queue.change_listener
+        if type(listener) == "function" then
+            pcall(listener, plugin, item and item.book_id, item and item.position)
+        end
     end)
 end
 
@@ -243,6 +246,13 @@ local function stopRunningItem(item)
     item.pid = nil
     item.read_fd = nil
     return true
+end
+
+local function stopWake(state)
+    if state and state.wake_action then
+        UIManager:unschedule(state.wake_action)
+        state.wake_action = nil
+    end
 end
 
 local function finishItem(plugin, item, ok, result_or_err)
@@ -448,39 +458,30 @@ function DownloadQueue.init(plugin)
     DownloadQueue.start(plugin)
 end
 
+function DownloadQueue.setChangeListener(plugin, listener)
+    if not plugin then
+        return
+    end
+    queue(plugin).change_listener = type(listener) == "function"
+        and listener or nil
+end
+
 function DownloadQueue.close(plugin)
     local state = plugin and plugin.novel_download_queue
     if not state then
         return
     end
     state.notify_token = (state.notify_token or 0) + 1
-    if state.wake_action then
-        UIManager:unschedule(state.wake_action)
-        state.wake_action = nil
-    end
+    stopWake(state)
     for index = 1, #state.items do
         local item = state.items[index]
-        if item.check then
-            UIManager:unschedule(item.check)
-            item.check = nil
-        end
-        if item.pid then
-            if ffiutil.isSubProcessDone(item.pid) then
-                if item.read_fd then
-                    ffiutil.readAllFromFD(item.read_fd)
-                end
-            else
-                ffiutil.terminateSubProcess(item.pid)
-                collectLater(item.pid, item.read_fd)
-            end
-            item.pid = nil
-            item.read_fd = nil
-            if item.status == STATUS_RUNNING then
-                item.status = STATUS_QUEUED
-            end
+        stopRunningItem(item)
+        if item.status == STATUS_RUNNING then
+            item.status = STATUS_QUEUED
         end
     end
     state.running_key = nil
+    state.change_listener = nil
     saveState(state)
 end
 
@@ -516,10 +517,7 @@ function DownloadQueue.pause(plugin)
     for index = 1, #state.items do
         state.items[index].waiting_network = nil
     end
-    if state.wake_action then
-        UIManager:unschedule(state.wake_action)
-        state.wake_action = nil
-    end
+    stopWake(state)
     notify(plugin)
 end
 
@@ -770,23 +768,7 @@ function DownloadQueue.clear(plugin)
     end
     state.items = {}
     state.waiting_network = false
-    if state.wake_action then
-        UIManager:unschedule(state.wake_action)
-        state.wake_action = nil
-    end
-    notify(plugin)
-end
-
-function DownloadQueue.clearDone(plugin)
-    local state = queue(plugin)
-    local kept = {}
-    for index = 1, #state.items do
-        local item = state.items[index]
-        if item.status ~= STATUS_DONE then
-            table.insert(kept, item)
-        end
-    end
-    state.items = kept
+    stopWake(state)
     notify(plugin)
 end
 

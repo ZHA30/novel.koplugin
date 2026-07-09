@@ -5,6 +5,7 @@ local Dialog = require("novel.ui.widget.dialog")
 local DiscoverService = require("novel.catalog.listing.discoverservice")
 local Loading = require("novel.ui.widget.loading")
 local NetworkMgr = require("ui/network/manager")
+local ResultSet = require("novel.ui.resultset")
 local ShellRoutes = require("novel.ui.shellroutes")
 local Shell = require("novel.ui.shell")
 local Trapper = require("ui/trapper")
@@ -61,17 +62,6 @@ local function showResultRoute(plugin, source, group, route)
     else
         Shell.push(plugin, route)
     end
-end
-
-local function appendUnsupported(existing, added)
-    local merged = {}
-    for index = 1, #(existing or {}) do
-        merged[#merged + 1] = existing[index]
-    end
-    for index = 1, #(added or {}) do
-        merged[#merged + 1] = added[index]
-    end
-    return merged
 end
 
 function DiscoverFlow.loadNextPage(plugin)
@@ -184,7 +174,7 @@ function DiscoverFlow.loadPage(plugin, page, options)
         end
 
         if append_next_page then
-            local merged_books, appended = DiscoverResultSet.mergeBooks(
+            local merged_books, appended = ResultSet.mergeBooks(
                 current.books or current_books,
                 result.books or {}
             )
@@ -194,7 +184,7 @@ function DiscoverFlow.loadPage(plugin, page, options)
                 source_name = current.source_name,
                 group = current.group,
                 books = merged_books,
-                unsupported = appendUnsupported(
+                unsupported = ResultSet.appendUnsupported(
                     current.unsupported or current_unsupported,
                     result.unsupported
                 ),

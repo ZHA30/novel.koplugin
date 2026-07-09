@@ -17,6 +17,9 @@ local Novel = WidgetContainer:extend{
 
 function Novel:init()
     self.app = AppContext:new{ plugin = self }
+    DownloadQueue.setChangeListener(self, function(plugin, book_id, position)
+        Shell.refreshDownloadState(plugin, book_id, position)
+    end)
     self.app:init()
     ReaderHooks.init(self)
 

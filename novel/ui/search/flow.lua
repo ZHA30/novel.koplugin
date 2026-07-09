@@ -3,6 +3,7 @@ local Dialog = require("novel.ui.widget.dialog")
 local InputDialog = require("ui/widget/inputdialog")
 local Loading = require("novel.ui.widget.loading")
 local NetworkMgr = require("ui/network/manager")
+local ResultSet = require("novel.ui.resultset")
 local ShellRoutes = require("novel.ui.shellroutes")
 local SearchService = require("novel.catalog.listing.searchservice")
 local SearchSupport = require("novel.ui.search.searchsupport")
@@ -59,59 +60,6 @@ local function showResultRoute(plugin, source, keyword, route)
     else
         Shell.push(plugin, route)
     end
-end
-
-local function appendUnsupported(existing, added)
-    local merged = {}
-    for index = 1, #(existing or {}) do
-        merged[#merged + 1] = existing[index]
-    end
-    for index = 1, #(added or {}) do
-        merged[#merged + 1] = added[index]
-    end
-    return merged
-end
-
-local function bookKey(book)
-    book = book or {}
-    local book_url = tostring(book.bookUrl or "")
-    if book_url ~= "" then
-        return book_url
-    end
-    local name = tostring(book.name or "")
-    if name == "" then
-        return nil
-    end
-    return name .. "\n" .. tostring(book.author or "")
-end
-
-local function mergeBooks(existing_books, new_books)
-    local merged = {}
-    local known = {}
-
-    for index = 1, #(existing_books or {}) do
-        local book = existing_books[index]
-        merged[#merged + 1] = book
-        local key = bookKey(book)
-        if key then
-            known[key] = true
-        end
-    end
-
-    local appended = 0
-    for index = 1, #(new_books or {}) do
-        local book = new_books[index]
-        local key = bookKey(book)
-        if not key or not known[key] then
-            merged[#merged + 1] = book
-            appended = appended + 1
-            if key then
-                known[key] = true
-            end
-        end
-    end
-
-    return merged, appended
 end
 
 function SearchFlow.showResults(plugin, source, keyword, result, options)
@@ -248,7 +196,7 @@ function SearchFlow.loadPage(plugin, page, options)
         end
 
         if append_next_page then
-            local merged_books, appended = mergeBooks(
+            local merged_books, appended = ResultSet.mergeBooks(
                 current.books or current_books,
                 result.books or {}
             )
@@ -258,7 +206,7 @@ function SearchFlow.loadPage(plugin, page, options)
                 source_name = current.source_name,
                 keyword = current.keyword,
                 books = merged_books,
-                unsupported = appendUnsupported(
+                unsupported = ResultSet.appendUnsupported(
                     current.unsupported or current_unsupported,
                     result.unsupported
                 ),

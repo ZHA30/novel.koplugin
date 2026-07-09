@@ -17,48 +17,6 @@ function DiscoverResultSet.resultTitle(group, first_page, last_page)
     return title .. " (" .. tostring(last_page) .. ")"
 end
 
-function DiscoverResultSet.bookKey(book)
-    book = book or {}
-    local book_url = tostring(book.bookUrl or "")
-    if book_url ~= "" then
-        return book_url
-    end
-    local name = tostring(book.name or "")
-    if name == "" then
-        return nil
-    end
-    return name .. "\n" .. tostring(book.author or "")
-end
-
-function DiscoverResultSet.mergeBooks(existing_books, new_books)
-    local merged = {}
-    local known = {}
-
-    for index = 1, #(existing_books or {}) do
-        local book = existing_books[index]
-        merged[#merged + 1] = book
-        local key = DiscoverResultSet.bookKey(book)
-        if key then
-            known[key] = true
-        end
-    end
-
-    local appended = 0
-    for index = 1, #(new_books or {}) do
-        local book = new_books[index]
-        local key = DiscoverResultSet.bookKey(book)
-        if not key or not known[key] then
-            merged[#merged + 1] = book
-            appended = appended + 1
-            if key then
-                known[key] = true
-            end
-        end
-    end
-
-    return merged, appended
-end
-
 function DiscoverResultSet.sameRoute(route, source, group)
     if not route or route.key ~= "discover_results" then
         return false

@@ -1,6 +1,7 @@
 local _ = require("novel.i18n")
 local Blitbuffer = require("ffi/blitbuffer")
 local ChapterCache = require("novel.reader.chaptercache")
+local ChapterDownload = require("novel.reader.chapterdownload")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local ChapterListing = require("novel.ui.chapters.listing")
 local ContentBuilder = require("novel.ui.contentbuilder")
@@ -222,7 +223,7 @@ local function finishChapterCacheAction(plugin, route, runtime, manifest, row,
 end
 
 local function cacheChapter(plugin, route, runtime, manifest, row, positions)
-    ChapterCache.cache(plugin, manifest, positions, {
+    ChapterDownload.enqueue(plugin, manifest, positions, {
         on_done = function(_summary, updated_manifest)
             finishChapterCacheAction(
                 plugin,

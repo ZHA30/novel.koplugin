@@ -598,7 +598,7 @@ local function pageItemCount(page)
 end
 
 local function fixedRowHeightAt(layout, page)
-    if not layout or pageItemCount(page) < layout.items_per_page then
+    if not layout or pageItemCount(page) <= 0 then
         return nil
     end
     local first = tonumber(page and page.first) or 1
@@ -696,8 +696,9 @@ function HomeList.new(_, args)
     page, current_page, total_pages = fixedPage(item_count, requested_page,
         fixed_layout)
     local row_height_at = fixedRowHeightAt(fixed_layout, page)
+    local omit_last_separator = pageItemCount(page) >= fixed_layout.items_per_page
     local entries = buildEntries(get_item, item_count, content_width,
-        page.first, page.last, row_height_at, row_height_at ~= nil)
+        page.first, page.last, row_height_at, omit_last_separator)
     appendEntries(content, entries)
 
     if type(args.on_page_info) == "function" then

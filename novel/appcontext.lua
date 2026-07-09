@@ -2,6 +2,7 @@ local BookshelfStore = require("novel.storage.bookshelfstore")
 local Cache = require("novel.storage.cache")
 local DownloadQueue = require("novel.reader.downloadqueue")
 local Manifest = require("novel.storage.manifest")
+local OfflineFiles = require("novel.storage.offlinefiles")
 local ReaderSettings = require("novel.reader.settings")
 local SourceStore = require("novel.storage.sourcestore")
 local PluginSettings = require("novel.storage.pluginsettings")
@@ -60,11 +61,13 @@ end
 
 function AppContext:init()
     self.log:debug("app initialized")
+    self:pruneOfflineOrphans()
     DownloadQueue.init(self.plugin)
 end
 
 function AppContext:onClose()
     DownloadQueue.close(self.plugin)
+    self:pruneOfflineOrphans()
     self.closed = true
     self.source_store = nil
     self.bookshelf_store = nil
@@ -77,6 +80,17 @@ end
 function AppContext:resetSettings()
     self.settings = PluginSettings.reset()
     self.log = Log:new(self.settings)
+end
+
+function AppContext:pruneOfflineOrphans()
+    local summary = OfflineFiles.pruneOrphans(self:getBookshelfStore())
+    if summary and #summary.removed_book_ids > 0 then
+        DownloadQueue.removeBooks(self.plugin, summary.removed_book_ids, {
+            notify = false,
+            restart = false,
+        })
+    end
+    return summary
 end
 
 function AppContext.deleteStoredSettings()

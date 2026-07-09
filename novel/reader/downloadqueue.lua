@@ -707,6 +707,71 @@ function DownloadQueue.remove(plugin, key)
     return true
 end
 
+local function removeBookItems(state, book_id)
+    local removed = false
+    for index = #state.items, 1, -1 do
+        local item = state.items[index]
+        if item.book_id == book_id then
+            if stopRunningItem(item) or state.running_key == item.key then
+                state.running_key = nil
+            end
+            table.remove(state.items, index)
+            removed = true
+        end
+    end
+    if removed then
+        state.waiting_network = false
+    end
+    return removed
+end
+
+function DownloadQueue.removeBook(plugin, book_id, options)
+    options = options or {}
+    book_id = tostring(book_id or "")
+    if book_id == "" then
+        return false
+    end
+
+    local state = queue(plugin)
+    if not removeBookItems(state, book_id) then
+        return false
+    end
+
+    if options.notify == false then
+        saveState(state)
+    else
+        notify(plugin)
+    end
+    if options.restart ~= false then
+        DownloadQueue.start(plugin)
+    end
+    return true
+end
+
+function DownloadQueue.removeBooks(plugin, book_ids, options)
+    local state = queue(plugin)
+    local removed = false
+    for index = 1, #(book_ids or {}) do
+        local book_id = tostring(book_ids[index] or "")
+        if book_id ~= "" and removeBookItems(state, book_id) then
+            removed = true
+        end
+    end
+    if not removed then
+        return false
+    end
+
+    if options and options.notify == false then
+        saveState(state)
+    else
+        notify(plugin)
+    end
+    if not options or options.restart ~= false then
+        DownloadQueue.start(plugin)
+    end
+    return true
+end
+
 function DownloadQueue.pauseItem(plugin, key)
     local state = queue(plugin)
     local item = DownloadQueue.find(plugin, key)
@@ -768,6 +833,7 @@ function DownloadQueue.clear(plugin)
     end
     state.items = {}
     state.waiting_network = false
+    state.running_key = nil
     stopWake(state)
     notify(plugin)
 end

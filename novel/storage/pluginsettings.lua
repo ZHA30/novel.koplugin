@@ -5,7 +5,7 @@ local PluginSettings = {
 }
 
 PluginSettings.defaults = {
-    schema_version = 4,
+    schema_version = 5,
     debug = {
         enabled = false,
     },
@@ -18,12 +18,6 @@ PluginSettings.defaults = {
         content_ttl_days = 14,
         max_metadata_records = 10000,
         max_metadata_bytes = 20 * 1024 * 1024,
-    },
-    prefetch = {
-        enabled = true,
-        lookahead = 1,
-        initial_delay = 0.8,
-        timeout_seconds = 45,
     },
     chapter_list = {
         books = {},
@@ -108,6 +102,9 @@ local function migrate(settings)
         if type(settings.debug) == "table" then
             settings.debug.max_entries = nil
         end
+    end
+    if version < 5 then
+        settings.prefetch = nil
     end
     settings.schema_version = PluginSettings.defaults.schema_version
     return true

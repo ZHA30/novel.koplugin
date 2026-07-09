@@ -5,7 +5,6 @@ local Dialog = require("novel.ui.widget.dialog")
 local Loading = require("novel.ui.widget.loading")
 local Manifest = require("novel.storage.manifest")
 local NetworkMgr = require("ui/network/manager")
-local Prefetch = require("novel.reader.prefetch")
 local ReturnController = require("novel.reader.returncontroller")
 local ReaderSettings = require("novel.reader.settings")
 local Trapper = require("ui/trapper")
@@ -123,47 +122,6 @@ local function openDownloadedChapter(plugin, manifest_store, manifest, position,
     openFile(plugin, chapter.file_path, options and options.jump)
 end
 
-local function copyOptions(options)
-    local copied = {}
-    for key, value in pairs(options or {}) do
-        copied[key] = value
-    end
-    return copied
-end
-
-local function retryWithoutPrefetch(plugin, manifest, position, options)
-    local retry_options = copyOptions(options)
-    retry_options.skip_prefetch_wait = true
-    ChapterOpen.open(plugin, manifest, position, retry_options)
-end
-
-local function waitForPrefetch(plugin, manifest, position, options)
-    if options.skip_prefetch_wait
-        or not Prefetch.isPending(plugin, manifest, position) then
-        return false
-    end
-
-    local request_id = nextContentRequest(plugin)
-    local loading_widget = showLoading(plugin)
-
-    if not Prefetch.await(plugin, manifest, position, function(ok, reason)
-        if not plugin.app or plugin.content_request_id ~= request_id then
-            closeLoading(plugin, loading_widget)
-            return
-        end
-        if not ok and reason == "closed" then
-            closeLoading(plugin, loading_widget)
-            plugin.novel_switching_chapter = nil
-            return
-        end
-        retryWithoutPrefetch(plugin, manifest, position, options)
-    end) then
-        closeLoading(plugin, loading_widget)
-        return false
-    end
-    return true
-end
-
 function ChapterOpen.open(plugin, manifest, position, options)
     options = options or {}
     if not plugin or not plugin.app then
@@ -204,10 +162,6 @@ function ChapterOpen.open(plugin, manifest, position, options)
         openDownloadedChapter(plugin, manifest_store, manifest, position, options)
         return
     end
-    if waitForPrefetch(plugin, manifest, position, options) then
-        return
-    end
-    Prefetch.close(plugin)
     if NetworkMgr:willRerunWhenOnline(function()
         ChapterOpen.open(plugin, manifest, position, options)
     end) then

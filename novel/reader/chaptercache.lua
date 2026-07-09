@@ -41,21 +41,21 @@ local function deleteSummaryMessage(summary)
     local lines = {}
     if summary.chapter_files_removed > 0 then
         table.insert(lines, string.format(
-            _("Deleted cache for %d chapters."),
+            _("Deleted %d chapters."),
             summary.chapter_files_removed
         ))
     end
     if summary.chapter_files_kept > 0 then
-        table.insert(lines, _("Current chapter cache was kept."))
+        table.insert(lines, _("Current chapter was kept."))
     end
     if summary.chapter_files_failed > 0 then
         table.insert(lines, string.format(
-            _("Failed to delete cache for %d chapters."),
+            _("Failed to delete %d chapters."),
             summary.chapter_files_failed
         ))
     end
     if #lines == 0 then
-        table.insert(lines, _("No cached chapters to delete."))
+        table.insert(lines, _("No chapters to delete."))
     end
     return table.concat(lines, "\n")
 end
@@ -106,7 +106,7 @@ function ChapterCache.delete(plugin, manifest, positions, options)
         keep_file = currentFile(),
     })
     if #target_positions == 0 then
-        Dialog.message(_("No cached chapters to delete."))
+        Dialog.message(_("No chapters to delete."))
         return
     end
 

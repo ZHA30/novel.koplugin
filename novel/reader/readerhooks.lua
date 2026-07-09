@@ -3,7 +3,6 @@ local ChapterOpen = require("novel.reader.chapteropen")
 local ChapterDoc = require("novel.reader.chapterdoc")
 local ChapterTurn = require("novel.reader.chapterturn")
 local Patches = require("novel.reader.patches")
-local Prefetch = require("novel.reader.prefetch")
 local ReturnController = require("novel.reader.returncontroller")
 local ReaderSettings = require("novel.reader.settings")
 
@@ -11,7 +10,6 @@ local ReaderHooks = {}
 
 function ReaderHooks.close(plugin)
     ChapterOpen.close(plugin)
-    Prefetch.close(plugin)
     ChapterTurn.close(plugin)
 end
 
@@ -32,7 +30,6 @@ end
 
 function ReaderHooks.stopPlugin(plugin)
     ChapterOpen.close(plugin, true)
-    Prefetch.close(plugin)
     ChapterTurn.close(plugin)
     Patches.restoreStatisticsInstance(plugin and plugin.ui and plugin.ui.statistics)
     Patches.restore()
@@ -52,13 +49,7 @@ function ReaderHooks.onSaveSettings(plugin)
 end
 
 function ReaderHooks.setup(plugin)
-    local is_novel = ChapterTurn.setup(plugin)
-    if is_novel then
-        Prefetch.setup(plugin)
-    else
-        Prefetch.close(plugin)
-    end
-    return is_novel
+    return ChapterTurn.setup(plugin)
 end
 
 function ReaderHooks.addToMainMenu(plugin, menu_items)

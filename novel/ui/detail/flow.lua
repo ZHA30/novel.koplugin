@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local BookshelfLifecycle = require("novel.bookshelflifecycle")
 local BookshelfStore = require("novel.storage.bookshelfstore")
 local DetailVisits = require("novel.ui.detail.detailvisits")
 local Dialog = require("novel.ui.widget.dialog")
@@ -144,7 +145,7 @@ local function buildButtons(plugin, source, result, options)
             icon = in_bookshelf and "book-check" or "book",
             callback = function()
                 if in_bookshelf then
-                    if bookshelf:remove(source, book) then
+                    if BookshelfLifecycle.remove(plugin, source, book) then
                         notifyBookshelfChanged(book, false)
                         DetailFlow.showLoaded(plugin, source, result, options)
                         Dialog.message(_("Removed from bookshelf."))

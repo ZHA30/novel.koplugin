@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local BookshelfLifecycle = require("novel.bookshelflifecycle")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DetailFlow = require("novel.ui.detail.flow")
 local Dialog = require("novel.ui.widget.dialog")
@@ -33,7 +34,8 @@ local function confirmRemove(plugin, record)
         text = _("Remove book from bookshelf?"),
         ok_text = _("Remove"),
         ok_callback = function()
-            local removed = plugin.app:getBookshelfStore():remove(record.source, record.book)
+            local removed = BookshelfLifecycle.remove(plugin, record.source,
+                record.book)
             Dialog.clearIfOwned(plugin, "bookshelf_confirm_dialog", confirm_dialog)
             if not removed then
                 Dialog.message(Dialog.failureMessage())

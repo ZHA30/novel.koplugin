@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local BookshelfLifecycle = require("novel.bookshelflifecycle")
 local ChaptersFlow = require("novel.ui.chapters.flow")
 local DetailFlow = require("novel.ui.detail.flow")
 local Dialog = require("novel.ui.widget.dialog")
@@ -81,7 +82,8 @@ local function toggleBookshelf(runtime, plugin, route, index, book, record, stor
         return
     end
     if record then
-        if store:remove(record.source or route.source, record.book or book) then
+        if BookshelfLifecycle.remove(plugin, record.source or route.source,
+            record.book or book) then
             updateBook(runtime, plugin, route, index, book, route_with)
             Dialog.message(_("Removed from bookshelf."))
         else

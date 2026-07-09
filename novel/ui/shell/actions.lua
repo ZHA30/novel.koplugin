@@ -262,14 +262,14 @@ local function chapterTopActions(plugin, route, callbacks)
         },
         {
             key = "delete_cache",
-            text = _("Delete cache"),
+            text = _("Delete"),
             icon = "trash-2",
             enabled = #delete_cache_positions > 0,
             callback = function()
                 confirmChapterAction(
-                    _("Delete cache for %d chapters?"),
+                    _("Delete %d chapters?"),
                     #delete_cache_positions,
-                    _("Delete cache"),
+                    _("Delete"),
                     function()
                         ChapterCache.delete(plugin, manifest, delete_cache_positions, {
                             on_done = function(_summary, updated_manifest)

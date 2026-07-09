@@ -159,23 +159,23 @@ msgstr "暂停"
 msgid "Download failed"
 msgstr "下载失败"
 
-msgid "Delete cache"
-msgstr "删除缓存"
+msgid "Delete"
+msgstr "删除"
 
-msgid "Delete cache for %d chapters?"
-msgstr "删除 %d 个章节的缓存？"
+msgid "Delete %d chapters?"
+msgstr "删除 %d 个章节？"
 
-msgid "Deleted cache for %d chapters."
-msgstr "已删除 %d 个章节的缓存。"
+msgid "Deleted %d chapters."
+msgstr "已删除 %d 个章节。"
 
-msgid "Current chapter cache was kept."
-msgstr "当前打开章节的缓存已保留。"
+msgid "Current chapter was kept."
+msgstr "当前打开章节已保留。"
 
-msgid "Failed to delete cache for %d chapters."
-msgstr "%d 个章节缓存删除失败。"
+msgid "Failed to delete %d chapters."
+msgstr "%d 个章节删除失败。"
 
-msgid "No cached chapters to delete."
-msgstr "没有可删除的章节缓存。"
+msgid "No chapters to delete."
+msgstr "没有可删除的章节。"
 
 msgid "Select"
 msgstr "选择"

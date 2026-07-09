@@ -105,13 +105,7 @@ msgstr "将 %d 个章节标为已读？"
 msgid "Mark %d chapters as unread?"
 msgstr "将 %d 个章节标为未读？"
 
-msgid "Cache"
-msgstr "缓存"
-
 msgid "Download"
-msgstr "下载"
-
-msgid "Downloads"
 msgstr "下载"
 
 msgid "Download queue"
@@ -131,9 +125,6 @@ msgstr "已暂停"
 
 msgid "Waiting for network"
 msgstr "等待网络"
-
-msgid "Cache %d chapters?"
-msgstr "缓存 %d 个章节？"
 
 msgid "Download %d chapters?"
 msgstr "下载 %d 个章节？"
@@ -168,29 +159,11 @@ msgstr "暂停"
 msgid "Download failed"
 msgstr "下载失败"
 
-msgid "Caching..."
-msgstr "缓存中..."
-
-msgid "Caching (%d/%d)..."
-msgstr "缓存中(%d/%d)..."
-
 msgid "Delete cache"
 msgstr "删除缓存"
 
 msgid "Delete cache for %d chapters?"
 msgstr "删除 %d 个章节的缓存？"
-
-msgid "Cached %d chapters."
-msgstr "已缓存 %d 个章节。"
-
-msgid "Skipped %d cached chapters."
-msgstr "已跳过 %d 个已缓存章节。"
-
-msgid "Failed to cache %d chapters."
-msgstr "%d 个章节缓存失败。"
-
-msgid "No chapters to cache."
-msgstr "没有需要缓存的章节。"
 
 msgid "Deleted cache for %d chapters."
 msgstr "已删除 %d 个章节的缓存。"

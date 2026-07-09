@@ -65,6 +65,42 @@ local function chapterIdentity(chapter, position)
     return "title:" .. clean(chapter.title) .. ":" .. tostring(position or 0)
 end
 
+local function chapterTitleKey(chapter)
+    local title = clean(chapter and chapter.title)
+    if title == "" then
+        return ""
+    end
+    return title:lower()
+end
+
+local function buildChapterIndexes(chapters)
+    local by_identity = {}
+    local by_title = {}
+    local title_counts = {}
+    for position = 1, #(chapters or {}) do
+        local chapter = chapters[position]
+        by_identity[chapterIdentity(chapter, position)] = chapter
+        local title_key = chapterTitleKey(chapter)
+        if title_key ~= "" then
+            title_counts[title_key] = (title_counts[title_key] or 0) + 1
+            by_title[title_key] = chapter
+        end
+    end
+    return by_identity, by_title, title_counts
+end
+
+local function oldChapterFor(chapter, position, by_identity, by_title, title_counts)
+    local old = by_identity[chapterIdentity(chapter, position)]
+    if old then
+        return old
+    end
+    local title_key = chapterTitleKey(chapter)
+    if title_key ~= "" and title_counts[title_key] == 1 then
+        return by_title[title_key]
+    end
+    return nil
+end
+
 local function chapterId(chapter, position)
     chapter = chapter or {}
     local url = clean(chapter.url)
@@ -169,11 +205,7 @@ function Manifest:ensureBook(source, book, chapters)
     chapters = chapters or {}
     local book_id = Manifest.bookId(source, book)
     local existing = self:load(book_id) or {}
-    local by_identity = {}
-    for position = 1, #(existing.chapters or {}) do
-        local chapter = existing.chapters[position]
-        by_identity[chapterIdentity(chapter, position)] = chapter
-    end
+    local by_identity, by_title, title_counts = buildChapterIndexes(existing.chapters)
 
     local manifest = {
         schema_version = Manifest.schema_version,
@@ -193,7 +225,13 @@ function Manifest:ensureBook(source, book, chapters)
     for position = 1, #chapters do
         local chapter = clone(chapters[position])
         chapter.position = position
-        local old = by_identity[chapterIdentity(chapter, position)]
+        local old = oldChapterFor(
+            chapter,
+            position,
+            by_identity,
+            by_title,
+            title_counts
+        )
         chapter.file_name = old and old.file_name
             or (chapterId(chapter, position) .. ".html")
         if old then

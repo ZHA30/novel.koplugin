@@ -1,33 +1,16 @@
 local _ = require("novel.i18n")
 local BookshelfLifecycle = require("novel.bookshelflifecycle")
+local BookRefresh = require("novel.bookshelfrefresh")
 local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DetailFlow = require("novel.ui.detail.flow")
 local Dialog = require("novel.ui.widget.dialog")
-local Loading = require("novel.ui.widget.loading")
-local NetworkMgr = require("ui/network/manager")
 local ChaptersFlow = require("novel.ui.chapters.flow")
+local RefreshFlow = require("novel.ui.refreshflow")
 local Shell = require("novel.ui.shell")
-local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 
 local BookshelfFlow = {}
-
-local function invalidateRefresh(plugin)
-    plugin.bookshelf_refresh_request_id = (plugin.bookshelf_refresh_request_id or 0) + 1
-end
-
-local function findCurrentSource(plugin, record)
-    local source_url = record.source_url or ""
-    local sources = plugin.app:getSourceStore():list()
-    for source_index = 1, #sources do
-        local source = sources[source_index]
-        if source.bookSourceUrl == source_url then
-            return source
-        end
-    end
-    return record.source
-end
 
 local function bookTitle(book)
     if book and book.name and book.name ~= "" then
@@ -61,7 +44,7 @@ local function confirmRemove(plugin, record)
 end
 
 local function resumeRecord(plugin, record)
-    local source = findCurrentSource(plugin, record)
+    local source = BookRefresh.findCurrentSource(plugin, record)
     local current = record.current
     if not current or not current.chapter then
         ChaptersFlow.resume(plugin, source, record.book, 1)
@@ -72,53 +55,13 @@ local function resumeRecord(plugin, record)
 end
 
 local function refreshRecord(plugin, record)
-    if not plugin.app then
-        Dialog.message(_("Novel is not ready."))
-        return
-    end
-    local source = findCurrentSource(plugin, record)
-    if NetworkMgr:willRerunWhenOnline(function()
-        refreshRecord(plugin, record)
-    end) then
-        return
-    end
-
-    invalidateRefresh(plugin)
-    local request_id = plugin.bookshelf_refresh_request_id
-
-    Trapper:wrap(function()
-        local loading_widget = Loading.show(plugin, "bookshelf_refresh_loading")
-        local settings = plugin.app and plugin.app.settings
-        local completed, result = Trapper:dismissableRunInSubprocess(function()
-            local BookshelfStore = require("novel.storage.bookshelfstore")
-            return BookshelfStore.fetchRefresh(source, record.book, {
-                settings = settings,
-            })
-        end, loading_widget)
-        Loading.close(plugin, "bookshelf_refresh_loading", loading_widget)
-
-        if not plugin.app or plugin.bookshelf_refresh_request_id ~= request_id then
-            return
-        end
-        if not completed then
-            Dialog.message(Dialog.canceledMessage())
-            return
-        end
-        if not result or not result.ok then
-            Dialog.message(Dialog.failureMessage(result))
-            return
-        end
-
-        local updated_record, err = plugin.app:getBookshelfStore()
-            :applyRefresh(source, record.book, result)
-        if not updated_record then
-            Dialog.message(Dialog.failureMessage(err))
-            return
-        end
-        Dialog.message(_("Book refreshed.") .. "\n"
-            .. _("Chapters: ") .. tostring(#(result.chapters or {})))
-        BookshelfFlow.show(plugin)
-    end)
+    local source = BookRefresh.findCurrentSource(plugin, record)
+    RefreshFlow.refreshBook(plugin, source, record.book, {
+        require_bookshelf = true,
+        on_done = function()
+            BookshelfFlow.show(plugin)
+        end,
+    })
 end
 
 local function showActions(plugin, record)
@@ -164,8 +107,7 @@ function BookshelfFlow.resume(plugin, record)
 end
 
 function BookshelfFlow.close(plugin)
-    invalidateRefresh(plugin)
-    Loading.close(plugin, "bookshelf_refresh_loading")
+    RefreshFlow.close(plugin)
     Dialog.closeKeys(plugin, {
         "bookshelf_confirm_dialog",
     })

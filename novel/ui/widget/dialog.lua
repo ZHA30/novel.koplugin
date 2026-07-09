@@ -43,11 +43,19 @@ function Dialog.message(message)
 end
 
 function Dialog.confirm(message, ok_text, callback)
-    UIManager:show(ConfirmBox:new{
+    local confirm_box
+    confirm_box = ConfirmBox:new{
         text = message,
         ok_text = ok_text,
-        ok_callback = callback,
-    })
+        keep_dialog_open = true,
+        ok_callback = function()
+            UIManager:close(confirm_box)
+            if callback then
+                callback()
+            end
+        end,
+    }
+    UIManager:show(confirm_box)
 end
 
 function Dialog.errorText(result, fallback)

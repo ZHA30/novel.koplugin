@@ -51,6 +51,9 @@ msgstr "移除"
 msgid "Book refreshed."
 msgstr "书籍已刷新。"
 
+msgid "Book is not in bookshelf."
+msgstr "书籍不在书架中。"
+
 msgid "Chapters: "
 msgstr "章节数："
 
@@ -182,6 +185,33 @@ msgstr "没有可删除的章节。"
 
 msgid "Refresh"
 msgstr "刷新"
+
+msgid "Refreshing..."
+msgstr "刷新中..."
+
+msgid "Bookshelf is empty."
+msgstr "书架为空。"
+
+msgid "Refreshing %d/%d..."
+msgstr "正在刷新 %d/%d..."
+
+msgid "Refresh failed."
+msgstr "刷新失败。"
+
+msgid "Refresh returned no result."
+msgstr "刷新没有返回结果。"
+
+msgid "Refresh subprocess returned no result."
+msgstr "刷新子进程没有返回结果。"
+
+msgid "Refresh complete. Success: %d. Failed: %d."
+msgstr "刷新完成。成功：%d。失败：%d。"
+
+msgid "Refresh canceled. Success: %d. Failed: %d."
+msgstr "刷新已取消。成功：%d。失败：%d。"
+
+msgid "Refresh %d books?"
+msgstr "刷新 %d 本书？"
 
 msgid "Close"
 msgstr "关闭"

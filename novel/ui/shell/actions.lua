@@ -6,6 +6,7 @@ local ChapterListing = require("novel.ui.chapters.listing")
 local Dialog = require("novel.ui.widget.dialog")
 local DownloadQueue = require("novel.reader.downloadqueue")
 local Manifest = require("novel.storage.manifest")
+local RefreshFlow = require("novel.ui.refreshflow")
 local ShellRoutes = require("novel.ui.shellroutes")
 local ShellSession = require("novel.ui.shellsession")
 local UIManager = require("ui/uimanager")
@@ -184,6 +185,25 @@ local function showBookIntro(plugin, manifest)
     })
 end
 
+local function refreshChapterBook(plugin, route, callbacks, manifest, filter, sort)
+    RefreshFlow.refreshBook(
+        plugin,
+        route.source or manifest.source,
+        route.book or manifest.book,
+        {
+            on_done = function(applied)
+                replaceChapterManifest(
+                    callbacks,
+                    route,
+                    applied.manifest,
+                    filter,
+                    sort
+                )
+            end,
+        }
+    )
+end
+
 local function replaceSelectionMode(plugin, callbacks, route, manifest, enabled)
     ChapterListing.setSelectionMode(plugin, manifest, enabled)
     callbacks.replace(route)
@@ -350,6 +370,20 @@ local function chapterTopActions(plugin, route, callbacks)
     )
     return {
         {
+            key = "refresh",
+            icon = "rotate-cw",
+            callback = function()
+                refreshChapterBook(
+                    plugin,
+                    route,
+                    callbacks,
+                    manifest,
+                    filter,
+                    sort
+                )
+            end,
+        },
+        {
             key = "intro",
             icon = "info",
             callback = function()
@@ -424,6 +458,33 @@ local function chapterTopActions(plugin, route, callbacks)
                     not selection.all_selected
                 )
                 callbacks.replace(route)
+            end,
+        },
+    }
+end
+
+local function bookshelfTopActions(plugin, route, callbacks)
+    local records = plugin and plugin.app
+        and plugin.app:getBookshelfStore():list() or {}
+    return {
+        {
+            key = "refresh_bookshelf",
+            icon = "rotate-cw",
+            enabled = #records > 0,
+            callback = function()
+                local current_records = plugin and plugin.app
+                    and plugin.app:getBookshelfStore():list() or {}
+                Dialog.confirm(
+                    string.format(_("Refresh %d books?"), #current_records),
+                    _("Refresh"),
+                    function()
+                        RefreshFlow.refreshBookshelf(plugin, current_records, {
+                            on_done = function()
+                                callbacks.replace(route or ShellRoutes.bookshelf())
+                            end,
+                        })
+                    end
+                )
             end,
         },
     }
@@ -600,6 +661,9 @@ function ShellActions.bottom(plugin, route, shell_widget, callbacks)
 end
 
 function ShellActions.top(plugin, route, callbacks)
+    if route and route.key == "bookshelf" then
+        return bookshelfTopActions(plugin, route, callbacks)
+    end
     if route and route.key == "chapters" and route.manifest then
         return chapterTopActions(plugin, route, callbacks)
     end

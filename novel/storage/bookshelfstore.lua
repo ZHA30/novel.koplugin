@@ -59,6 +59,17 @@ local function bookKey(source, book)
     return sourceUrl(source) .. "\n" .. bookUrl(book)
 end
 
+local function recordMatches(record, source, book)
+    if not record then
+        return false
+    end
+    if record.key == bookKey(source, book) then
+        return true
+    end
+    return (record.source_url or sourceUrl(record.source)) == sourceUrl(source)
+        and bookUrl(record.book) == bookUrl(book)
+end
+
 local function sortRecords(records)
     table.sort(records, function(left, right)
         if (left.updated_time or 0) ~= (right.updated_time or 0) then
@@ -229,13 +240,12 @@ end
 
 function BookshelfStore:updateExisting(source, book)
     local records = self:list()
-    local key = bookKey(source, book)
     local next_source = clone(source)
     local next_source_url = sourceUrl(source)
     local next_source_name = sourceName(source)
     for record_index = 1, #records do
         local record = records[record_index]
-        if record.key == key then
+        if recordMatches(record, source, book) then
             local updated_book = preserveProgress(normalizeBook(source, book), record)
             local changed = not sameBook(record.book, updated_book)
                 or record.source_url ~= next_source_url
@@ -277,11 +287,10 @@ function BookshelfStore:applyRefresh(source, book, refresh)
         return nil, "invalid refresh result"
     end
 
-    local key = bookKey(source, book)
     local records = self:list()
     for record_index = 1, #records do
         local record = records[record_index]
-        if record.key == key then
+        if recordMatches(record, source, book) then
             local timestamp = now()
             local updated_book = preserveProgress(normalizeBook(source, refresh.book), record)
             local current = record.current
@@ -388,8 +397,6 @@ function BookshelfStore.fetchRefresh(source, book, options)
         chapters = chapters.chapters or {},
         debug = mergeResultLists(detail.debug, chapters.debug),
         unsupported = mergeResultLists(detail.unsupported, chapters.unsupported),
-        detail = detail.response,
-        chapter_pages = chapters.pages,
     }
 end
 

@@ -415,9 +415,24 @@ local function downloadTopActions(plugin)
     local summary = DownloadQueue.summary(plugin)
     return {
         {
+            key = "download_clear",
+            text = _("Clear queue"),
+            icon = "trash-2",
+            enabled = summary.total > 0,
+            callback = function()
+                Dialog.confirm(
+                    _("Clear all downloads?"),
+                    _("Clear queue"),
+                    function()
+                        DownloadQueue.clear(plugin)
+                    end
+                )
+            end,
+        },
+        {
             key = "download_toggle",
             text = summary.paused and _("Resume") or _("Pause"),
-            icon = summary.paused and "circle-play" or "square",
+            icon = summary.paused and "play" or "pause",
             enabled = summary.total > 0,
             callback = function()
                 if summary.paused then

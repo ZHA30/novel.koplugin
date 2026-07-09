@@ -37,6 +37,20 @@ local function trailingActions(plugin, item)
                 DownloadQueue.retry(plugin, item.key)
             end,
         })
+    elseif item.status == DownloadQueue.STATUS_PAUSED then
+        table.insert(actions, {
+            icon = "play",
+            callback = function()
+                DownloadQueue.resumeItem(plugin, item.key)
+            end,
+        })
+    else
+        table.insert(actions, {
+            icon = "pause",
+            callback = function()
+                DownloadQueue.pauseItem(plugin, item.key)
+            end,
+        })
     end
     table.insert(actions, {
         icon = "trash-2",

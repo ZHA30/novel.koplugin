@@ -224,6 +224,27 @@ local function removeItem(state, item)
     return false
 end
 
+local function stopRunningItem(item)
+    if item.check then
+        UIManager:unschedule(item.check)
+        item.check = nil
+    end
+    if not item.pid then
+        return false
+    end
+    if ffiutil.isSubProcessDone(item.pid) then
+        if item.read_fd then
+            ffiutil.readAllFromFD(item.read_fd)
+        end
+    else
+        ffiutil.terminateSubProcess(item.pid)
+        collectLater(item.pid, item.read_fd)
+    end
+    item.pid = nil
+    item.read_fd = nil
+    return true
+end
+
 local function finishItem(plugin, item, ok, result_or_err)
     local state = queue(plugin)
     local book_id = item.book_id
@@ -643,6 +664,9 @@ function DownloadQueue.statusLabel(item)
     if status == STATUS_ERROR then
         return _("Failed")
     end
+    if status == STATUS_PAUSED then
+        return _("Paused")
+    end
     if item and item.waiting_network == true then
         return _("Waiting for network")
     end
@@ -676,21 +700,44 @@ function DownloadQueue.remove(plugin, key)
     if not item then
         return false
     end
-    if item.check then
-        UIManager:unschedule(item.check)
-    end
-    if item.pid then
-        if ffiutil.isSubProcessDone(item.pid) then
-            if item.read_fd then
-                ffiutil.readAllFromFD(item.read_fd)
-            end
-        else
-            ffiutil.terminateSubProcess(item.pid)
-            collectLater(item.pid, item.read_fd)
-        end
+    if stopRunningItem(item) then
         state.running_key = nil
     end
     table.remove(state.items, index)
+    notify(plugin, item)
+    DownloadQueue.start(plugin)
+    return true
+end
+
+function DownloadQueue.pauseItem(plugin, key)
+    local state = queue(plugin)
+    local item = DownloadQueue.find(plugin, key)
+    if not item or item.status == STATUS_ERROR or item.status == STATUS_DONE then
+        return false
+    end
+    if stopRunningItem(item) then
+        state.running_key = nil
+    end
+    item.status = STATUS_PAUSED
+    item.waiting_network = nil
+    state.waiting_network = false
+    item.next_retry_at = nil
+    item.updated_at = now()
+    notify(plugin, item)
+    DownloadQueue.start(plugin)
+    return true
+end
+
+function DownloadQueue.resumeItem(plugin, key)
+    local item = DownloadQueue.find(plugin, key)
+    if not item or item.status ~= STATUS_PAUSED then
+        return false
+    end
+    item.status = STATUS_QUEUED
+    item.error = nil
+    item.waiting_network = nil
+    item.next_retry_at = nil
+    item.updated_at = now()
     notify(plugin, item)
     DownloadQueue.start(plugin)
     return true
@@ -711,6 +758,23 @@ function DownloadQueue.retry(plugin, key)
     notify(plugin, item)
     DownloadQueue.start(plugin)
     return true
+end
+
+function DownloadQueue.clear(plugin)
+    local state = queue(plugin)
+    for index = 1, #state.items do
+        local item = state.items[index]
+        if stopRunningItem(item) then
+            state.running_key = nil
+        end
+    end
+    state.items = {}
+    state.waiting_network = false
+    if state.wake_action then
+        UIManager:unschedule(state.wake_action)
+        state.wake_action = nil
+    end
+    notify(plugin)
 end
 
 function DownloadQueue.clearDone(plugin)

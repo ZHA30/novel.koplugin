@@ -126,6 +126,9 @@ msgstr "下载中"
 msgid "Queued"
 msgstr "排队中"
 
+msgid "Paused"
+msgstr "已暂停"
+
 msgid "Waiting for network"
 msgstr "等待网络"
 
@@ -149,6 +152,12 @@ msgstr "没有下载任务"
 
 msgid "Remove this download?"
 msgstr "移除此下载任务？"
+
+msgid "Clear queue"
+msgstr "清空队列"
+
+msgid "Clear all downloads?"
+msgstr "清空所有下载任务？"
 
 msgid "Resume"
 msgstr "继续"

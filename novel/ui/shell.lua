@@ -24,6 +24,12 @@ local function actionCallbacks(plugin)
         next_page = function()
             Shell.nextPage(plugin)
         end,
+        first_page = function()
+            Shell.firstPage(plugin)
+        end,
+        last_page = function()
+            Shell.lastPage(plugin)
+        end,
         pop = function()
             Shell.pop(plugin)
         end,
@@ -240,6 +246,17 @@ function Shell.previousPage(plugin)
     return DiscoverFlow.loadPage(plugin, page, options)
 end
 
+function Shell.firstPage(plugin)
+    local info = ShellSession.listInfo(plugin) or {}
+    local current_page = tonumber(info.current_page) or 1
+    if current_page > 1 then
+        ShellSession.setListPage(plugin, 1)
+        scheduleRender(plugin)
+        return true
+    end
+    return false
+end
+
 function Shell.nextPage(plugin)
     local route = Shell.currentRoute(plugin)
     local info = ShellSession.listInfo(plugin) or {}
@@ -263,6 +280,18 @@ function Shell.nextPage(plugin)
     end
     local DiscoverFlow = require("novel.ui.discover.flow")
     return DiscoverFlow.loadPage(plugin, page, options)
+end
+
+function Shell.lastPage(plugin)
+    local info = ShellSession.listInfo(plugin) or {}
+    local current_page = tonumber(info.current_page) or 1
+    local total_pages = tonumber(info.total_pages) or current_page
+    if total_pages > current_page then
+        ShellSession.setListPage(plugin, total_pages)
+        scheduleRender(plugin)
+        return true
+    end
+    return false
 end
 
 function Shell.currentRoute(plugin)

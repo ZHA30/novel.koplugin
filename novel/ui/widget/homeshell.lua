@@ -45,6 +45,7 @@ local ShellActionButton = InputContainer:extend{
     width = 0,
     height = BOTTOM_BAR_HEIGHT,
     callback = nil,
+    hold_callback = nil,
 }
 
 function ShellActionButton:init()
@@ -128,11 +129,28 @@ function ShellActionButton:init()
             },
         },
     }
+    if self.hold_callback then
+        self.ges_events.HoldSelect = {
+            GestureRange:new{
+                ges = "hold",
+                range = function()
+                    return self.dimen
+                end,
+            },
+        }
+    end
 end
 
 function ShellActionButton:onTapSelect()
     if self.enabled ~= false and self.callback then
         self.callback(self.key)
+    end
+    return true
+end
+
+function ShellActionButton:onHoldSelect()
+    if self.enabled ~= false and self.hold_callback then
+        self.hold_callback(self.key)
     end
     return true
 end
@@ -439,6 +457,9 @@ function HomeShell:buildBottomBar()
                     action.callback(action.key)
                 end
             end,
+            hold_callback = action.hold_callback and function()
+                action.hold_callback(action.key)
+            end or nil,
         })
     end
 

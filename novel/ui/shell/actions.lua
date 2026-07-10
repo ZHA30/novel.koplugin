@@ -57,6 +57,9 @@ local function previousAction(plugin, route, callbacks)
         callback = function()
             callbacks.previous_page()
         end,
+        hold_callback = function()
+            callbacks.first_page()
+        end,
     }
 end
 
@@ -68,6 +71,9 @@ local function nextAction(plugin, route, callbacks)
         enabled = canNextPage(plugin, route),
         callback = function()
             callbacks.next_page()
+        end,
+        hold_callback = function()
+            callbacks.last_page()
         end,
     }
 end

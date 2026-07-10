@@ -4,7 +4,9 @@ local ltn12 = require("ltn12")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local Charset = require("novel.catalog.shared.charset")
+local CookieStore = require("novel.storage.cookiestore")
 local Url = require("novel.catalog.shared.url")
+local UrlEncode = require("novel.catalog.shared.urlencode")
 
 local HttpRequest = {}
 
@@ -21,6 +23,17 @@ local function copyHeaders(headers)
         copy[tostring(key)] = tostring(value)
     end
     return copy
+end
+
+local function setHeader(headers, wanted, value)
+    local wanted_lower = wanted:lower()
+    for key, _ in pairs(headers) do
+        if tostring(key):lower() == wanted_lower then
+            headers[key] = value
+            return
+        end
+    end
+    headers[wanted] = value
 end
 
 local function headerValue(headers, wanted)
@@ -89,19 +102,55 @@ local function redirectMethod(method, code)
     return method
 end
 
-local function formBody(fields)
-    if type(fields) ~= "table" then
+local function isStructuredBody(value)
+    if type(value) ~= "string" then
+        return false
+    end
+    local stripped = value:match("^%s*(.-)%s*$")
+    return stripped:match("^%{") ~= nil
+        or stripped:match("^%[") ~= nil
+        or stripped:match("^<") ~= nil
+end
+
+local function contentTypeCharset(charset)
+    charset = tostring(charset or ""):match("^%s*(.-)%s*$")
+    if charset == "" then
+        return "UTF-8"
+    end
+    return charset
+end
+
+local function bodyContentType(body, charset)
+    if type(body) ~= "string" or body == "" then
         return nil
     end
-    local parts = {}
-    for key, value in pairs(fields) do
-        table.insert(parts, tostring(key) .. "=" .. tostring(value or ""))
+    local stripped = body:match("^%s*(.-)%s*$")
+    if stripped:match("^%{") or stripped:match("^%[") then
+        return "application/json; charset=UTF-8"
     end
-    table.sort(parts)
-    if #parts == 0 then
-        return nil
+    if stripped:match("^<") then
+        return "application/xml; charset=UTF-8"
     end
-    return table.concat(parts, "&")
+    return "text/plain; charset=" .. contentTypeCharset(charset)
+end
+
+local function mergeCookieHeader(headers, stored_cookie)
+    if not stored_cookie or stored_cookie == "" then
+        return
+    end
+    local stored = CookieStore.cookieToMap(stored_cookie)
+    local explicit = CookieStore.cookieToMap(headerValue(headers, "cookie") or "")
+    for key, value in pairs(explicit) do
+        stored[key] = value
+    end
+    local merged = CookieStore.mapToCookie(stored)
+    if merged and merged ~= "" then
+        setHeader(headers, "Cookie", merged)
+    end
+end
+
+local function hasFields(fields)
+    return type(fields) == "table" and next(fields) ~= nil
 end
 
 local function requestModule(url)
@@ -117,19 +166,34 @@ local function buildRequest(spec, url, method)
     local body = spec.body
     local headers = copyHeaders(spec.headers)
 
-    if method == "POST" and (body == nil or body == "") then
-        body = formBody(spec.fields)
+    if method == "POST" and hasFields(spec.fields) then
+        body = UrlEncode.fields(spec.fields, spec.charset)
+    elseif method == "POST" and (body == nil or body == "") then
+        body = nil
     end
     local body_charset_error
-    body, body_charset_error = Charset.fromUTF8(body, spec.charset)
+    local structured_body = isStructuredBody(body)
+    if body and body ~= "" then
+        if not structured_body then
+            body, body_charset_error = Charset.fromUTF8(body, spec.charset)
+        end
+    end
 
     if not hasHeader(headers, "Accept-Encoding") then
-        headers["Accept-Encoding"] = "identity"
+        setHeader(headers, "Accept-Encoding", "identity")
     end
+    if not hasHeader(headers, "User-Agent") then
+        setHeader(headers, "User-Agent", "KOReader")
+    end
+    mergeCookieHeader(headers, spec.cookie)
     if body and body ~= "" then
-        headers["Content-Length"] = tostring(#body)
+        setHeader(headers, "Content-Length", tostring(#body))
         if not hasHeader(headers, "Content-Type") then
-            headers["Content-Type"] = "application/x-www-form-urlencoded"
+            setHeader(headers, "Content-Type",
+                hasFields(spec.fields)
+                    and "application/x-www-form-urlencoded"
+                    or bodyContentType(body, structured_body and nil or spec.charset)
+                    or "application/x-www-form-urlencoded")
         end
     end
 
@@ -163,6 +227,7 @@ local function rawExecute(spec, url, method)
         }
     end
 
+    spec.cookie = CookieStore:new():get(spec.cookie_key or url)
     local request, sink, body_charset_error = buildRequest(spec, url, method)
     local code, headers, status = socket.skip(1, transport.request(request))
     local body = table.concat(sink)
@@ -228,12 +293,15 @@ local function normalizedSpec(spec)
         timeout = tonumber(spec.timeout),
         total_timeout = tonumber(spec.total_timeout),
         max_redirects = spec.max_redirects,
+        cookie_key = spec.cookie_key,
     }
 end
 
 function HttpRequest.execute(spec)
     spec = normalizedSpec(spec)
-    local current_url = spec.method == "POST" and spec.url_no_query or spec.url
+    local current_url = spec.method == "POST"
+        and spec.url_no_query
+        or UrlEncode.appendQuery(spec.url_no_query, spec.fields, spec.charset)
     local current_method = spec.method
     local max_redirects = spec.max_redirects
     if max_redirects == nil then
@@ -250,6 +318,7 @@ function HttpRequest.execute(spec)
             result.request_url = spec.url
             result.redirects = redirects
             result.final_url = current_url
+            CookieStore:new():mergeResponse(spec.cookie_key or current_url, result.headers)
 
             local location = headerValue(result.headers, "location")
             if result.status and isRedirect(result.status) and location and location ~= "" then

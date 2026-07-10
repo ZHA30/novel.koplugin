@@ -78,6 +78,7 @@ function RequestSupport.requestSpec(source, rule_url, options, context)
     spec.timeout = options.timeout or spec.timeout
     spec.total_timeout = options.total_timeout or spec.total_timeout
     spec.max_redirects = options.max_redirects or spec.max_redirects
+    spec.cookie_key = source.bookSourceUrl or spec.base_url or spec.url
     return spec
 end
 

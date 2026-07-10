@@ -172,6 +172,18 @@ local function mergeHeaders(target, headers)
     end
 end
 
+local function headerValue(headers, wanted)
+    if type(headers) ~= "table" then
+        return nil
+    end
+    wanted = wanted:lower()
+    for key, value in pairs(headers) do
+        if tostring(key):lower() == wanted then
+            return value
+        end
+    end
+end
+
 local function optionBody(value)
     if value == nil or value == rapidjson.null or value == "" then
         return nil
@@ -217,7 +229,9 @@ local function analyzeFields(result)
             result.url_no_query = result.url:sub(1, query_start - 1)
             result.fields = splitFields(result.query)
         end
-    elseif result.body and not result.headers["Content-Type"] and not isStructuredBody(result.body) then
+    elseif result.body
+        and not headerValue(result.headers, "Content-Type")
+        and not isStructuredBody(result.body) then
         result.fields = splitFields(result.body)
     end
 end

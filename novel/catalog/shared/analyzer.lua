@@ -54,12 +54,9 @@ local function replaceRegex(value, rule)
     if not rule.replace_regex or rule.replace_regex == "" then
         return value
     end
-    local pattern = Regex.toLuaPattern(rule.replace_regex)
-    local replacement = Regex.toLuaReplacement(rule.replacement or "")
-    if rule.replace_first then
-        return (tostring(value):gsub(pattern, replacement, 1))
-    end
-    return (tostring(value):gsub(pattern, replacement))
+    local replaced, _, err = Regex.replace(value, rule.replace_regex,
+        rule.replacement or "", rule.replace_first)
+    return replaced, err
 end
 
 function Analyzer:new(options)
@@ -135,18 +132,28 @@ function Analyzer:applyPutMap(put_map)
     end
 end
 
-local function applyReplacement(result, rule)
+local function applyReplacement(analyzer, result, rule)
     if not rule.replace_regex or rule.replace_regex == "" then
         return result
     end
     if type(result) == "table" then
         local replaced = {}
         for index = 1, #result do
-            replaced[index] = replaceRegex(result[index], rule)
+            local err
+            replaced[index], err = replaceRegex(result[index], rule)
+            if err then
+                analyzer:addUnsupported("rule.regex", err.kind, err.pattern)
+                return result
+            end
         end
         return replaced
     end
-    return replaceRegex(result, rule)
+    local replaced, err = replaceRegex(result, rule)
+    if err then
+        analyzer:addUnsupported("rule.regex", err.kind, err.pattern)
+        return result
+    end
+    return replaced
 end
 
 local function resultHasValues(result)
@@ -260,9 +267,9 @@ function Analyzer:evaluateRuleStep(rule, content, mode)
         local branch = branches[1]
         self:applyRuleUnsupported(branch)
         if mode == "elements" then
-            return applyReplacement(self:dispatchElements(content, branch), branch)
+            return applyReplacement(self, self:dispatchElements(content, branch), branch)
         end
-        return applyReplacement(self:dispatchStringList(content, branch), branch)
+        return applyReplacement(self, self:dispatchStringList(content, branch), branch)
     end
 
     local results = {}
@@ -276,7 +283,7 @@ function Analyzer:evaluateRuleStep(rule, content, mode)
         else
             branch_result = self:dispatchStringList(content, branch)
         end
-        branch_result = applyReplacement(branch_result, branch)
+        branch_result = applyReplacement(self, branch_result, branch)
 
         if resultHasValues(branch_result) then
             table.insert(results, asResultList(branch_result))

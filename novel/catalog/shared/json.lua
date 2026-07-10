@@ -66,6 +66,7 @@ local function readBracket(value, index)
     local start_index = index
     local in_quote = nil
     local escaped = false
+    local depth = 0
     while index <= #value do
         local char = value:sub(index, index)
         if escaped then
@@ -78,8 +79,14 @@ local function readBracket(value, index)
             end
         elseif char == "'" or char == '"' then
             in_quote = char
+        elseif char == "[" then
+            depth = depth + 1
         elseif char == "]" then
-            return value:sub(start_index, index - 1), index + 1
+            if depth > 0 then
+                depth = depth - 1
+            else
+                return value:sub(start_index, index - 1), index + 1
+            end
         end
         index = index + 1
     end
@@ -120,6 +127,51 @@ local function unquote(value)
         return value:sub(2, -2)
     end
     return value
+end
+
+local function parseFilterExpression(expression)
+    expression = expression:match("^%?%((.*)%)$")
+    if not expression then
+        return nil
+    end
+    expression = expression:match("^%s*(.-)%s*$")
+
+    local path, expected = expression:match(
+        "^@([%.[%]%w_%-'\"/]+)%s*==%s*(.-)%s*$")
+    if not path then
+        path, expected = expression:match(
+            "^@([%.[%]%w_%-'\"/]+)%s*=%s*(.-)%s*$")
+    end
+    if path and expected then
+        local expected_type
+        local quote = expected:sub(1, 1)
+        if (quote == "'" or quote == '"') and expected:sub(-1) == quote then
+            expected = unquote(expected)
+            expected_type = "string"
+        elseif expected == "true" or expected == "false" then
+            expected = expected == "true"
+            expected_type = "boolean"
+        elseif tonumber(expected) ~= nil then
+            expected = tonumber(expected)
+            expected_type = "number"
+        else
+            return nil
+        end
+        return {
+            op = "equals",
+            path = path,
+            value = expected,
+            value_type = expected_type,
+        }
+    end
+
+    path = expression:match("^@([%.[%]%w_%-'\"/]+)$")
+    if path then
+        return {
+            op = "truthy",
+            path = path,
+        }
+    end
 end
 
 local function tokenize(path)
@@ -182,6 +234,15 @@ local function tokenize(path)
                         type = "index",
                         value = tonumber(expression),
                     })
+                elseif expression:sub(1, 2) == "?(" then
+                    local filter = parseFilterExpression(expression)
+                    if not filter then
+                        return nil, "unsupported filter selector"
+                    end
+                    table.insert(tokens, {
+                        type = "filter",
+                        filter = filter,
+                    })
                 elseif expression:find(":", 1, true) then
                     local slice_parts = splitTopLevel(expression, ":")
                     if #slice_parts < 2 or #slice_parts > 3 then
@@ -237,6 +298,42 @@ local function tokenize(path)
     return tokens
 end
 
+local applyToken
+
+local function pathValues(value, path)
+    local tokens = tokenize(path)
+    if not tokens then
+        return {}
+    end
+    local values = { value }
+    for token_index = 1, #tokens do
+        values = applyToken(values, tokens[token_index])
+        if #values == 0 then
+            break
+        end
+    end
+    return values
+end
+
+local function filterMatches(value, filter)
+    if type(value) ~= "table" or type(filter) ~= "table" then
+        return false
+    end
+    local values = pathValues(value, filter.path)
+    if filter.op == "truthy" then
+        return #values > 0
+    end
+    if filter.op == "equals" then
+        for index = 1, #values do
+            if type(values[index]) == filter.value_type
+                and values[index] == filter.value then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function recursiveFind(value, field, output)
     if type(value) ~= "table" then
         return
@@ -249,7 +346,7 @@ local function recursiveFind(value, field, output)
     end
 end
 
-local function applyToken(values, token)
+function applyToken(values, token)
     local next_values = {}
     for index = 1, #values do
         local value = values[index]
@@ -304,6 +401,16 @@ local function applyToken(values, token)
                 end
             elseif token.type == "recursive" then
                 recursiveFind(value, token.value, next_values)
+            elseif token.type == "filter" then
+                if isArray(value) then
+                    for item_index = 1, #value do
+                        if filterMatches(value[item_index], token.filter) then
+                            addValue(next_values, value[item_index])
+                        end
+                    end
+                elseif filterMatches(value, token.filter) then
+                    addValue(next_values, value)
+                end
             end
         end
     end

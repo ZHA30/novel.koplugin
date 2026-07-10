@@ -195,7 +195,7 @@ function ChaptersPage.build(shell, plugin, route, runtime)
         download_label_at = function(position)
             return DownloadQueue.chapterStatusLabel(
                 plugin,
-                manifest.book_id,
+                manifest,
                 position
             )
         end,

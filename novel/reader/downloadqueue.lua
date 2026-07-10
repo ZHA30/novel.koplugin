@@ -1,5 +1,7 @@
 local _ = require("novel.i18n")
 local ChapterDoc = require("novel.reader.chapterdoc")
+local DownloadItem = require("novel.reader.downloaditem")
+local DownloadPolicy = require("novel.reader.downloadpolicy")
 local ChapterRecord = require("novel.reader.chapterrecord")
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
@@ -13,10 +15,10 @@ local util = require("util")
 local DownloadQueue = {}
 
 DownloadQueue.path = DataStorage:getDataDir() .. "/novel/downloadqueue.lua"
-DownloadQueue.max_retries = 3
+DownloadQueue.max_attempts = DownloadPolicy.max_attempts
 DownloadQueue.poll_interval = 0.25
 DownloadQueue.collect_interval = 1
-DownloadQueue.retry_delays = { 2, 5, 15 }
+DownloadQueue.checkpoint_changes = DownloadPolicy.checkpoint_changes
 
 local STATUS_QUEUED = "queued"
 local STATUS_RUNNING = "running"
@@ -52,10 +54,6 @@ local function titleForChapter(chapter, position)
     return string.format(_("Chapter %d"), tonumber(position) or 0)
 end
 
-local function itemKey(book_id, position)
-    return tostring(book_id or "") .. ":" .. tostring(position or 0)
-end
-
 local function storageDir()
     return DownloadQueue.path:match("^(.*)/[^/]+$") or DataStorage:getDataDir()
 end
@@ -86,19 +84,36 @@ local function savedItems(items)
     return result
 end
 
-local function normalizedLoadedItem(item)
+local function normalizedLoadedItem(item, manifest_store, manifests)
     if type(item) ~= "table" then
         return nil, true
     end
     if item.status == STATUS_DONE then
         return nil, true
     end
-    item.key = item.key or itemKey(item.book_id, item.position)
+    local changed = item.status == STATUS_RUNNING
+        or item.chapter_file_name == nil
     item.status = item.status == STATUS_RUNNING and STATUS_QUEUED
         or (item.status or STATUS_QUEUED)
     item.tries = tonumber(item.tries) or 0
     item.progress = tonumber(item.progress) or 0
-    return item, false
+    local book_id = tostring(item.book_id or "")
+    if book_id ~= "" then
+        local manifest = manifests[book_id]
+        if manifest == nil then
+            manifest = manifest_store:load(book_id) or false
+            manifests[book_id] = manifest
+        end
+        if manifest then
+            local chapter, position = DownloadItem.resolve(manifest, item)
+            if chapter then
+                local old_key = item.key
+                DownloadItem.bind(item, chapter, position)
+                changed = changed or old_key ~= item.key
+            end
+        end
+    end
+    return item, changed
 end
 
 local function loadState()
@@ -113,16 +128,21 @@ local function loadState()
     state.waiting_network = state.waiting_network == true
     local loaded_items = state.items or {}
     state.items = {}
-    local removed_done = false
+    local needs_save = false
+    local manifest_store = Manifest:new()
+    local manifests = {}
     for index = 1, #loaded_items do
-        local item, removed = normalizedLoadedItem(loaded_items[index])
+        local item, changed = normalizedLoadedItem(
+            loaded_items[index],
+            manifest_store,
+            manifests
+        )
         if item then
             table.insert(state.items, item)
-        elseif removed then
-            removed_done = true
         end
+        needs_save = needs_save or changed
     end
-    state.needs_save = removed_done
+    state.needs_save = needs_save
     return state
 end
 
@@ -135,6 +155,16 @@ local function saveState(state)
         items = savedItems(state.items),
     })
     settings:flush()
+    state.dirty_changes = 0
+end
+
+local function checkpointState(state)
+    -- Manifests are authoritative, so a crash can safely replay a bounded
+    -- number of completed queue entries as local cache hits.
+    state.dirty_changes = (state.dirty_changes or 0) + 1
+    if DownloadPolicy.shouldCheckpoint(state.dirty_changes) then
+        saveState(state)
+    end
 end
 
 local function queue(plugin)
@@ -193,9 +223,13 @@ local function collectLater(pid, read_fd)
     UIManager:scheduleIn(DownloadQueue.collect_interval, collect)
 end
 
-local function notify(plugin, item)
+local function notify(plugin, item, save_mode)
     local state = queue(plugin)
-    saveState(state)
+    if save_mode == "immediate" then
+        saveState(state)
+    elseif save_mode ~= "none" then
+        checkpointState(state)
+    end
     state.notify_token = (state.notify_token or 0) + 1
     local token = state.notify_token
     UIManager:scheduleIn(0.5, function()
@@ -210,10 +244,6 @@ local function notify(plugin, item)
             pcall(listener, plugin, item and item.book_id, item and item.position)
         end
     end)
-end
-
-local function retryDelay(tries)
-    return DownloadQueue.retry_delays[tries] or DownloadQueue.retry_delays[#DownloadQueue.retry_delays]
 end
 
 local function removeItem(state, item)
@@ -279,9 +309,10 @@ local function finishItem(plugin, item, ok, result_or_err)
     item.tries = (tonumber(item.tries) or 0) + 1
     item.error = tostring(result_or_err or _("Download failed"))
     state.waiting_network = false
-    if item.tries < DownloadQueue.max_retries then
+    local retry_at = DownloadPolicy.retryAt(item.tries, now())
+    if retry_at then
         item.status = STATUS_QUEUED
-        item.next_retry_at = now() + retryDelay(item.tries)
+        item.next_retry_at = retry_at
     else
         item.status = STATUS_ERROR
         item.next_retry_at = nil
@@ -309,7 +340,13 @@ local function readResult(plugin, item, encoded)
         finishItem(plugin, item, false, "manifest is missing")
         return
     end
-    local file, err = saveResult(manifest_store, manifest, item.position, result)
+    local chapter, position = DownloadItem.resolve(manifest, item)
+    if not chapter then
+        finishItem(plugin, item, false, "chapter is missing")
+        return
+    end
+    DownloadItem.bind(item, chapter, position)
+    local file, err = saveResult(manifest_store, manifest, position, result)
     if not file then
         finishItem(plugin, item, false, err)
         return
@@ -354,7 +391,7 @@ end
 local function startItem(plugin, item)
     local manifest_store = Manifest:new()
     local manifest = manifest_store:load(item.book_id)
-    local chapter = manifest and manifest.chapters and manifest.chapters[item.position]
+    local chapter, position = DownloadItem.resolve(manifest, item)
     if not manifest or not chapter then
         item.status = STATUS_ERROR
         item.error = "chapter is missing"
@@ -363,7 +400,8 @@ local function startItem(plugin, item)
         DownloadQueue.start(plugin)
         return false
     end
-    if Manifest.chapterFileExists(manifest, item.position)
+    DownloadItem.bind(item, chapter, position)
+    if Manifest.chapterFileExists(manifest, position)
         and ChapterDoc.contentIsCurrent(manifest, chapter) then
         finishItem(plugin, item, true)
         return true
@@ -371,7 +409,7 @@ local function startItem(plugin, item)
 
     local source = manifest.source
     local book = manifest.book
-    local next_chapter_url = nextContentUrl(manifest, item.position)
+    local next_chapter_url = nextContentUrl(manifest, position)
     local settings = plugin.app and plugin.app.settings
     local pid, read_fd = ffiutil.runInSubProcess(function(_pid, write_fd)
         local ChapterContent = require("novel.catalog.reading.chaptercontent")
@@ -402,7 +440,7 @@ local function startItem(plugin, item)
     item.started_at = now()
     item.updated_at = item.started_at
     queue(plugin).running_key = item.key
-    notify(plugin, item)
+    notify(plugin, item, "none")
     scheduleCheck(plugin, item)
     return true
 end
@@ -502,7 +540,7 @@ function DownloadQueue.start(plugin)
         state.waiting_network = true
         item.waiting_network = true
         item.error = _("Waiting for network")
-        notify(plugin, item)
+        notify(plugin, item, "none")
         return false
     end
     state.waiting_network = false
@@ -518,13 +556,13 @@ function DownloadQueue.pause(plugin)
         state.items[index].waiting_network = nil
     end
     stopWake(state)
-    notify(plugin)
+    notify(plugin, nil, "immediate")
 end
 
 function DownloadQueue.resume(plugin)
     local state = queue(plugin)
     state.paused = false
-    notify(plugin)
+    notify(plugin, nil, "immediate")
     DownloadQueue.start(plugin)
 end
 
@@ -544,7 +582,7 @@ function DownloadQueue.enqueue(plugin, manifest, positions, options)
         local position = tonumber(positions[index])
         local chapter = position and manifest.chapters and manifest.chapters[position]
         if chapter then
-            local key = itemKey(manifest.book_id, position)
+            local key = DownloadItem.key(manifest.book_id, chapter, position)
             local existing
             for item_index = 1, #state.items do
                 if state.items[item_index].key == key then
@@ -564,7 +602,7 @@ function DownloadQueue.enqueue(plugin, manifest, positions, options)
                     existing.next_retry_at = nil
                     existing.updated_at = now()
                 else
-                    table.insert(state.items, {
+                    local item = {
                         key = key,
                         book_id = manifest.book_id,
                         book_title = clean(manifest.book_title),
@@ -576,13 +614,15 @@ function DownloadQueue.enqueue(plugin, manifest, positions, options)
                         progress = 0,
                         created_at = now(),
                         updated_at = now(),
-                    })
+                    }
+                    DownloadItem.bind(item, chapter, position)
+                    table.insert(state.items, item)
                 end
                 queued = queued + 1
             end
         end
     end
-    notify(plugin)
+    notify(plugin, nil, "immediate")
     if type(options.on_done) == "function" then
         options.on_done({
             queued = queued,
@@ -647,7 +687,7 @@ function DownloadQueue.networkReady(plugin)
         return false
     end
     state.waiting_network = false
-    notify(plugin)
+    notify(plugin, nil, "none")
     return DownloadQueue.start(plugin)
 end
 
@@ -671,11 +711,18 @@ function DownloadQueue.statusLabel(item)
     return _("Queued")
 end
 
-function DownloadQueue.chapterStatusLabel(plugin, book_id, position)
-    if not plugin or not book_id or not position then
+function DownloadQueue.chapterStatusLabel(plugin, manifest, position)
+    if not plugin or not manifest or not position then
         return nil
     end
-    local key = itemKey(book_id, position)
+    if type(manifest) ~= "table" then
+        manifest = Manifest:new():load(manifest)
+    end
+    local chapter = manifest and manifest.chapters and manifest.chapters[position]
+    if not chapter then
+        return nil
+    end
+    local key = DownloadItem.key(manifest.book_id, chapter, position)
     local item = DownloadQueue.find(plugin, key)
     if not item or item.status == STATUS_DONE then
         return nil
@@ -702,7 +749,7 @@ function DownloadQueue.remove(plugin, key)
         state.running_key = nil
     end
     table.remove(state.items, index)
-    notify(plugin, item)
+    notify(plugin, item, "immediate")
     DownloadQueue.start(plugin)
     return true
 end
@@ -740,7 +787,7 @@ function DownloadQueue.removeBook(plugin, book_id, options)
     if options.notify == false then
         saveState(state)
     else
-        notify(plugin)
+        notify(plugin, nil, "immediate")
     end
     if options.restart ~= false then
         DownloadQueue.start(plugin)
@@ -764,7 +811,7 @@ function DownloadQueue.removeBooks(plugin, book_ids, options)
     if options and options.notify == false then
         saveState(state)
     else
-        notify(plugin)
+        notify(plugin, nil, "immediate")
     end
     if not options or options.restart ~= false then
         DownloadQueue.start(plugin)
@@ -786,7 +833,7 @@ function DownloadQueue.pauseItem(plugin, key)
     state.waiting_network = false
     item.next_retry_at = nil
     item.updated_at = now()
-    notify(plugin, item)
+    notify(plugin, item, "immediate")
     DownloadQueue.start(plugin)
     return true
 end
@@ -801,7 +848,7 @@ function DownloadQueue.resumeItem(plugin, key)
     item.waiting_network = nil
     item.next_retry_at = nil
     item.updated_at = now()
-    notify(plugin, item)
+    notify(plugin, item, "immediate")
     DownloadQueue.start(plugin)
     return true
 end
@@ -818,7 +865,7 @@ function DownloadQueue.retry(plugin, key)
     item.waiting_network = nil
     item.next_retry_at = nil
     item.updated_at = now()
-    notify(plugin, item)
+    notify(plugin, item, "immediate")
     DownloadQueue.start(plugin)
     return true
 end
@@ -835,7 +882,7 @@ function DownloadQueue.clear(plugin)
     state.waiting_network = false
     state.running_key = nil
     stopWake(state)
-    notify(plugin)
+    notify(plugin, nil, "immediate")
 end
 
 function DownloadQueue.deleteStorage()

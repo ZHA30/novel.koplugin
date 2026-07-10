@@ -23,7 +23,7 @@ local function mandatoryFor(item)
     local label = DownloadQueue.statusLabel(item)
     local tries = tonumber(item.tries) or 0
     if tries > 0 and item.status ~= DownloadQueue.STATUS_DONE then
-        return string.format("%s %d/%d", label, tries, DownloadQueue.max_retries)
+        return string.format("%s %d/%d", label, tries, DownloadQueue.max_attempts)
     end
     return label
 end

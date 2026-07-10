@@ -4,6 +4,7 @@ local JsonRule = require("novel.catalog.shared.json")
 local Regex = require("novel.catalog.shared.regex")
 local Split = require("novel.catalog.shared.split")
 local Url = require("novel.catalog.shared.url")
+local XPathRule = require("novel.catalog.shared.xpath")
 
 local Analyzer = {}
 Analyzer.__index = Analyzer
@@ -54,7 +55,7 @@ local function replaceRegex(value, rule)
         return value
     end
     local pattern = Regex.toLuaPattern(rule.replace_regex)
-    local replacement = rule.replacement or ""
+    local replacement = Regex.toLuaReplacement(rule.replacement or "")
     if rule.replace_first then
         return (tostring(value):gsub(pattern, replacement, 1))
     end
@@ -210,8 +211,11 @@ function Analyzer:dispatchStringList(content, rule)
         self:addUnsupported("rule.js", "js", active_rule)
         return {}
     elseif rule.mode == Split.modes.xpath then
-        self:addUnsupported("rule.xpath", "xpath", active_rule)
-        return {}
+        local values, err = XPathRule.parse(content):getStringList(active_rule)
+        if err then
+            self:addUnsupported("rule.xpath", "xpath", active_rule)
+        end
+        return values
     end
     return HtmlRule.parse(content):getStringList(active_rule)
 end
@@ -232,8 +236,11 @@ function Analyzer:dispatchElements(content, rule)
         self:addUnsupported("rule.js", "js", active_rule)
         return {}
     elseif rule.mode == Split.modes.xpath then
-        self:addUnsupported("rule.xpath", "xpath", active_rule)
-        return {}
+        local values, err = XPathRule.parse(content):getElements(active_rule)
+        if err then
+            self:addUnsupported("rule.xpath", "xpath", active_rule)
+        end
+        return values
     end
     return HtmlRule.parse(content):getElements(active_rule)
 end

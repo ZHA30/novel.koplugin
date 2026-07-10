@@ -2,7 +2,6 @@ local Regex = {}
 
 local unsupported_tokens = {
     "%(%?[:=!<]",
-    "%[%^",
     "|",
     "\\b",
     "\\B",
@@ -18,6 +17,9 @@ local escape_map = {
     S = "%S",
     w = "%w",
     W = "%W",
+    n = "\n",
+    r = "\r",
+    t = "\t",
     ["\\"] = "\\",
     ["."] = "%.",
     ["-"] = "%-",
@@ -72,9 +74,18 @@ end
 
 function Regex.toLuaPattern(pattern)
     pattern = tostring(pattern or "")
+    pattern = pattern:gsub("%[\\s\\S%]", "[%z\1-\255]")
+    pattern = pattern:gsub("%[\\d%]", "[%d]")
+    pattern = pattern:gsub("%[\\w%]", "[%w]")
     pattern = pattern:gsub("%.%*%?", ".-")
     pattern = pattern:gsub("%.%+%?", ".-")
     return translateEscapes(pattern)
+end
+
+function Regex.toLuaReplacement(replacement)
+    replacement = tostring(replacement or "")
+    replacement = replacement:gsub("%$(%d%d?)", "%%%1")
+    return replacement
 end
 
 function Regex.analyze(pattern)

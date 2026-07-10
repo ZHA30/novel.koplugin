@@ -62,35 +62,64 @@ function JsonRule:new(content)
     }, self)
 end
 
-local function readQuoted(value, index)
-    local quote = value:sub(index, index)
-    local output = {}
+local function readBracket(value, index)
+    local start_index = index
+    local in_quote = nil
     local escaped = false
-    index = index + 1
     while index <= #value do
         local char = value:sub(index, index)
         if escaped then
-            table.insert(output, char)
             escaped = false
         elseif char == "\\" then
             escaped = true
-        elseif char == quote then
-            return table.concat(output), index + 1
-        else
-            table.insert(output, char)
+        elseif in_quote then
+            if char == in_quote then
+                in_quote = nil
+            end
+        elseif char == "'" or char == '"' then
+            in_quote = char
+        elseif char == "]" then
+            return value:sub(start_index, index - 1), index + 1
         end
         index = index + 1
     end
 end
 
-local function readUntil(value, index, delimiter)
-    local start_index = index
-    while index <= #value and value:sub(index, index) ~= delimiter do
+local function splitTopLevel(value, delimiter)
+    local parts = {}
+    local start_index = 1
+    local index = 1
+    local in_quote = nil
+    local escaped = false
+    while index <= #value do
+        local char = value:sub(index, index)
+        if escaped then
+            escaped = false
+        elseif char == "\\" then
+            escaped = true
+        elseif in_quote then
+            if char == in_quote then
+                in_quote = nil
+            end
+        elseif char == "'" or char == '"' then
+            in_quote = char
+        elseif char == delimiter then
+            table.insert(parts, value:sub(start_index, index - 1):match("^%s*(.-)%s*$"))
+            start_index = index + 1
+        end
         index = index + 1
     end
-    if index <= #value then
-        return value:sub(start_index, index - 1), index + 1
+    table.insert(parts, value:sub(start_index):match("^%s*(.-)%s*$"))
+    return parts
+end
+
+local function unquote(value)
+    value = value:match("^%s*(.-)%s*$")
+    local quote = value:sub(1, 1)
+    if (quote == "'" or quote == '"') and value:sub(-1) == quote then
+        return value:sub(2, -2)
     end
+    return value
 end
 
 local function tokenize(path)
@@ -133,30 +162,66 @@ local function tokenize(path)
                 })
             end
         elseif char == "[" then
-            local next_char = path:sub(index + 1, index + 1)
-            if next_char == "'" or next_char == '"' then
-                local name, next_index = readQuoted(path, index + 1)
-                if not name or path:sub(next_index, next_index) ~= "]" then
-                    return nil, "invalid bracket field selector"
-                end
+            local expression
+            expression, index = readBracket(path, index + 1)
+            if not expression then
+                return nil, "unclosed bracket selector"
+            end
+            expression = expression:match("^%s*(.-)%s*$")
+            if (expression:sub(1, 1) == "'" or expression:sub(1, 1) == '"')
+                and not expression:find(",", 1, true) then
                 table.insert(tokens, {
                     type = "field",
-                    value = name,
+                    value = unquote(expression),
                 })
-                index = next_index + 1
             else
-                local expression
-                expression, index = readUntil(path, index + 1, "]")
-                if not expression then
-                    return nil, "unclosed bracket selector"
-                end
-                expression = expression:match("^%s*(.-)%s*$")
                 if expression == "*" then
                     table.insert(tokens, { type = "wildcard" })
                 elseif expression:match("^%-?%d+$") then
                     table.insert(tokens, {
                         type = "index",
                         value = tonumber(expression),
+                    })
+                elseif expression:find(":", 1, true) then
+                    local slice_parts = splitTopLevel(expression, ":")
+                    if #slice_parts < 2 or #slice_parts > 3 then
+                        return nil, "unsupported slice selector"
+                    end
+                    local start_text = slice_parts[1]
+                    local end_text = slice_parts[2]
+                    local step_text = slice_parts[3]
+                    if (start_text ~= "" and not start_text:match("^%-?%d+$"))
+                        or (end_text ~= "" and not end_text:match("^%-?%d+$"))
+                        or (step_text ~= nil and step_text ~= "" and not step_text:match("^%-?%d+$")) then
+                        return nil, "unsupported slice selector"
+                    end
+                    if step_text ~= nil and tonumber(step_text) <= 0 then
+                        return nil, "unsupported slice selector"
+                    end
+                    table.insert(tokens, {
+                        type = "slice",
+                        start_value = tonumber(start_text),
+                        end_value = tonumber(end_text),
+                        step = tonumber(step_text) or 1,
+                    })
+                elseif expression:find(",", 1, true) then
+                    local selectors = {}
+                    for _, item in ipairs(splitTopLevel(expression, ",")) do
+                        if item:match("^%-?%d+$") then
+                            table.insert(selectors, {
+                                type = "index",
+                                value = tonumber(item),
+                            })
+                        else
+                            table.insert(selectors, {
+                                type = "field",
+                                value = unquote(item),
+                            })
+                        end
+                    end
+                    table.insert(tokens, {
+                        type = "union",
+                        selectors = selectors,
                     })
                 else
                     return nil, "unsupported bracket selector"
@@ -208,6 +273,34 @@ local function applyToken(values, token)
                     for key in pairs(value) do
                         addValue(next_values, value[key])
                     end
+                end
+            elseif token.type == "slice" then
+                if isArray(value) then
+                    local step = token.step or 1
+                    if step == 0 then
+                        step = 1
+                    end
+                    local length = #value
+                    local start_pos = token.start_value or 0
+                    local end_pos = token.end_value
+                    if start_pos < 0 then
+                        start_pos = length + start_pos
+                    end
+                    if end_pos == nil then
+                        end_pos = length
+                    elseif end_pos < 0 then
+                        end_pos = length + end_pos
+                    end
+                    start_pos = math.max(0, start_pos) + 1
+                    end_pos = math.min(length, end_pos)
+                    for item_index = start_pos, end_pos, step do
+                        addValue(next_values, value[item_index])
+                    end
+                end
+            elseif token.type == "union" then
+                for _, selector in ipairs(token.selectors or {}) do
+                    local selected = applyToken({ value }, selector)
+                    appendAll(next_values, selected)
                 end
             elseif token.type == "recursive" then
                 recursiveFind(value, token.value, next_values)

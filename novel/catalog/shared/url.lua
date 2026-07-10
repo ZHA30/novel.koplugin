@@ -147,6 +147,21 @@ function Url.absolute(base_url, relative_path)
     return relative_path
 end
 
+function Url.redactForLog(value)
+    value = trim(value)
+    if value == "" then
+        return ""
+    end
+    value = value:gsub("^(%a[%w+.-]*://)[^/@]+@", "%1REDACTED@")
+    value = value:gsub("#.*$", "")
+    local base, query = value:match("^([^?]*)%?(.*)$")
+    if not base then
+        return value
+    end
+    query = query:gsub("([^&=]+)=([^&]*)", "%1=REDACTED")
+    return base .. "?" .. query
+end
+
 local function baseFromUrl(value)
     return value and value:match("^(https?://[^/]+)") or nil
 end

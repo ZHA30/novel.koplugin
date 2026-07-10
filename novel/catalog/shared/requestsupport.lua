@@ -1,13 +1,42 @@
 local SourceInfo = require("novel.catalog.shared.sourceinfo")
 local Url = require("novel.catalog.shared.url")
+local logger = require("logger")
 
 local RequestSupport = {}
+
+local function logDetail(data)
+    if type(data) ~= "table" then
+        return ""
+    end
+    local url = data.url or data.final_url or data.request_url
+    if url then
+        return Url.redactForLog(url)
+    end
+    if data.rule then
+        return tostring(data.rule):sub(1, 120)
+    end
+    if data.count ~= nil then
+        return tostring(data.count)
+    end
+    if data.status ~= nil then
+        return tostring(data.status)
+    end
+    return ""
+end
+
+local function logSnippet(field, snippet)
+    if tostring(field or ""):lower():find("url", 1, true) then
+        return Url.redactForLog(snippet)
+    end
+    return snippet
+end
 
 function RequestSupport.addDebug(debug, event, data)
     table.insert(debug, {
         event = event,
         data = data,
     })
+    logger.dbg("NovelSource:", event, logDetail(data))
 end
 
 function RequestSupport.error(kind, message, data)
@@ -34,34 +63,43 @@ end
 function RequestSupport.copyUnsupported(target, source, field, items, start_index)
     for index = start_index or 1, #(items or {}) do
         local item = items[index]
-        table.insert(target, {
+        local entry = {
             source = SourceInfo.title(source),
             field = field or item.field or "rule",
             kind = item.kind or "unknown",
             snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
+        }
+        table.insert(target, entry)
+        logger.warn("NovelSource: unsupported", entry.source, entry.field,
+            entry.kind, logSnippet(entry.field, entry.snippet))
     end
 end
 
 function RequestSupport.copyUrlUnsupported(target, source, items, field)
     for index = 1, #(items or {}) do
         local item = items[index]
-        table.insert(target, {
+        local entry = {
             source = SourceInfo.title(source),
             field = item.field == "url" and (field or item.field) or item.field,
             kind = item.kind or "unknown",
             snippet = tostring(item.snippet or ""):sub(1, 120),
-        })
+        }
+        table.insert(target, entry)
+        logger.warn("NovelSource: unsupported", entry.source, entry.field,
+            entry.kind, logSnippet(entry.field, entry.snippet))
     end
 end
 
 function RequestSupport.addUnsupported(target, source, field, kind, snippet)
-    table.insert(target, {
+    local entry = {
         source = SourceInfo.title(source),
         field = field,
         kind = kind,
         snippet = tostring(snippet or ""):sub(1, 120),
-    })
+    }
+    table.insert(target, entry)
+    logger.warn("NovelSource: unsupported", entry.source, entry.field,
+        entry.kind, logSnippet(entry.field, entry.snippet))
 end
 
 function RequestSupport.requestSpec(source, rule_url, options, context)
@@ -97,9 +135,14 @@ function RequestSupport.execute(service, source, spec)
     service.throttle:release(token)
 
     if not ok then
+        logger.warn("NovelSource: request exception", SourceInfo.title(source),
+            tostring(response))
         return nil, RequestSupport.error("request", tostring(response))
     end
     if not response.ok then
+        logger.warn("NovelSource: request error", SourceInfo.title(source),
+            response.error and response.error.kind or "request",
+            response.error and response.error.message or "")
         return nil, response.error
             or RequestSupport.error("request", "request failed"), response
     end

@@ -1,6 +1,7 @@
 local http = require("socket.http")
 local https = require("ssl.https")
 local ltn12 = require("ltn12")
+local logger = require("logger")
 local socket = require("socket")
 local socketutil = require("socketutil")
 local Charset = require("novel.catalog.shared.charset")
@@ -138,8 +139,16 @@ local function mergeCookieHeader(headers, stored_cookie)
     if not stored_cookie or stored_cookie == "" then
         return
     end
+    local explicit_cookie = headerValue(headers, "cookie")
+    if explicit_cookie == nil then
+        setHeader(headers, "Cookie", stored_cookie)
+        return
+    end
+    if explicit_cookie == "" then
+        return
+    end
     local stored = CookieStore.cookieToMap(stored_cookie)
-    local explicit = CookieStore.cookieToMap(headerValue(headers, "cookie") or "")
+    local explicit = CookieStore.cookieToMap(explicit_cookie)
     for key, value in pairs(explicit) do
         stored[key] = value
     end
@@ -227,8 +236,10 @@ local function rawExecute(spec, url, method)
         }
     end
 
-    spec.cookie = CookieStore:new():get(spec.cookie_key or url)
+    spec.cookie = CookieStore:new():get(spec.cookie_key or url, url)
     local request, sink, body_charset_error = buildRequest(spec, url, method)
+    local log_url = Url.redactForLog(url)
+    logger.dbg("NovelSource: request", method, log_url)
     local code, headers, status = socket.skip(1, transport.request(request))
     local body = table.concat(sink)
     local charset = detectCharset(headers, body, spec.charset)
@@ -241,7 +252,7 @@ local function rawExecute(spec, url, method)
         error_kind = classifyHttpStatus(code)
     end
 
-    return {
+    local result = {
         ok = error_kind == nil,
         url = url,
         status = code,
@@ -256,6 +267,14 @@ local function rawExecute(spec, url, method)
             message = tostring(status or code or ""),
         } or nil,
     }
+    if result.ok then
+        logger.dbg("NovelSource: response", method, log_url, code, #body, charset or "")
+    else
+        logger.warn("NovelSource: request failed", method, log_url,
+            result.error and result.error.kind or "unknown",
+            result.error and result.error.message or "")
+    end
+    return result
 end
 
 local function shouldRetry(result)
@@ -318,7 +337,8 @@ function HttpRequest.execute(spec)
             result.request_url = spec.url
             result.redirects = redirects
             result.final_url = current_url
-            CookieStore:new():mergeResponse(spec.cookie_key or current_url, result.headers)
+            CookieStore:new():mergeResponse(spec.cookie_key or current_url,
+                current_url, result.headers)
 
             local location = headerValue(result.headers, "location")
             if result.status and isRedirect(result.status) and location and location ~= "" then
@@ -336,6 +356,8 @@ function HttpRequest.execute(spec)
                     url = current_url,
                     location = next_url,
                 })
+                logger.dbg("NovelSource: redirect", result.status,
+                    Url.redactForLog(current_url), Url.redactForLog(next_url))
                 current_url = next_url
                 current_method = redirectMethod(current_method, result.status)
                 if current_method == "GET" then

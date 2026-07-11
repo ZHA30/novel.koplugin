@@ -303,29 +303,43 @@ function Cache:openDB()
     end
 
     local db = SQ3.open(self.db_path)
-    if db.set_busy_timeout then
-        db:set_busy_timeout(self.busy_timeout)
-    end
-    if Device and Device.canUseWAL and Device:canUseWAL() then
-        db:exec("PRAGMA journal_mode=WAL;")
-    else
-        db:exec("PRAGMA journal_mode=TRUNCATE;")
+    local configured, configure_err = pcall(function()
+        if db.set_busy_timeout then
+            db:set_busy_timeout(self.busy_timeout)
+        end
+        if Device and Device.canUseWAL and Device:canUseWAL() then
+            db:exec("PRAGMA journal_mode=WAL;")
+        else
+            db:exec("PRAGMA journal_mode=TRUNCATE;")
+        end
+    end)
+    if not configured then
+        pcall(db.close, db)
+        return nil, configure_err
     end
     return db
 end
 
 function Cache:withDB(callback)
-    local db, err = self:openDB()
+    local opened, db, err = pcall(self.openDB, self)
+    if not opened then
+        logger.warn("novel cache open failed:", db)
+        return nil, db
+    end
     if not db then
         logger.warn("novel cache open failed:", err)
         return nil, err
     end
 
     local ok, first, second, third = pcall(callback, db)
-    db:close()
+    local closed, close_err = pcall(db.close, db)
     if not ok then
         logger.warn("novel cache operation failed:", first)
         return nil, first
+    end
+    if not closed then
+        logger.warn("novel cache close failed:", close_err)
+        return nil, close_err
     end
     return first, second, third
 end

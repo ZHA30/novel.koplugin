@@ -7,6 +7,7 @@ local OfflineFiles = require("novel.storage.offlinefiles")
 local ReaderSettings = require("novel.reader.settings")
 local SourceStore = require("novel.storage.sourcestore")
 local PluginSettings = require("novel.storage.pluginsettings")
+local UIManager = require("ui/uimanager")
 local logger = require("logger")
 
 local Log = {}
@@ -62,13 +63,22 @@ end
 
 function AppContext:init()
     self.log:debug("app initialized")
-    self:pruneOfflineOrphans()
+    self.prune_action = function()
+        self.prune_action = nil
+        if not self.closed then
+            self:pruneOfflineOrphans()
+        end
+    end
+    UIManager:nextTick(self.prune_action)
     DownloadQueue.init(self.plugin)
 end
 
 function AppContext:onClose()
+    if self.prune_action then
+        UIManager:unschedule(self.prune_action)
+        self.prune_action = nil
+    end
     DownloadQueue.close(self.plugin)
-    self:pruneOfflineOrphans()
     self.closed = true
     self.source_store = nil
     self.bookshelf_store = nil

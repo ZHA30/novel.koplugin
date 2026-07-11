@@ -3,6 +3,7 @@ local Manifest = require("novel.storage.manifest")
 local Shell = require("novel.ui.shell")
 local ShellRoutes = require("novel.ui.shellroutes")
 local ShellSession = require("novel.ui.shellsession")
+local lfs = require("libs/libkoreader-lfs")
 local UIManager = require("ui/uimanager")
 
 local ReturnController = {}
@@ -55,6 +56,23 @@ local function cloneState(snapshot)
     return ShellSession.clone(snapshot)
 end
 
+local function currentFileManagerPath(plugin)
+    local file_chooser = plugin and plugin.ui and plugin.ui.file_chooser
+    local path = file_chooser and file_chooser.path
+    if type(path) == "string" and path ~= "" then
+        return path
+    end
+end
+
+local function entryFileManagerPath()
+    local request = state.exit_request
+    local path = request and request.file_manager_path
+        or state.entry_context and state.entry_context.file_manager_path
+    if type(path) == "string" and path ~= "" then
+        return path
+    end
+end
+
 function ReturnController.captureEntry(plugin)
     if not isFileManagerPlugin(plugin) then
         return false
@@ -63,6 +81,7 @@ function ReturnController.captureEntry(plugin)
     clearRestoreState()
     state.plugin_name = pluginKey(plugin)
     state.entry_context = {
+        file_manager_path = currentFileManagerPath(plugin),
         shell_state = ShellSession.snapshot(plugin),
     }
     return true
@@ -84,6 +103,8 @@ function ReturnController.prepareReturnFromReader(reader_ui, file)
     end
 
     state.exit_request = {
+        file_manager_path = state.entry_context
+            and state.entry_context.file_manager_path or nil,
         kind = "restore_entry",
         shell_state = cloneState(state.entry_context.shell_state),
     }
@@ -99,6 +120,8 @@ function ReturnController.requestFinishExit(reader_ui, current_chapter)
 
     unscheduleRestoreAction()
     state.exit_request = {
+        file_manager_path = state.entry_context
+            and state.entry_context.file_manager_path or nil,
         kind = "finish",
         file = file,
         shell_state = state.entry_context
@@ -128,6 +151,20 @@ function ReturnController.consumeCloseRestoreRequest()
     end
     request.close_pending = nil
     return request.file
+end
+
+function ReturnController.restoreFileManagerPath(reader_ui)
+    local path = entryFileManagerPath()
+    if not path or lfs.attributes(path, "mode") ~= "directory" then
+        return false
+    end
+    if not reader_ui
+        or type(reader_ui.setLastDirForFileBrowser) ~= "function" then
+        return false
+    end
+
+    reader_ui:setLastDirForFileBrowser(path)
+    return true
 end
 
 local function restoreEntry(plugin, shell_state)

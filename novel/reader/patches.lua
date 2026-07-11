@@ -218,8 +218,9 @@ local function installCorePatches()
         installPatch("readerui_show_file_manager", ReaderUI, "showFileManager",
             function(original)
             return function(reader_ui, file, selected_files)
-                if ReturnController.prepareReturnFromReader(reader_ui, file)
-                    and ChapterDoc.chapterByFile(file) then
+                local restoring = ReturnController.prepareReturnFromReader(reader_ui, file)
+                if restoring and (file == nil or ChapterDoc.chapterByFile(file)) then
+                    ReturnController.restoreFileManagerPath(reader_ui)
                     file = nil
                 end
                 local result = callPatched(original, reader_ui, file, selected_files)

@@ -7,7 +7,37 @@ local FileLock = {
     stale_after = 60,
 }
 
-local function removeLock(path)
+local serial = 0
+
+local function tokenPath(path)
+    return path .. "/owner"
+end
+
+local function readToken(path)
+    local file = io.open(tokenPath(path), "rb")
+    if not file then
+        return nil
+    end
+    local token = file:read("*all")
+    file:close()
+    return token
+end
+
+local function writeToken(path, token)
+    local file = io.open(tokenPath(path), "wb")
+    if not file then
+        return false
+    end
+    file:write(token)
+    file:close()
+    return true
+end
+
+local function removeLock(path, token)
+    if token and readToken(path) ~= token then
+        return false
+    end
+    os.remove(tokenPath(path))
     return lfs.rmdir(path)
 end
 
@@ -28,8 +58,15 @@ function FileLock.with(path, callback, options)
         end
     end
 
+    serial = serial + 1
+    local token = table.concat({ tostring(os.time()), tostring(socket.gettime()), tostring(serial) }, ":")
+    if not writeToken(path, token) then
+        removeLock(path)
+        return nil, "cannot initialize storage lock"
+    end
+
     local results = { pcall(callback) }
-    removeLock(path)
+    removeLock(path, token)
     if not results[1] then
         return nil, results[2]
     end

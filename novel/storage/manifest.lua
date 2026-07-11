@@ -2,6 +2,7 @@ local Cache = require("novel.storage.cache")
 local DataStorage = require("datastorage")
 local dump = require("dump")
 local FileLock = require("novel.storage.filelock")
+local ffiUtil = require("ffi/util")
 local LuaSettings = require("luasettings")
 local util = require("util")
 
@@ -177,7 +178,7 @@ function Manifest:load(book_id)
         return nil
     end
     local path = self.manifestPath(book_id)
-    if not util.pathExists(path) then
+    if not util.pathExists(path) and not util.pathExists(path .. ".old") then
         return nil
     end
     local settings = LuaSettings:open(path)
@@ -226,6 +227,7 @@ function Manifest:saveUnlocked(manifest)
         end
         return nil, rename_err
     end
+    ffiUtil.fsyncDirectory(path)
     return self.normalizeManifest(manifest)
 end
 

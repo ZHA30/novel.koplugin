@@ -113,7 +113,7 @@ end
 
 local function deleteChapterFiles(manifest, keep_file, summary)
     local seen_paths = {}
-    local changed = false
+    local removed_files = {}
 
     for position = 1, #(manifest.chapters or {}) do
         local chapter = manifest.chapters[position]
@@ -121,11 +121,7 @@ local function deleteChapterFiles(manifest, keep_file, summary)
         if path then
             seen_paths[path] = true
             if removeChapterFile(path, manifest.book_id, keep_file, summary) then
-                chapter.downloaded = false
-                chapter.downloaded_at = nil
-                chapter.content_type = nil
-                chapter.image_style = nil
-                changed = true
+                removed_files[chapter.file_name] = true
             end
         end
     end
@@ -145,8 +141,18 @@ local function deleteChapterFiles(manifest, keep_file, summary)
         end
     end
 
-    if changed then
-        local saved, err = Manifest:new():save(manifest)
+    if next(removed_files) ~= nil then
+        local saved, err = Manifest:new():update(manifest.book_id, function(latest)
+            for position = 1, #(latest.chapters or {}) do
+                local chapter = latest.chapters[position]
+                if removed_files[chapter.file_name] then
+                    chapter.downloaded = false
+                    chapter.downloaded_at = nil
+                    chapter.content_type = nil
+                    chapter.image_style = nil
+                end
+            end
+        end)
         if saved then
             summary.manifest = saved
         else

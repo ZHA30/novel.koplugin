@@ -97,10 +97,27 @@ local function invalidateContentCache(manifest)
     }, "content")
 end
 
+local function clearDownloadedState(book_id, removed_files)
+    if next(removed_files) == nil then
+        return Manifest:new():load(book_id)
+    end
+    return Manifest:new():update(book_id, function(latest)
+        for position = 1, #(latest.chapters or {}) do
+            local chapter = latest.chapters[position]
+            if removed_files[chapter.file_name] then
+                chapter.downloaded = false
+                chapter.downloaded_at = nil
+                chapter.content_type = nil
+                chapter.image_style = nil
+            end
+        end
+    end)
+end
+
 local function deleteChapterFiles(manifest, options, summary)
     local keep_file = options and options.keep_file
     local seen_paths = {}
-    local changed = false
+    local removed_files = {}
 
     for position = 1, #(manifest.chapters or {}) do
         local chapter = manifest.chapters[position]
@@ -108,11 +125,7 @@ local function deleteChapterFiles(manifest, options, summary)
         if path then
             seen_paths[path] = true
             if removeChapterFile(path, manifest.book_id, keep_file, summary) then
-                chapter.downloaded = false
-                chapter.downloaded_at = nil
-                chapter.content_type = nil
-                chapter.image_style = nil
-                changed = true
+                removed_files[chapter.file_name] = true
             end
         end
     end
@@ -132,8 +145,15 @@ local function deleteChapterFiles(manifest, options, summary)
         end
     end
 
-    if changed then
-        Manifest:new():save(manifest)
+    local saved, err = clearDownloadedState(manifest.book_id, removed_files)
+    if saved then
+        summary.manifest = saved
+    elseif next(removed_files) ~= nil then
+        summary.ok = false
+        summary.error = {
+            kind = "manifest",
+            message = err,
+        }
     end
 end
 
@@ -161,7 +181,7 @@ function CacheCleanup.deleteOfflineChapters(manifest, positions, options)
         return summary
     end
 
-    local changed = false
+    local removed_files = {}
     local seen = {}
     for position_index = 1, #(positions or {}) do
         local position = tonumber(positions[position_index])
@@ -171,17 +191,13 @@ function CacheCleanup.deleteOfflineChapters(manifest, positions, options)
             local path = chapter and chapter.file_path
             if path and removeChapterFile(path, manifest.book_id,
                 options.keep_file, summary) then
-                chapter.downloaded = false
-                chapter.downloaded_at = nil
-                chapter.content_type = nil
-                chapter.image_style = nil
-                changed = true
+                removed_files[chapter.file_name] = true
             end
         end
     end
 
-    if changed then
-        local saved, err = Manifest:new():save(manifest)
+    if next(removed_files) ~= nil then
+        local saved, err = clearDownloadedState(manifest.book_id, removed_files)
         if not saved then
             summary.ok = false
             summary.error = {
@@ -220,6 +236,7 @@ function CacheCleanup.deleteOfflineBook(manifest, options)
     end
 
     deleteChapterFiles(manifest, options, summary)
+    manifest = summary.manifest or manifest
     summary.metadata_content_removed = invalidateContentCache(manifest)
 
     logger.dbg("novel offline book deleted:", manifest.book_id,

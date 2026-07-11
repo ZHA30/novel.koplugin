@@ -1,5 +1,7 @@
 local ChapterDoc = require("novel.reader.chapterdoc")
+local Manifest = require("novel.storage.manifest")
 local Shell = require("novel.ui.shell")
+local ShellRoutes = require("novel.ui.shellroutes")
 local ShellSession = require("novel.ui.shellsession")
 local UIManager = require("ui/uimanager")
 
@@ -7,9 +9,8 @@ local ReturnController = {}
 
 local state = {
     entry_context = nil,
-    pending_restore = nil,
+    exit_request = nil,
     restore_action = nil,
-    close_request_file = nil,
     plugin_name = nil,
     restore_retry_count = 0,
 }
@@ -45,8 +46,7 @@ end
 local function clearRestoreState()
     unscheduleRestoreAction()
     state.entry_context = nil
-    state.pending_restore = nil
-    state.close_request_file = nil
+    state.exit_request = nil
     state.plugin_name = nil
     state.restore_retry_count = 0
 end
@@ -76,13 +76,38 @@ function ReturnController.canReturnFromReader(reader_ui, file)
 end
 
 function ReturnController.prepareReturnFromReader(reader_ui, file)
+    if state.exit_request then
+        return true
+    end
     if not ReturnController.canReturnFromReader(reader_ui, file) then
         return false
     end
 
-    state.pending_restore = {
+    state.exit_request = {
+        kind = "restore_entry",
         shell_state = cloneState(state.entry_context.shell_state),
     }
+    return true
+end
+
+function ReturnController.requestFinishExit(reader_ui, current_chapter)
+    local file = reader_ui and reader_ui.document and reader_ui.document.file
+    current_chapter = current_chapter or ChapterDoc.chapterByFile(file)
+    if not file or not current_chapter or not current_chapter.book_id then
+        return false
+    end
+
+    unscheduleRestoreAction()
+    state.exit_request = {
+        kind = "finish",
+        file = file,
+        shell_state = state.entry_context
+            and cloneState(state.entry_context.shell_state) or nil,
+        book_id = current_chapter.book_id,
+        close_pending = true,
+    }
+    state.plugin_name = state.plugin_name or "novel"
+    state.restore_retry_count = 0
     return true
 end
 
@@ -91,32 +116,60 @@ function ReturnController.requestCloseRestore(reader_ui, file)
     if not ReturnController.prepareReturnFromReader(reader_ui, file) then
         return false
     end
-    state.close_request_file = file
+    state.exit_request.file = file
+    state.exit_request.close_pending = true
     return true
 end
 
 function ReturnController.consumeCloseRestoreRequest()
-    local file = state.close_request_file
-    state.close_request_file = nil
-    if not file or not state.pending_restore then
+    local request = state.exit_request
+    if not request or not request.close_pending or not request.file then
         return nil
     end
-    return file
+    request.close_pending = nil
+    return request.file
+end
+
+local function restoreEntry(plugin, shell_state)
+    if shell_state then
+        ShellSession.restore(plugin, shell_state)
+        return
+    end
+    ShellSession.resetStack(plugin)
+    ShellSession.setActiveTab(plugin, "bookshelf")
+    ShellSession.push(plugin, ShellRoutes.bookshelf())
+end
+
+local function takeExitRequest()
+    local request = state.exit_request
+    state.exit_request = nil
+    state.entry_context = nil
+    state.plugin_name = nil
+    state.restore_retry_count = 0
+    return request
 end
 
 function ReturnController.restoreNow(plugin)
-    if not state.pending_restore or not isFileManagerPlugin(plugin) then
+    if not state.exit_request or not isFileManagerPlugin(plugin) then
         return false
     end
 
-    local pending = state.pending_restore
-    state.pending_restore = nil
-    state.entry_context = nil
-    state.close_request_file = nil
-    state.plugin_name = nil
-    state.restore_retry_count = 0
+    local request = takeExitRequest()
+    restoreEntry(plugin, request.shell_state)
 
-    ShellSession.restore(plugin, pending.shell_state)
+    if request.kind == "finish" then
+        local manifest = Manifest:new():load(request.book_id)
+        if manifest then
+            local current = ShellSession.currentRoute(plugin)
+            local tab = current and current.tab or ShellSession.activeTab(plugin)
+            local ChaptersFlow = require("novel.ui.chapters.flow")
+            ChaptersFlow.showManifestImmediate(plugin, manifest, {
+                tab = tab,
+            })
+            return true
+        end
+    end
+
     Shell.show(plugin, {
         force_repaint = true,
     })
@@ -124,7 +177,7 @@ function ReturnController.restoreNow(plugin)
 end
 
 function ReturnController.scheduleRestoreFromLoadedPlugin()
-    if not state.pending_restore or state.restore_action then
+    if not state.exit_request or state.restore_action then
         return false
     end
 
@@ -141,7 +194,7 @@ function ReturnController.scheduleRestoreFromLoadedPlugin()
         end
 
         state.restore_retry_count = (state.restore_retry_count or 0) + 1
-        if state.restore_retry_count < 6 and state.pending_restore then
+        if state.restore_retry_count < 6 and state.exit_request then
             state.restore_action = action
             UIManager:nextTick(action)
         else

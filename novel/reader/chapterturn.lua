@@ -1,6 +1,8 @@
 local Manifest = require("novel.storage.manifest")
 local ChapterDoc = require("novel.reader.chapterdoc")
 local ChapterOpen = require("novel.reader.chapteropen")
+local ChapterRecord = require("novel.reader.chapterrecord")
+local ReturnController = require("novel.reader.returncontroller")
 local UIManager = require("ui/uimanager")
 
 local ChapterTurn = {}
@@ -100,6 +102,42 @@ local function rollingAtBoundary(rolling, diff)
     return nil
 end
 
+local function updateFinalProgress(plugin, manifest, position)
+    local chapter = manifest and manifest.chapters and manifest.chapters[position]
+    if not chapter or not plugin.app then
+        return
+    end
+    plugin.app:getBookshelfStore():updateProgress(
+        manifest.source, manifest.book, chapter, position, 0)
+end
+
+local function finishReading(plugin, current_chapter, manifest)
+    local position = current_chapter.position
+    local manifest_store = Manifest:new()
+    manifest = manifest_store:load(manifest.book_id) or manifest
+    if not manifest.chapters or not manifest.chapters[position] then
+        return false
+    end
+
+    plugin.novel_switching_chapter = true
+    manifest_store:updateCurrent(manifest, position)
+    manifest_store:markRead(manifest, position)
+    manifest = manifest_store:load(manifest.book_id) or manifest
+    updateFinalProgress(plugin, manifest, position)
+
+    local reader_ui = plugin.ui
+    if not ReturnController.requestFinishExit(reader_ui, current_chapter) then
+        plugin.novel_switching_chapter = nil
+        return false
+    end
+    UIManager:nextTick(function()
+        if reader_ui and reader_ui.document then
+            reader_ui:onClose()
+        end
+    end)
+    return true
+end
+
 local function switchChapter(plugin, direction)
     if plugin.novel_switching_chapter then
         return true
@@ -111,8 +149,12 @@ local function switchChapter(plugin, direction)
     if not manifest then
         return false
     end
-    local target_position = (current_chapter.position or 1) + direction
-    if target_position < 1 or target_position > #(manifest.chapters or {}) then
+    local target_chapter, target_position = ChapterRecord.nextOpenable(
+        manifest.chapters, current_chapter.position, direction)
+    if not target_chapter then
+        if direction > 0 then
+            return finishReading(plugin, current_chapter, manifest)
+        end
         return false
     end
 

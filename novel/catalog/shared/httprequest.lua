@@ -327,6 +327,8 @@ function HttpRequest.execute(spec)
         max_redirects = DEFAULT_MAX_REDIRECTS
     end
 
+    local previous_block_timeout = socketutil.block_timeout
+    local previous_total_timeout = socketutil.total_timeout
     socketutil:set_timeout(spec.timeout or DEFAULT_BLOCK_TIMEOUT,
         spec.total_timeout or DEFAULT_TOTAL_TIMEOUT)
 
@@ -370,7 +372,7 @@ function HttpRequest.execute(spec)
         end
     end)
 
-    socketutil:reset_timeout()
+    socketutil:set_timeout(previous_block_timeout, previous_total_timeout)
 
     if ok then
         return response

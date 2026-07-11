@@ -132,7 +132,7 @@ local function finishReading(plugin, current_chapter, manifest)
     end
     UIManager:nextTick(function()
         if reader_ui and reader_ui.document then
-            reader_ui:onClose()
+            reader_ui:onClose(false)
         end
     end)
     return true

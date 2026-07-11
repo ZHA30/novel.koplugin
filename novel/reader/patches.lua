@@ -223,7 +223,9 @@ local function installCorePatches()
                     file = nil
                 end
                 local result = callPatched(original, reader_ui, file, selected_files)
-                ReturnController.scheduleRestoreFromLoadedPlugin()
+                if not ReturnController.restoreFromLoadedPlugin() then
+                    ReturnController.scheduleRestoreFromLoadedPlugin()
+                end
                 return result
             end
         end)

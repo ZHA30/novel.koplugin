@@ -176,6 +176,22 @@ function ReturnController.restoreNow(plugin)
     return true
 end
 
+function ReturnController.restoreFromLoadedPlugin()
+    if not state.exit_request then
+        return false
+    end
+
+    local PluginLoader = require("pluginloader")
+    local plugin = PluginLoader:getPluginInstance(state.plugin_name or "novel")
+    if not plugin or not isFileManagerPlugin(plugin) then
+        return false
+    end
+
+    unscheduleRestoreAction()
+    state.restore_retry_count = 0
+    return ReturnController.restoreNow(plugin)
+end
+
 function ReturnController.scheduleRestoreFromLoadedPlugin()
     if not state.exit_request or state.restore_action then
         return false
@@ -185,11 +201,7 @@ function ReturnController.scheduleRestoreFromLoadedPlugin()
     action = function()
         clearRestoreAction(action)
 
-        local PluginLoader = require("pluginloader")
-        local plugin = PluginLoader:getPluginInstance(state.plugin_name or "novel")
-        if plugin and isFileManagerPlugin(plugin) then
-            state.restore_retry_count = 0
-            ReturnController.restoreNow(plugin)
+        if ReturnController.restoreFromLoadedPlugin() then
             return
         end
 

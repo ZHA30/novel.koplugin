@@ -37,6 +37,40 @@ local function setHeader(headers, wanted, value)
     headers[wanted] = value
 end
 
+local function removeHeader(headers, wanted)
+    local wanted_lower = wanted:lower()
+    for key in pairs(headers) do
+        if tostring(key):lower() == wanted_lower then
+            headers[key] = nil
+        end
+    end
+end
+
+local function stripCrossOriginHeaders(headers)
+    for _, name in ipairs({
+        "Authorization",
+        "Proxy-Authorization",
+        "Cookie",
+        "Referer",
+    }) do
+        removeHeader(headers, name)
+    end
+end
+
+local function stripEntityHeaders(headers)
+    for _, name in ipairs({
+        "Content-Length",
+        "Content-Type",
+        "Transfer-Encoding",
+    }) do
+        removeHeader(headers, name)
+    end
+end
+
+local function urlOrigin(url)
+    return tostring(url or ""):match("^(https?://[^/]+)")
+end
+
 local function headerValue(headers, wanted)
     if type(headers) ~= "table" then
         return nil
@@ -353,6 +387,9 @@ function HttpRequest.execute(spec)
                     return result
                 end
                 local next_url = Url.absolute(current_url, location)
+                if urlOrigin(current_url) ~= urlOrigin(next_url) then
+                    stripCrossOriginHeaders(spec.headers)
+                end
                 table.insert(redirects, {
                     status = result.status,
                     url = current_url,
@@ -365,6 +402,7 @@ function HttpRequest.execute(spec)
                 if current_method == "GET" then
                     spec.body = nil
                     spec.fields = nil
+                    stripEntityHeaders(spec.headers)
                 end
             else
                 return result

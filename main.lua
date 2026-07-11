@@ -75,6 +75,9 @@ end
 
 function Novel:addToMainMenu(menu_items)
     ReaderHooks.addToMainMenu(self, menu_items)
+    if not self.ui or self.ui.document then
+        return
+    end
     menu_items.novel_search = {
         text = _("Novel"),
         sorting_hint = "search",

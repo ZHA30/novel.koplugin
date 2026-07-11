@@ -1,5 +1,7 @@
 local Cache = require("novel.storage.cache")
 local DataStorage = require("datastorage")
+local dump = require("dump")
+local FileLock = require("novel.storage.filelock")
 local LuaSettings = require("luasettings")
 local util = require("util")
 
@@ -8,6 +10,7 @@ local Manifest = {
     schema_version = 1,
 }
 Manifest.__index = Manifest
+local write_serial = 0
 
 local function now()
     return os.time()
@@ -185,7 +188,7 @@ function Manifest:loadByBook(source, book)
     return self:load(Manifest.bookId(source, book))
 end
 
-function Manifest:save(manifest)
+function Manifest:saveUnlocked(manifest)
     if type(manifest) ~= "table" or not manifest.book_id then
         return nil, "manifest is required"
     end
@@ -195,15 +198,75 @@ function Manifest:save(manifest)
     end
     manifest.schema_version = Manifest.schema_version
     manifest.updated_at = now()
-    local settings = LuaSettings:open(self.manifestPath(manifest.book_id))
-    settings:saveSetting("manifest", stripRuntimeFields(manifest))
-    settings:flush()
+    local path = self.manifestPath(manifest.book_id)
+    write_serial = write_serial + 1
+    local temporary_path = path .. ".tmp." .. tostring(os.time())
+        .. "." .. tostring(write_serial)
+    local written, write_err = util.writeToFile(dump({
+        manifest = stripRuntimeFields(manifest),
+    }, nil, true), temporary_path, true, true)
+    if not written then
+        return nil, write_err
+    end
+    local backup_path = path .. ".old"
+    local had_manifest = util.pathExists(path)
+    if had_manifest then
+        os.remove(backup_path)
+        local backed_up, backup_err = os.rename(path, backup_path)
+        if not backed_up then
+            os.remove(temporary_path)
+            return nil, backup_err
+        end
+    end
+    local renamed, rename_err = os.rename(temporary_path, path)
+    if not renamed then
+        os.remove(temporary_path)
+        if had_manifest then
+            os.rename(backup_path, path)
+        end
+        return nil, rename_err
+    end
     return self.normalizeManifest(manifest)
+end
+
+function Manifest:save(manifest)
+    if type(manifest) ~= "table" or not manifest.book_id then
+        return nil, "manifest is required"
+    end
+    local made, make_err = util.makePath(self.bookDir(manifest.book_id))
+    if not made then
+        return nil, make_err
+    end
+    return FileLock.with(self.manifestPath(manifest.book_id) .. ".lock", function()
+        return self:saveUnlocked(manifest)
+    end)
+end
+
+function Manifest:update(book_id, callback)
+    if not book_id or book_id == "" then
+        return nil, "book id is required"
+    end
+    return FileLock.with(self.manifestPath(book_id) .. ".lock", function()
+        local manifest = self:load(book_id)
+        if not manifest then
+            return nil, "manifest is missing"
+        end
+        local ok, err = callback(manifest)
+        if ok == false then
+            return nil, err
+        end
+        return self:saveUnlocked(manifest)
+    end)
 end
 
 function Manifest:ensureBook(source, book, chapters)
     chapters = chapters or {}
     local book_id = Manifest.bookId(source, book)
+    local made, make_err = util.makePath(self.bookDir(book_id))
+    if not made then
+        return nil, make_err
+    end
+    return FileLock.with(self.manifestPath(book_id) .. ".lock", function()
     local existing = self:load(book_id) or {}
     local by_identity, by_title, title_counts = buildChapterIndexes(existing.chapters)
 
@@ -246,7 +309,8 @@ function Manifest:ensureBook(source, book, chapters)
         table.insert(manifest.chapters, chapter)
     end
 
-    return self:save(manifest)
+        return self:saveUnlocked(manifest)
+    end)
 end
 
 function Manifest:findChapterByFile(file)
@@ -308,12 +372,20 @@ function Manifest:saveChapter(manifest, position, html, options)
         return nil, rename_err
     end
 
-    chapter.downloaded = true
-    chapter.downloaded_at = now()
-    chapter.content_type = options.content_type or "text"
-    chapter.image_style = options.image_style or "default"
-    self:save(manifest)
-    return chapter.file_path
+    local saved, save_err = self:update(manifest.book_id, function(latest)
+        local latest_chapter = latest.chapters and latest.chapters[position]
+        if not latest_chapter or latest_chapter.file_name ~= chapter.file_name then
+            return false, "chapter changed while saving content"
+        end
+        latest_chapter.downloaded = true
+        latest_chapter.downloaded_at = now()
+        latest_chapter.content_type = options.content_type or "text"
+        latest_chapter.image_style = options.image_style or "default"
+    end)
+    if not saved then
+        return nil, save_err
+    end
+    return chapter.file_path, nil, saved
 end
 
 function Manifest:updateCurrent(manifest, position)
@@ -321,10 +393,15 @@ function Manifest:updateCurrent(manifest, position)
     if not chapter then
         return false
     end
-    manifest.current_position = position
-    chapter.last_opened_at = now()
-    self:save(manifest)
-    return true
+    local saved, err = self:update(manifest.book_id, function(latest)
+        local latest_chapter = latest.chapters and latest.chapters[position]
+        if not latest_chapter then
+            return false, "chapter is missing"
+        end
+        latest.current_position = position
+        latest_chapter.last_opened_at = now()
+    end)
+    return saved ~= nil, err, saved
 end
 
 function Manifest:markRead(manifest, position, read)
@@ -332,10 +409,15 @@ function Manifest:markRead(manifest, position, read)
     if not chapter then
         return false
     end
-    chapter.read = read ~= false
-    chapter.read_at = chapter.read and now() or nil
-    self:save(manifest)
-    return true
+    local saved, err = self:update(manifest.book_id, function(latest)
+        local latest_chapter = latest.chapters and latest.chapters[position]
+        if not latest_chapter then
+            return false, "chapter is missing"
+        end
+        latest_chapter.read = read ~= false
+        latest_chapter.read_at = latest_chapter.read and now() or nil
+    end)
+    return saved ~= nil, err, saved
 end
 
 function Manifest:markReadMany(manifest, positions, read)
@@ -344,27 +426,23 @@ function Manifest:markReadMany(manifest, positions, read)
     end
 
     local changed = 0
-    local seen = {}
-    local read_value = read ~= false
-    local timestamp = now()
-    for position_index = 1, #(positions or {}) do
-        local position = tonumber(positions[position_index])
-        if position and not seen[position] then
-            seen[position] = true
-            local chapter = manifest.chapters and manifest.chapters[position]
-            if chapter then
-                chapter.read = read_value
-                chapter.read_at = read_value and timestamp or nil
-                changed = changed + 1
+    local saved, err = self:update(manifest.book_id, function(latest)
+        local seen = {}
+        local read_value = read ~= false
+        local timestamp = now()
+        for position_index = 1, #(positions or {}) do
+            local position = tonumber(positions[position_index])
+            if position and not seen[position] then
+                seen[position] = true
+                local chapter = latest.chapters and latest.chapters[position]
+                if chapter then
+                    chapter.read = read_value
+                    chapter.read_at = read_value and timestamp or nil
+                    changed = changed + 1
+                end
             end
         end
-    end
-
-    if changed == 0 then
-        return self.normalizeManifest(manifest), nil, 0
-    end
-
-    local saved, err = self:save(manifest)
+    end)
     if not saved then
         return nil, err, changed
     end

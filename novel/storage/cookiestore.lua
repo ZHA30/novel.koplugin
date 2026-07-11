@@ -1,5 +1,6 @@
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
+local FileLock = require("novel.storage.filelock")
 
 local CookieStore = {
     path = DataStorage:getSettingsDir() .. "/novel_cookies.lua",
@@ -187,6 +188,12 @@ function CookieStore:new()
     }, self)
 end
 
+local function withLatestStore(callback)
+    return FileLock.with(CookieStore.path .. ".lock", function()
+        return callback(CookieStore:new())
+    end)
+end
+
 function CookieStore.cookieToMap(cookie)
     local map = {}
     cookie = tostring(cookie or "")
@@ -277,6 +284,15 @@ function CookieStore:get(key_or_url, request_url)
 end
 
 function CookieStore:set(key_or_url, cookie)
+    if not self then
+        return false
+    end
+    return withLatestStore(function(store)
+        return store:setUnlocked(key_or_url, cookie)
+    end)
+end
+
+function CookieStore:setUnlocked(key_or_url, cookie)
     local key = cookieKey(key_or_url)
     if key == "" then
         return false
@@ -295,11 +311,16 @@ function CookieStore:set(key_or_url, cookie)
 end
 
 function CookieStore:merge(key_or_url, cookie)
-    local next_map = CookieStore.cookieToMap(self:get(key_or_url))
-    for key, value in pairs(CookieStore.cookieToMap(cookie)) do
-        next_map[key] = value
+    if not self then
+        return false
     end
-    return self:set(key_or_url, CookieStore.mapToCookie(next_map))
+    return withLatestStore(function(store)
+        local next_map = CookieStore.cookieToMap(store:get(key_or_url))
+        for key, value in pairs(CookieStore.cookieToMap(cookie)) do
+            next_map[key] = value
+        end
+        return store:setUnlocked(key_or_url, CookieStore.mapToCookie(next_map))
+    end)
 end
 
 local function parseSetCookie(header, request_url)
@@ -440,6 +461,9 @@ function CookieStore.cookiesFromSetCookie(headers)
 end
 
 function CookieStore:mergeResponse(key_or_url, request_url, headers)
+    if not self then
+        return false
+    end
     if headers == nil then
         headers = request_url
         request_url = key_or_url
@@ -449,33 +473,35 @@ function CookieStore:mergeResponse(key_or_url, request_url, headers)
         return false
     end
 
-    local records = self:readRecords(key_or_url, request_url)
-    local by_key = {}
-    for _, record in ipairs(records) do
-        if not isExpired(record) then
-            by_key[recordKey(record)] = record
-        end
-    end
-    for index = 1, #set_cookies do
-        local record, delete = parseSetCookie(set_cookies[index], request_url)
-        if record then
-            local key = recordKey(record)
-            if delete then
-                by_key[key] = nil
-            else
-                by_key[key] = record
+    return withLatestStore(function(store)
+        local records = store:readRecords(key_or_url, request_url)
+        local by_key = {}
+        for _, record in ipairs(records) do
+            if not isExpired(record) then
+                by_key[recordKey(record)] = record
             end
         end
-    end
+        for index = 1, #set_cookies do
+            local record, delete = parseSetCookie(set_cookies[index], request_url)
+            if record then
+                local key = recordKey(record)
+                if delete then
+                    by_key[key] = nil
+                else
+                    by_key[key] = record
+                end
+            end
+        end
 
-    local merged = {}
-    for _, record in pairs(by_key) do
-        table.insert(merged, record)
-    end
-    table.sort(merged, function(left, right)
-        return recordKey(left) < recordKey(right)
+        local merged = {}
+        for _, record in pairs(by_key) do
+            table.insert(merged, record)
+        end
+        table.sort(merged, function(left, right)
+            return recordKey(left) < recordKey(right)
+        end)
+        return store:writeRecords(key_or_url, merged)
     end)
-    return self:writeRecords(key_or_url, merged)
 end
 
 function CookieStore.deleteStorage()

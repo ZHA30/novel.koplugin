@@ -2,8 +2,11 @@ local lfs = require("libs/libkoreader-lfs")
 local socket = require("socket")
 
 local FileLock = {
-    retry_interval = 0.05,
-    timeout = 10,
+    retry_interval = 0.02,
+    -- Storage mutations are also reached from Reader/UI callbacks. Fail
+    -- quickly on contention instead of freezing the event loop for seconds;
+    -- background owners may explicitly request a longer timeout.
+    timeout = 0.25,
     stale_after = 60,
 }
 

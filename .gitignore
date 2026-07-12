@@ -10,11 +10,14 @@
 *.swp
 *.swo
 *~
+
+# Local development material
+AGENTS.md
 docs/
+spec/
+tests/
 /source/
 
-# Lua/build artifacts
+# Generated Lua analysis artifacts
 *.luac
-*.so
-*.dylib
-*.dll
+.luacheckcache

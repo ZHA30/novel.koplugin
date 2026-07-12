@@ -1,5 +1,6 @@
 local ChapterListing = require("novel.ui.chapters.listing")
 local Dialog = require("novel.ui.widget.dialog")
+local DownloadQueue = require("novel.reader.downloadqueue")
 local HomeShell = require("novel.ui.widget.homeshell")
 local Manifest = require("novel.storage.manifest")
 local ShellActions = require("novel.ui.shell.actions")
@@ -83,6 +84,8 @@ function Shell.show(plugin, options)
     if not plugin or not plugin.app then
         return
     end
+    plugin.novel_shell_visible = true
+    DownloadQueue.runtimeChanged(plugin)
     cancelScheduledRender(plugin)
     options = options or {}
     if options.active_tab then
@@ -131,10 +134,12 @@ function Shell.show(plugin, options)
 end
 
 function Shell.close(plugin)
+    plugin.novel_shell_visible = false
     plugin.novel_shell_render_pending = nil
     cancelScheduledRender(plugin)
     ShellSession.resetStack(plugin)
     Dialog.closeWidget(plugin, "novel_home")
+    DownloadQueue.runtimeChanged(plugin)
 end
 
 function Shell.flushPendingRender(plugin)

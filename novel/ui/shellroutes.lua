@@ -72,6 +72,14 @@ function ShellRoutes.cacheSettings(args)
     }
 end
 
+function ShellRoutes.downloadSettings(args)
+    args = args or {}
+    return {
+        key = "download_settings",
+        tab = args.tab or "settings",
+    }
+end
+
 function ShellRoutes.sources(args)
     args = args or {}
     return {
@@ -192,6 +200,9 @@ function ShellRoutes.title(route)
     end
     if route and route.key == "cache_settings" then
         return _("Cache")
+    end
+    if route and route.key == "download_settings" then
+        return _("Download")
     end
     if route and route.key == "sources" then
         return _("Sources")

@@ -16,6 +16,8 @@ local Novel = WidgetContainer:extend{
 }
 
 function Novel:init()
+    self.novel_closing = nil
+    self.novel_shell_visible = false
     self.app = AppContext:new{ plugin = self }
     DownloadQueue.setChangeListener(self, function(plugin, book_id, position)
         Shell.refreshDownloadState(plugin, book_id, position)
@@ -37,6 +39,7 @@ function Novel:onSaveSettings()
 end
 
 function Novel:onCloseWidget()
+    self.novel_closing = true
     ReaderHooks.close(self)
     Loading.closeKeys(self, {
         "bookshelf_refresh_loading",
@@ -58,6 +61,7 @@ end
 
 function Novel:onReaderReady()
     ReaderHooks.setup(self)
+    DownloadQueue.runtimeChanged(self)
 end
 
 function Novel:onNetworkConnected()
@@ -69,6 +73,7 @@ function Novel.deletePluginSettings()
 end
 
 function Novel:stopPlugin()
+    self.novel_closing = true
     DownloadQueue.close(self)
     ReaderHooks.stopPlugin(self)
 end

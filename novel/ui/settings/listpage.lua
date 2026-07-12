@@ -15,6 +15,15 @@ function SettingsListPage.build(shell, plugin, route, runtime)
                 })
             end,
         },
+        {
+            title = _("Download"),
+            icon = "arrow-down-to-line",
+            callback = function()
+                runtime.push(plugin, ShellRoutes.downloadSettings{
+                    tab = route and route.tab or "settings",
+                })
+            end,
+        },
     }
 
     return ContentBuilder.buildList(shell, items)

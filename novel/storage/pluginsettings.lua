@@ -5,9 +5,13 @@ local PluginSettings = {
 }
 
 PluginSettings.defaults = {
-    schema_version = 5,
+    schema_version = 6,
     debug = {
         enabled = false,
+    },
+    download = {
+        background_mode = "pause_while_reading",
+        workers = 1,
     },
     cache = {
         enabled = true,
@@ -105,6 +109,12 @@ local function migrate(settings)
     end
     if version < 5 then
         settings.prefetch = nil
+    end
+    if version > 0 and version < 6 then
+        settings.download = settings.download or {}
+        settings.download.background_mode = settings.download.background_mode
+            or "always"
+        settings.download.workers = tonumber(settings.download.workers) or 1
     end
     settings.schema_version = PluginSettings.defaults.schema_version
     return true

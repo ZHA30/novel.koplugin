@@ -21,6 +21,9 @@ local ENTRIES = {
     cache_settings = {
         module = "novel.ui.settings.cachepage",
     },
+    download_settings = {
+        module = "novel.ui.settings.downloadpage",
+    },
     sources = {
         module = "novel.ui.sources.sourcespage",
     },

@@ -150,6 +150,27 @@ msgstr "标记选中为未读"
 msgid "Download"
 msgstr "下载"
 
+msgid "Background download mode"
+msgstr "后台下载模式"
+
+msgid "Only in Novel"
+msgstr "仅在 Novel 内"
+
+msgid "Pause while reading"
+msgstr "阅读时暂停"
+
+msgid "Always download in background"
+msgstr "始终后台下载"
+
+msgid "Background downloading is available only while KOReader is running."
+msgstr "后台下载仅在 KOReader 运行期间可用。"
+
+msgid "Simultaneous downloads"
+msgstr "同时下载数"
+
+msgid "More simultaneous downloads use more network, CPU, and memory."
+msgstr "增加同时下载数会占用更多网络、CPU 和内存。"
+
 msgid "Download selected"
 msgstr "下载选中"
 

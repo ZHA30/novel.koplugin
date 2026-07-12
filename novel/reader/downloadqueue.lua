@@ -19,12 +19,24 @@ DownloadQueue.max_attempts = DownloadPolicy.max_attempts
 DownloadQueue.poll_interval = 0.25
 DownloadQueue.collect_interval = 1
 DownloadQueue.checkpoint_changes = DownloadPolicy.checkpoint_changes
+DownloadQueue.min_workers = 1
+DownloadQueue.max_workers = 3
+
+local BACKGROUND_NOVEL_ONLY = "novel_only"
+local BACKGROUND_PAUSE_WHILE_READING = "pause_while_reading"
+local BACKGROUND_ALWAYS = "always"
 
 local STATUS_QUEUED = "queued"
 local STATUS_RUNNING = "running"
 local STATUS_PAUSED = "paused"
 local STATUS_DONE = "done"
 local STATUS_ERROR = "error"
+
+local VALID_BACKGROUND_MODES = {
+    [BACKGROUND_NOVEL_ONLY] = true,
+    [BACKGROUND_PAUSE_WHILE_READING] = true,
+    [BACKGROUND_ALWAYS] = true,
+}
 
 local function now()
     return os.time()
@@ -63,6 +75,7 @@ local function emptyState()
         paused = false,
         waiting_network = false,
         items = {},
+        running_keys = {},
     }
 end
 
@@ -126,6 +139,8 @@ local function loadState()
         return emptyState()
     end
     state.waiting_network = state.waiting_network == true
+    state.running_key = nil
+    state.running_keys = {}
     local loaded_items = state.items or {}
     state.items = {}
     local needs_save = false
@@ -172,6 +187,68 @@ local function queue(plugin)
         plugin.novel_download_queue = loadState()
     end
     return plugin.novel_download_queue
+end
+
+local function downloadSettings(plugin)
+    local settings = plugin and plugin.app and plugin.app.settings
+    local download = settings and settings.download
+    return type(download) == "table" and download or {}
+end
+
+local function backgroundMode(plugin)
+    local mode = downloadSettings(plugin).background_mode
+    if VALID_BACKGROUND_MODES[mode] then
+        return mode
+    end
+    return BACKGROUND_PAUSE_WHILE_READING
+end
+
+local function workerCount(plugin)
+    local workers = math.floor(tonumber(downloadSettings(plugin).workers) or 1)
+    return math.max(DownloadQueue.min_workers,
+        math.min(DownloadQueue.max_workers, workers))
+end
+
+local function runtimeAllowsDownloads(plugin)
+    if not plugin or not plugin.app or plugin.novel_closing then
+        return false
+    end
+    if plugin.novel_shell_visible == true then
+        return true
+    end
+    local mode = backgroundMode(plugin)
+    if mode == BACKGROUND_NOVEL_ONLY then
+        return false
+    end
+    if mode == BACKGROUND_PAUSE_WHILE_READING then
+        return ChapterDoc.currentChapter(plugin) == nil
+    end
+    return true
+end
+
+local function runningKeys(state)
+    state.running_keys = state.running_keys or {}
+    return state.running_keys
+end
+
+local function runningCount(state)
+    local count = 0
+    for running_key in pairs(runningKeys(state)) do
+        if running_key ~= nil then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function markRunning(state, item)
+    runningKeys(state)[item.key] = true
+end
+
+local function unmarkRunning(state, item)
+    if state and item then
+        runningKeys(state)[item.key] = nil
+    end
 end
 
 local function nextContentUrl(manifest, position)
@@ -230,20 +307,47 @@ local function notify(plugin, item, save_mode)
     elseif save_mode ~= "none" then
         checkpointState(state)
     end
-    state.notify_token = (state.notify_token or 0) + 1
+    state.pending_changes = state.pending_changes or {}
+    if item and item.book_id then
+        local change_key = tostring(item.book_id) .. ":"
+            .. tostring(item.position or "")
+        state.pending_changes[change_key] = {
+            book_id = item.book_id,
+            position = item.position,
+        }
+    else
+        state.pending_general_change = true
+    end
+    if state.notify_action then
+        return
+    end
+    state.notify_token = state.notify_token or 0
     local token = state.notify_token
-    UIManager:scheduleIn(0.5, function()
+    state.notify_action = function()
+        if plugin and plugin.novel_download_queue then
+            plugin.novel_download_queue.notify_action = nil
+        end
         if not plugin or not plugin.app or not plugin.novel_download_queue then
             return
         end
         if plugin.novel_download_queue.notify_token ~= token then
             return
         end
-        local listener = plugin.novel_download_queue.change_listener
+        local current_state = plugin.novel_download_queue
+        local listener = current_state.change_listener
         if type(listener) == "function" then
-            pcall(listener, plugin, item and item.book_id, item and item.position)
+            if current_state.pending_general_change then
+                pcall(listener, plugin)
+            end
+            for change_key, change in pairs(current_state.pending_changes or {}) do
+                current_state.pending_changes[change_key] = nil
+                pcall(listener, plugin, change.book_id, change.position)
+            end
         end
-    end)
+        current_state.pending_changes = {}
+        current_state.pending_general_change = nil
+    end
+    UIManager:scheduleIn(0.5, state.notify_action)
 end
 
 local function removeItem(state, item)
@@ -278,6 +382,22 @@ local function stopRunningItem(item)
     return true
 end
 
+local function stopRunningItems(state)
+    local stopped = false
+    for item_index = 1, #(state.items or {}) do
+        local item = state.items[item_index]
+        if item.status == STATUS_RUNNING then
+            stopRunningItem(item)
+            item.status = STATUS_QUEUED
+            item.started_at = nil
+            item.updated_at = now()
+            stopped = true
+        end
+    end
+    state.running_keys = {}
+    return stopped
+end
+
 local function stopWake(state)
     if state and state.wake_action then
         UIManager:unschedule(state.wake_action)
@@ -294,9 +414,9 @@ local function finishItem(plugin, item, ok, result_or_err)
     item.waiting_network = nil
     item.progress = ok and 1 or item.progress
     item.updated_at = now()
+    unmarkRunning(state, item)
     if ok then
         state.waiting_network = false
-        state.running_key = nil
         removeItem(state, item)
         notify(plugin, {
             book_id = book_id,
@@ -317,7 +437,6 @@ local function finishItem(plugin, item, ok, result_or_err)
         item.status = STATUS_ERROR
         item.next_retry_at = nil
     end
-    state.running_key = nil
     notify(plugin, item)
     DownloadQueue.start(plugin)
 end
@@ -439,7 +558,7 @@ local function startItem(plugin, item)
     item.progress = 0
     item.started_at = now()
     item.updated_at = item.started_at
-    queue(plugin).running_key = item.key
+    markRunning(queue(plugin), item)
     notify(plugin, item, "none")
     scheduleCheck(plugin, item)
     return true
@@ -510,15 +629,14 @@ function DownloadQueue.close(plugin)
         return
     end
     state.notify_token = (state.notify_token or 0) + 1
-    stopWake(state)
-    for index = 1, #state.items do
-        local item = state.items[index]
-        stopRunningItem(item)
-        if item.status == STATUS_RUNNING then
-            item.status = STATUS_QUEUED
-        end
+    if state.notify_action then
+        UIManager:unschedule(state.notify_action)
+        state.notify_action = nil
     end
-    state.running_key = nil
+    state.pending_changes = {}
+    state.pending_general_change = nil
+    stopWake(state)
+    stopRunningItems(state)
     state.change_listener = nil
     saveState(state)
 end
@@ -528,24 +646,42 @@ function DownloadQueue.start(plugin)
         return false
     end
     local state = queue(plugin)
-    if state.paused == true or state.running_key then
+    if state.starting then
+        state.start_requested = true
         return false
     end
-    local item = runnableItem(state)
-    if not item then
+    if state.paused == true or not runtimeAllowsDownloads(plugin) then
+        stopWake(state)
+        return false
+    end
+    state.starting = true
+    local started = false
+    repeat
+        state.start_requested = nil
+        while runningCount(state) < workerCount(plugin) do
+            local item = runnableItem(state)
+            if not item then
+                break
+            end
+            if not networkAvailable() then
+                state.waiting_network = true
+                item.waiting_network = true
+                item.error = _("Waiting for network")
+                notify(plugin, item, "none")
+                break
+            end
+            state.waiting_network = false
+            item.waiting_network = nil
+            if startItem(plugin, item) then
+                started = true
+            end
+        end
+    until not state.start_requested
+    state.starting = nil
+    if runningCount(state) < workerCount(plugin) then
         scheduleWake(plugin, state)
-        return false
     end
-    if not networkAvailable() then
-        state.waiting_network = true
-        item.waiting_network = true
-        item.error = _("Waiting for network")
-        notify(plugin, item, "none")
-        return false
-    end
-    state.waiting_network = false
-    item.waiting_network = nil
-    return startItem(plugin, item)
+    return started
 end
 
 function DownloadQueue.pause(plugin)
@@ -556,6 +692,7 @@ function DownloadQueue.pause(plugin)
         state.items[index].waiting_network = nil
     end
     stopWake(state)
+    stopRunningItems(state)
     notify(plugin, nil, "immediate")
 end
 
@@ -691,6 +828,41 @@ function DownloadQueue.networkReady(plugin)
     return DownloadQueue.start(plugin)
 end
 
+function DownloadQueue.runtimeChanged(plugin)
+    if not plugin or not plugin.app then
+        return false
+    end
+    local state = queue(plugin)
+    if runtimeAllowsDownloads(plugin) then
+        return DownloadQueue.start(plugin)
+    end
+    stopWake(state)
+    local changed = state.waiting_network == true
+    state.waiting_network = false
+    for item_index = 1, #state.items do
+        changed = changed or state.items[item_index].waiting_network == true
+        state.items[item_index].waiting_network = nil
+    end
+    changed = stopRunningItems(state) or changed
+    if changed then
+        notify(plugin, nil, "immediate")
+        return true
+    end
+    return false
+end
+
+function DownloadQueue.settingsChanged(plugin)
+    return DownloadQueue.runtimeChanged(plugin)
+end
+
+function DownloadQueue.backgroundMode(plugin)
+    return backgroundMode(plugin)
+end
+
+function DownloadQueue.workerCount(plugin)
+    return workerCount(plugin)
+end
+
 function DownloadQueue.statusLabel(item)
     local status = item and item.status
     if status == STATUS_RUNNING then
@@ -746,7 +918,7 @@ function DownloadQueue.remove(plugin, key)
         return false
     end
     if stopRunningItem(item) then
-        state.running_key = nil
+        unmarkRunning(state, item)
     end
     table.remove(state.items, index)
     notify(plugin, item, "immediate")
@@ -759,8 +931,8 @@ local function removeBookItems(state, book_id)
     for index = #state.items, 1, -1 do
         local item = state.items[index]
         if item.book_id == book_id then
-            if stopRunningItem(item) or state.running_key == item.key then
-                state.running_key = nil
+            if stopRunningItem(item) or runningKeys(state)[item.key] then
+                unmarkRunning(state, item)
             end
             table.remove(state.items, index)
             removed = true
@@ -826,7 +998,7 @@ function DownloadQueue.pauseItem(plugin, key)
         return false
     end
     if stopRunningItem(item) then
-        state.running_key = nil
+        unmarkRunning(state, item)
     end
     item.status = STATUS_PAUSED
     item.waiting_network = nil
@@ -875,12 +1047,12 @@ function DownloadQueue.clear(plugin)
     for index = 1, #state.items do
         local item = state.items[index]
         if stopRunningItem(item) then
-            state.running_key = nil
+            unmarkRunning(state, item)
         end
     end
     state.items = {}
     state.waiting_network = false
-    state.running_key = nil
+    state.running_keys = {}
     stopWake(state)
     notify(plugin, nil, "immediate")
 end
@@ -894,5 +1066,8 @@ DownloadQueue.STATUS_RUNNING = STATUS_RUNNING
 DownloadQueue.STATUS_PAUSED = STATUS_PAUSED
 DownloadQueue.STATUS_DONE = STATUS_DONE
 DownloadQueue.STATUS_ERROR = STATUS_ERROR
+DownloadQueue.BACKGROUND_NOVEL_ONLY = BACKGROUND_NOVEL_ONLY
+DownloadQueue.BACKGROUND_PAUSE_WHILE_READING = BACKGROUND_PAUSE_WHILE_READING
+DownloadQueue.BACKGROUND_ALWAYS = BACKGROUND_ALWAYS
 
 return DownloadQueue

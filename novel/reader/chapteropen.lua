@@ -8,9 +8,10 @@ local NetworkMgr = require("ui/network/manager")
 local ReturnController = require("novel.reader.returncontroller")
 local ReaderSettings = require("novel.reader.settings")
 local Trapper = require("ui/trapper")
-local UIManager = require("ui/uimanager")
 
 local ChapterOpen = {}
+-- This crosses the old and new plugin instances created by ReaderUI:switchDocument().
+local pending_jump
 
 local function nextContentRequest(plugin)
     plugin.content_request_id = (plugin.content_request_id or 0) + 1
@@ -26,6 +27,7 @@ local function showLoading(plugin)
 end
 
 local function resetSwitch(plugin)
+    pending_jump = nil
     closeLoading(plugin)
     plugin.novel_switching_chapter = nil
 end
@@ -55,24 +57,31 @@ local function alreadyAtStart(reader_ui)
     return false
 end
 
-local function jumpAfterOpen(reader_ui, jump)
-    if not jump then
-        return
+local function jumpTo(reader_ui, jump)
+    if not jump or not reader_ui or not reader_ui.document then
+        return false
     end
-    UIManager:nextTick(function()
-        if not reader_ui or not reader_ui.document then
-            return
-        end
-        if jump == "start" and alreadyAtStart(reader_ui) then
-            return
-        end
-        local percent = jump == "end" and 100 or 0
-        if reader_ui.paging and reader_ui.paging.onGotoPercent then
-            reader_ui.paging:onGotoPercent(percent)
-        elseif reader_ui.rolling and reader_ui.rolling.onGotoPercent then
-            reader_ui.rolling:onGotoPercent(percent)
-        end
-    end)
+    if jump == "start" and alreadyAtStart(reader_ui) then
+        return true
+    end
+    local percent = jump == "end" and 100 or 0
+    if reader_ui.paging and reader_ui.paging.onGotoPercent then
+        reader_ui.paging:onGotoPercent(percent)
+        return true
+    elseif reader_ui.rolling and reader_ui.rolling.onGotoPercent then
+        reader_ui.rolling:onGotoPercent(percent)
+        return true
+    end
+    return false
+end
+
+local function queueJump(file, jump)
+    if jump then
+        pending_jump = {
+            file = file,
+            jump = jump,
+        }
+    end
 end
 
 local function openFile(plugin, file, jump)
@@ -81,25 +90,43 @@ local function openFile(plugin, file, jump)
         return
     end
 
-    local function afterOpen(reader_ui)
+    pending_jump = nil
+    local function afterOpen()
         closeLoading(plugin)
         plugin.novel_switching_chapter = nil
-        jumpAfterOpen(reader_ui or plugin.ui, jump)
     end
 
     if plugin.ui.document then
         plugin.novel_switching_chapter = true
         if plugin.ui.document.file == file then
-            afterOpen(plugin.ui)
+            jumpTo(plugin.ui, jump)
+            afterOpen()
             return
         end
         local DocumentRegistry = require("document/documentregistry")
         local provider, is_provider_forced = DocumentRegistry:getProvider(file, true)
+        queueJump(file, jump)
         plugin.ui:switchDocument(file, true, afterOpen, provider, is_provider_forced)
     elseif plugin.ui.openFile then
         ReturnController.captureEntry(plugin)
+        plugin.novel_switching_chapter = true
+        queueJump(file, jump)
         plugin.ui:openFile(file, nil, nil, nil, afterOpen)
     end
+end
+
+function ChapterOpen.applyPendingJump(plugin)
+    local request = pending_jump
+    local reader_ui = plugin and plugin.ui
+    if not request or not reader_ui or not reader_ui.document then
+        return false
+    end
+
+    pending_jump = nil
+    if reader_ui.document.file ~= request.file then
+        return false
+    end
+    return jumpTo(reader_ui, request.jump)
 end
 
 local function updateProgress(plugin, manifest, position)
@@ -224,6 +251,7 @@ function ChapterOpen.close(plugin, force)
     if not force and plugin.novel_switching_chapter then
         return
     end
+    pending_jump = nil
     closeLoading(plugin)
 end
 

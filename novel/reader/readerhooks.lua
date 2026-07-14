@@ -49,6 +49,7 @@ function ReaderHooks.onSaveSettings(plugin)
 end
 
 function ReaderHooks.setup(plugin)
+    ChapterOpen.applyPendingJump(plugin)
     return ChapterTurn.setup(plugin)
 end
 

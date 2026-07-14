@@ -24,6 +24,9 @@ msgstr "发现"
 msgid "More"
 msgstr "更多"
 
+msgid "Intro"
+msgstr "简介"
+
 msgid "Settings"
 msgstr "设置"
 

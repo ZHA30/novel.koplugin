@@ -2,10 +2,13 @@ local _ = require("novel.i18n")
 local BookshelfLifecycle = require("novel.bookshelflifecycle")
 local BookRefresh = require("novel.bookshelfrefresh")
 local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
+local ChapterCache = require("novel.reader.chaptercache")
+local ChapterDownload = require("novel.reader.chapterdownload")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DetailFlow = require("novel.ui.detail.flow")
 local Dialog = require("novel.ui.widget.dialog")
 local ChaptersFlow = require("novel.ui.chapters.flow")
+local Manifest = require("novel.storage.manifest")
 local RefreshFlow = require("novel.ui.refreshflow")
 local Shell = require("novel.ui.shell")
 local UIManager = require("ui/uimanager")
@@ -64,6 +67,65 @@ local function refreshRecord(plugin, record)
     })
 end
 
+local function showBookIntro(plugin, record)
+    local source = BookRefresh.findCurrentSource(plugin, record)
+    DetailFlow.show(plugin, source, record.book, {
+        buttons_builder = function()
+            return {
+                {
+                    icon = "x",
+                    callback = function()
+                        Dialog.closeWidget(plugin, "detail_viewer")
+                    end,
+                },
+            }
+        end,
+    })
+end
+
+local function enqueueBookDownload(plugin, manifest)
+    local positions = {}
+    for position = 1, #(manifest and manifest.chapters or {}) do
+        table.insert(positions, position)
+    end
+    local download_positions = ChapterCache.cacheablePositions(manifest, positions)
+    if #download_positions == 0 then
+        Dialog.message(_("No chapters to download."))
+        return
+    end
+
+    Dialog.confirm(
+        string.format(_("Download %d chapters?"), #download_positions),
+        _("Download"),
+        function()
+            ChapterDownload.enqueue(plugin, manifest, download_positions, {
+                on_done = function()
+                    if plugin.app then
+                        BookshelfFlow.show(plugin)
+                    end
+                end,
+            })
+        end
+    )
+end
+
+local function downloadRecord(plugin, record)
+    local source = BookRefresh.findCurrentSource(plugin, record)
+    local manifest = Manifest:new():loadByBook(source, record.book)
+    if manifest and #(manifest.chapters or {}) > 0 then
+        enqueueBookDownload(plugin, manifest)
+        return
+    end
+
+    RefreshFlow.refreshBook(plugin, source, record.book, {
+        message = false,
+        require_bookshelf = true,
+        on_done = function(applied)
+            enqueueBookDownload(plugin, applied and applied.manifest)
+        end,
+    })
+end
+
 local function showActions(plugin, record)
     UIManager:show(ChapterActionDialog:new{
         title = bookTitle(record and record.book),
@@ -73,6 +135,20 @@ local function showActions(plugin, record)
                 text = _("Refresh"),
                 callback = function()
                     refreshRecord(plugin, record)
+                end,
+            },
+            {
+                icon = "info",
+                text = _("Intro"),
+                callback = function()
+                    showBookIntro(plugin, record)
+                end,
+            },
+            {
+                icon = "arrow-down-to-line",
+                text = _("Download"),
+                callback = function()
+                    downloadRecord(plugin, record)
                 end,
             },
             {

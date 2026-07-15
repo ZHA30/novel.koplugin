@@ -25,13 +25,14 @@ function BookshelfLifecycle.removeMany(plugin, records)
         local record = records[index]
         if record and store:remove(record.source, record.book) then
             removed_count = removed_count + 1
-            table.insert(book_ids, OfflineFiles.bookId(record.source, record.book))
+            local book_id = OfflineFiles.bookId(record.source, record.book)
+            table.insert(book_ids, book_id)
             local summary = OfflineFiles.deleteBook(record.source, record.book, {
-                book_id = book_ids[#book_ids],
+                book_id = book_id,
             })
             if summary and summary.ok == false then
                 logger.warn("Novel: failed to delete offline files for removed book:",
-                    book_ids[#book_ids], summary.error and summary.error.message)
+                    book_id, summary.error and summary.error.message)
             end
         end
     end

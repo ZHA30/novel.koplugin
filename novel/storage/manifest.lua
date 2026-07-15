@@ -35,7 +35,8 @@ local function clean(value)
 end
 
 local function safeId(value)
-    return tostring(value or ""):gsub("[^%w._-]", "_")
+    local sanitized = tostring(value or ""):gsub("[^%w._-]", "_")
+    return sanitized
 end
 
 local function sourceUrl(source)

@@ -395,7 +395,9 @@ local function replaceOldUrlTemplates(url)
     url = url:gsub("searchPage", "{{page}}")
     url = url:gsub("\1(%d+)\1", function(index)
         local template = templates[tonumber(index)] or ""
-        return template:gsub("searchKey", "key"):gsub("searchPage", "page")
+        local converted = template:gsub("searchKey", "key")
+            :gsub("searchPage", "page")
+        return converted
     end)
     return url
 end
@@ -406,8 +408,9 @@ local function toNewUrl(url)
         return nil
     end
     if startsWithIgnoreCase(url, "<js>") then
-        return url:gsub("=searchKey", "={{key}}")
+        local converted = url:gsub("=searchKey", "={{key}}")
             :gsub("=searchPage", "={{page}}")
+        return converted
     end
 
     local options = {}

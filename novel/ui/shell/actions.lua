@@ -577,7 +577,7 @@ local function chapterActions(plugin, route, callbacks)
         },
         {
             key = "continue",
-            text = _("Continue"),
+            text = _("Continue reading"),
             icon = "circle-play",
             enabled = manifest ~= nil and #(manifest.chapters or {}) > 0,
             callback = function()
@@ -657,7 +657,7 @@ local function downloadTopActions(plugin)
         },
         {
             key = "download_toggle",
-            text = summary.paused and _("Resume") or _("Pause"),
+            text = summary.paused and _("Resume downloads") or _("Pause"),
             icon = summary.paused and "play" or "pause",
             enabled = summary.total > 0,
             callback = function()

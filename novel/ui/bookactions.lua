@@ -239,7 +239,7 @@ function BookActions.showMenu(plugin, source, book, record, options)
             },
             {
                 icon = "list",
-                text = _("Table of contents"),
+                text = _("Chapters"),
                 callback = function()
                     ChaptersFlow.show(plugin, source, book, {
                         tab = options.tab,

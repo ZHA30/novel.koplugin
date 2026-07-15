@@ -84,7 +84,7 @@ local function showWorkersDialog(plugin, route, runtime)
         value_max = DownloadQueue.max_workers,
         value_step = 1,
         default_value = 1,
-        ok_text = _("Set"),
+        ok_text = _("Apply"),
         callback = function(spin)
             download.workers = tonumber(spin.value) or 1
             save(plugin, route, runtime)

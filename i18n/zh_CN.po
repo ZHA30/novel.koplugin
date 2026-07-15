@@ -57,11 +57,8 @@ msgstr "当前缓存大小"
 msgid "Cache limit"
 msgstr "缓存限制"
 
-msgid "Set"
-msgstr "设置"
-
 msgid "Clear metadata cache"
-msgstr "清理缓存"
+msgstr "清理元数据缓存"
 
 msgid "Clear metadata cache?"
 msgstr "清理元数据缓存？"
@@ -123,9 +120,6 @@ msgstr "章节数："
 msgid "Chapters"
 msgstr "目录"
 
-msgid "Table of contents"
-msgstr "目录"
-
 msgid "Chapter %d"
 msgstr "第 %d 章"
 
@@ -165,8 +159,8 @@ msgstr "返回"
 msgid "Loading"
 msgstr "加载中"
 
-msgid "Continue"
-msgstr "继续"
+msgid "Continue reading"
+msgstr "继续阅读"
 
 msgid "Mark as read"
 msgstr "标记为已读"
@@ -252,8 +246,8 @@ msgstr "清空队列"
 msgid "Clear all downloads?"
 msgstr "清空所有下载任务？"
 
-msgid "Resume"
-msgstr "继续"
+msgid "Resume downloads"
+msgstr "继续下载"
 
 msgid "Pause"
 msgstr "暂停"

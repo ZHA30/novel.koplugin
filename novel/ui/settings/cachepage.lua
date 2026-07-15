@@ -84,7 +84,7 @@ local function showCacheLimitDialog(plugin, route, runtime)
         value_hold_step = 10,
         unit = "MB",
         default_value = DEFAULT_CACHE_LIMIT_MB,
-        ok_text = _("Set"),
+        ok_text = _("Apply"),
         callback = function(spin)
             settings.cache = settings.cache or {}
             settings.cache.max_metadata_bytes = tonumber(spin.value)

@@ -93,6 +93,15 @@ function ShellSession.replace(plugin, route)
     ShellSession.get(plugin).list_info = nil
 end
 
+function ShellSession.replacePrevious(plugin, route)
+    local stack = ShellSession.stack(plugin)
+    if #stack < 2 then
+        return false
+    end
+    stack[#stack - 1] = prepareRoute(route, stack[#stack - 1])
+    return true
+end
+
 function ShellSession.pop(plugin)
     local stack = ShellSession.stack(plugin)
     if #stack == 0 then

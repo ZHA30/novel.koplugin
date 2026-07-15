@@ -64,6 +64,22 @@ function ShellRoutes.settingsList(args)
     }
 end
 
+function ShellRoutes.readingSettings(args)
+    args = args or {}
+    return {
+        key = "reading_settings",
+        tab = args.tab or "settings",
+    }
+end
+
+function ShellRoutes.introSettings(args)
+    args = args or {}
+    return {
+        key = "intro_settings",
+        tab = args.tab or "settings",
+    }
+end
+
 function ShellRoutes.cacheSettings(args)
     args = args or {}
     return {
@@ -107,6 +123,21 @@ function ShellRoutes.chapters(args)
         filter = args.filter,
         sort = args.sort,
         error = args.error,
+    }
+end
+
+function ShellRoutes.detail(args)
+    args = args or {}
+    return ShellRoutes.copy{
+        key = "detail",
+        tab = args.tab or "bookshelf",
+        source = args.source,
+        book = args.book or {},
+        text = args.text,
+        unsupported = args.unsupported or {},
+        loading = args.loading == true,
+        error = args.error,
+        detail_page = tonumber(args.detail_page) or 1,
     }
 end
 
@@ -185,6 +216,10 @@ function ShellRoutes.title(route)
             route.manifest and route.manifest.book or route.book
         )
     end
+    if route and route.key == "detail" then
+        local book = route.book or {}
+        return book.name or book.bookUrl or _("Book")
+    end
     if route and route.key == "discover_results" then
         return DiscoverResultSet.resultTitle(
             route.group,
@@ -197,6 +232,12 @@ function ShellRoutes.title(route)
     end
     if route and route.key == "settings_list" then
         return _("Settings")
+    end
+    if route and route.key == "reading_settings" then
+        return _("Reading")
+    end
+    if route and route.key == "intro_settings" then
+        return _("Intro")
     end
     if route and route.key == "cache_settings" then
         return _("Cache")

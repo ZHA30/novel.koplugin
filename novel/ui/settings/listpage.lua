@@ -7,6 +7,15 @@ local SettingsListPage = {}
 function SettingsListPage.build(shell, plugin, route, runtime)
     local items = {
         {
+            title = _("Reading"),
+            icon = "book",
+            callback = function()
+                runtime.push(plugin, ShellRoutes.readingSettings{
+                    tab = route and route.tab or "settings",
+                })
+            end,
+        },
+        {
             title = _("Cache"),
             icon = "cache",
             callback = function()

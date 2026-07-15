@@ -164,18 +164,7 @@ end
 
 local function showBookIntro(plugin, record)
     local source = BookRefresh.findCurrentSource(plugin, record)
-    DetailFlow.show(plugin, source, record.book, {
-        buttons_builder = function()
-            return {
-                {
-                    icon = "x",
-                    callback = function()
-                        Dialog.closeWidget(plugin, "detail_viewer")
-                    end,
-                },
-            }
-        end,
-    })
+    DetailFlow.show(plugin, source, record.book, { tab = "bookshelf" })
 end
 
 local function enqueueBookDownload(plugin, manifest)

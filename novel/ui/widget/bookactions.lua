@@ -44,18 +44,22 @@ end
 local function updateBook(runtime, plugin, route, index, book, route_with)
     local books = copiedBooks(route.books)
     books[index] = book or books[index]
-    runtime.replace(plugin, route_with(route, {
+    local updated_route = route_with(route, {
         books = books,
-    }))
+    })
+    local current = runtime.currentRoute and runtime.currentRoute(plugin)
+    if current and current.key == "detail"
+        and type(runtime.replacePrevious) == "function" then
+        runtime.replacePrevious(plugin, updated_route)
+        return
+    end
+    runtime.replace(plugin, updated_route)
 end
 
 local function showDetail(runtime, plugin, route, index, book, route_with)
     DetailFlow.show(plugin, route.source, book, {
         on_visited = function(visited_book)
             updateBook(runtime, plugin, route, index, visited_book, route_with)
-        end,
-        on_bookshelf_changed = function(changed_book)
-            updateBook(runtime, plugin, route, index, changed_book, route_with)
         end,
     })
 end

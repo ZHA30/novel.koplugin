@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
+local BookshelfLifecycle = require("novel.bookshelflifecycle")
 local BookshelfSelection = require("novel.ui.bookshelf.selection")
 local ChapterCache = require("novel.reader.chaptercache")
 local ChapterDownload = require("novel.reader.chapterdownload")
@@ -13,6 +14,10 @@ local ShellSession = require("novel.ui.shellsession")
 local UIManager = require("ui/uimanager")
 
 local ShellActions = {}
+
+local function detailFlow()
+    return require("novel.ui.detail.flow")
+end
 
 local function listInfo(plugin)
     return ShellSession.listInfo(plugin) or {}
@@ -171,24 +176,12 @@ local function countedText(label, count)
     return string.format("%s (%d)", label, count)
 end
 
-local function showBookIntro(plugin, manifest)
+local function showBookIntro(plugin, route, manifest)
     if not manifest then
         return
     end
-    local DetailFlow = require("novel.ui.detail.flow")
-    DetailFlow.show(plugin, manifest.source, manifest.book, {
-        buttons_builder = function()
-            return {
-                {
-                    {
-                        icon = "x",
-                        callback = function()
-                            Dialog.closeWidget(plugin, "detail_viewer")
-                        end,
-                    },
-                },
-            }
-        end,
+    detailFlow().show(plugin, manifest.source, manifest.book, {
+        tab = route and route.tab,
     })
 end
 
@@ -394,7 +387,7 @@ local function chapterTopActions(plugin, route, callbacks)
             key = "intro",
             icon = "info",
             callback = function()
-                showBookIntro(plugin, manifest)
+                showBookIntro(plugin, route, manifest)
             end,
         },
         {
@@ -698,6 +691,87 @@ local function searchResultsActions(plugin, route, callbacks)
     }
 end
 
+local function detailRouteWithPage(route, page)
+    return detailFlow().withPage(route, page)
+end
+
+local function detailActions(plugin, route, shell_widget, callbacks)
+    local info = shell_widget and shell_widget.detail_page_info or {}
+    local store = plugin and plugin.app and plugin.app:getBookshelfStore()
+    local in_bookshelf = store and store:has(route.source, route.book)
+    return {
+        {
+            key = "previous",
+            text = _("Previous page"),
+            icon = "arrow-left",
+            enabled = info.has_previous == true,
+            callback = function()
+                callbacks.replace(detailRouteWithPage(route, (route.detail_page or 1) - 1))
+            end,
+        },
+        {
+            key = "next",
+            text = _("Next page"),
+            icon = "arrow-right",
+            enabled = info.has_next == true,
+            callback = function()
+                callbacks.replace(detailRouteWithPage(route, (route.detail_page or 1) + 1))
+            end,
+        },
+        {
+            key = "chapters",
+            text = _("Chapters"),
+            icon = "list",
+            enabled = route.loading ~= true,
+            callback = function()
+                local ChaptersFlow = require("novel.ui.chapters.flow")
+                ChaptersFlow.show(plugin, route.source, route.book, {
+                    tab = route.tab,
+                })
+            end,
+        },
+        {
+            key = "bookshelf",
+            text = in_bookshelf and _("Remove") or _("Add to bookshelf"),
+            icon = in_bookshelf and "book-check" or "book",
+            enabled = store ~= nil and route.loading ~= true,
+            callback = function()
+                if in_bookshelf then
+                    if BookshelfLifecycle.remove(plugin, route.source, route.book) then
+                        callbacks.replace(detailFlow().withBook(route, route.book))
+                        Dialog.message(_("Removed from bookshelf."))
+                    else
+                        Dialog.message(Dialog.failureMessage())
+                    end
+                    return
+                end
+                local record, err = store:add(route.source, route.book)
+                if record then
+                    callbacks.replace(detailFlow().withBook(route, record.book or route.book))
+                    Dialog.message(_("Added to bookshelf."))
+                else
+                    Dialog.message(Dialog.failureMessage(err))
+                end
+            end,
+        },
+        backAction(callbacks),
+    }
+end
+
+local function detailTopActions(route)
+    local actions = {}
+    if #(route.unsupported or {}) > 0 then
+        actions[#actions + 1] = {
+            key = "unsupported",
+            icon = "funnel",
+            callback = function()
+                Dialog.showUnsupported(route.unsupported)
+            end,
+        }
+    end
+    return actions
+end
+
 function ShellActions.home(plugin, callbacks)
     return homeActions(plugin, callbacks)
 end
@@ -709,6 +783,9 @@ function ShellActions.bottom(plugin, route, shell_widget, callbacks)
     end
     if route and route.key == "chapters" and route.manifest then
         return chapterActions(plugin, route, callbacks)
+    end
+    if route and route.key == "detail" then
+        return detailActions(plugin, route, shell_widget, callbacks)
     end
     if route and route.key == "search_results" then
         return searchResultsActions(plugin, route, callbacks)
@@ -722,6 +799,9 @@ function ShellActions.top(plugin, route, callbacks)
     end
     if route and route.key == "chapters" and route.manifest then
         return chapterTopActions(plugin, route, callbacks)
+    end
+    if route and route.key == "detail" then
+        return detailTopActions(route)
     end
     if route and route.key == "downloads" then
         return downloadTopActions(plugin)

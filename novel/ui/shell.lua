@@ -61,10 +61,6 @@ local function scheduleRender(plugin)
         end
         plugin.novel_shell_render_scheduled = nil
         if plugin and plugin.app then
-            if plugin.detail_viewer and UIManager:isWidgetShown(plugin.detail_viewer) then
-                plugin.novel_shell_render_pending = true
-                return
-            end
             plugin.novel_shell_render_pending = nil
             Shell.show(plugin)
         end
@@ -142,13 +138,6 @@ function Shell.close(plugin)
     DownloadQueue.runtimeChanged(plugin)
 end
 
-function Shell.flushPendingRender(plugin)
-    if not plugin or not plugin.novel_shell_render_pending then
-        return
-    end
-    scheduleRender(plugin)
-end
-
 function Shell.reshow(plugin)
     scheduleRender(plugin)
 end
@@ -208,6 +197,10 @@ function Shell.replace(plugin, route)
     end
     ShellSession.replace(plugin, route)
     scheduleRender(plugin)
+end
+
+function Shell.replacePrevious(plugin, route)
+    return ShellSession.replacePrevious(plugin, route)
 end
 
 function Shell.replaceNow(plugin, route)

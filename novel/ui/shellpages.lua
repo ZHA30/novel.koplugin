@@ -18,6 +18,12 @@ local ENTRIES = {
     settings_list = {
         module = "novel.ui.settings.listpage",
     },
+    reading_settings = {
+        module = "novel.ui.settings.readingpage",
+    },
+    intro_settings = {
+        module = "novel.ui.settings.intropage",
+    },
     cache_settings = {
         module = "novel.ui.settings.cachepage",
     },
@@ -32,6 +38,9 @@ local ENTRIES = {
     },
     chapters = {
         module = "novel.ui.chapters.chapterspage",
+    },
+    detail = {
+        module = "novel.ui.detail.detailpage",
     },
     discover_results = {
         module = "novel.ui.discover.resultspage",

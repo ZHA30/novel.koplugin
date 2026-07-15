@@ -5,7 +5,7 @@ local PluginSettings = {
 }
 
 PluginSettings.defaults = {
-    schema_version = 6,
+    schema_version = 7,
     debug = {
         enabled = false,
     },
@@ -30,8 +30,10 @@ PluginSettings.defaults = {
         detail_visited = {},
     },
     ui = {
-        detail = {
+        intro = {
             font_size = 22,
+            vertical_margin = 16,
+            horizontal_margin = 16,
         },
         grouping = {
             sources_collapsed_groups = {},

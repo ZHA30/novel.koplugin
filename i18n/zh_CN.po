@@ -30,6 +30,24 @@ msgstr "简介"
 msgid "Settings"
 msgstr "设置"
 
+msgid "Reading"
+msgstr "阅读"
+
+msgid "Font"
+msgstr "字体"
+
+msgid "Margins"
+msgstr "边距"
+
+msgid "Vertical"
+msgstr "上下"
+
+msgid "Horizontal"
+msgstr "左右"
+
+msgid "default"
+msgstr "默认"
+
 msgid "Cache"
 msgstr "缓存"
 
@@ -123,6 +141,9 @@ msgstr "已从书架移除 %d 本书。"
 msgid "Added to bookshelf."
 msgstr "已加入书架。"
 
+msgid "Add to bookshelf"
+msgstr "加入书架"
+
 msgid "Unsupported rules"
 msgstr "不支持的规则"
 
@@ -137,6 +158,9 @@ msgstr "上一页"
 
 msgid "Back"
 msgstr "返回"
+
+msgid "Loading"
+msgstr "加载中"
 
 msgid "Continue"
 msgstr "继续"

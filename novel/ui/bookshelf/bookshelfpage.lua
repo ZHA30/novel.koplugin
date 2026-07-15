@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local BookshelfFlow = require("novel.ui.bookshelf.flow")
+local BookshelfSelection = require("novel.ui.bookshelf.selection")
 local ChapterRecord = require("novel.reader.chapterrecord")
 local ChaptersFlow = require("novel.ui.chapters.flow")
 local ContentBuilder = require("novel.ui.contentbuilder")
@@ -153,6 +154,7 @@ function BookshelfPage.build(shell, plugin)
     end
 
     local sources = sourceIndex(plugin)
+    local selection_mode = BookshelfSelection.isMode(plugin)
     local items = {}
     for index = 1, #records_list do
         local record = records_list[index]
@@ -162,7 +164,16 @@ function BookshelfPage.build(shell, plugin)
             book = record.book,
             source_title = record.source_name,
             book_subtitle_segments = subtitleSegments(record, source),
-            action_buttons = {
+            action_buttons = selection_mode and {
+                {
+                    id = "select",
+                    icon = BookshelfSelection.isSelected(plugin, record)
+                        and "square-check" or "square",
+                    callback = function()
+                        BookshelfFlow.toggleSelected(plugin, record)
+                    end,
+                },
+            } or {
                 {
                     id = "resume",
                     icon = "circle-play",
@@ -181,7 +192,11 @@ function BookshelfPage.build(shell, plugin)
                 },
             },
             callback = function()
-                ChaptersFlow.show(plugin, source, record.book)
+                if selection_mode then
+                    BookshelfFlow.toggleSelected(plugin, record)
+                else
+                    ChaptersFlow.show(plugin, source, record.book)
+                end
             end,
         }
     end

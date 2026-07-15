@@ -27,12 +27,6 @@ local function currentFile()
     return ChapterDoc.currentReaderFile()
 end
 
-local function isChapterCurrent(manifest, position)
-    local chapter = manifest and manifest.chapters and manifest.chapters[position]
-    return Manifest.chapterFileExists(manifest, position)
-        and ChapterDoc.contentIsCurrent(manifest, chapter)
-end
-
 local function deleteSummaryMessage(summary)
     if not summary.ok then
         return Dialog.failureMessage(summary)
@@ -66,7 +60,7 @@ function ChapterCache.cacheablePositions(manifest, positions)
     local openable_positions = uniqueOpenablePositions(manifest, positions)
     for position_index = 1, #openable_positions do
         local position = openable_positions[position_index]
-        if not isChapterCurrent(manifest, position) then
+        if not Manifest.chapterFileExists(manifest, position) then
             table.insert(result, position)
         end
     end

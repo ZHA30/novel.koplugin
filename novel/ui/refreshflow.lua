@@ -324,20 +324,22 @@ function RefreshFlow.refreshBookshelf(plugin, records, options)
         if not plugin.app or currentRequest(plugin) ~= request_id then
             return
         end
-        if canceled then
-            Dialog.message(refreshSummary(
-                _("Refresh canceled. Success: %d. Failed: %d."),
-                success_count,
-                failure_count,
-                first_failure
-            ))
-        else
-            Dialog.message(refreshSummary(
-                _("Refresh complete. Success: %d. Failed: %d."),
-                success_count,
-                failure_count,
-                first_failure
-            ))
+        if options.message ~= false then
+            if canceled then
+                Dialog.message(refreshSummary(
+                    _("Refresh canceled. Success: %d. Failed: %d."),
+                    success_count,
+                    failure_count,
+                    first_failure
+                ))
+            else
+                Dialog.message(refreshSummary(
+                    _("Refresh complete. Success: %d. Failed: %d."),
+                    success_count,
+                    failure_count,
+                    first_failure
+                ))
+            end
         end
         if options.on_done then
             options.on_done({

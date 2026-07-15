@@ -1,5 +1,6 @@
 local _ = require("novel.i18n")
 local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
+local BookshelfSelection = require("novel.ui.bookshelf.selection")
 local ChapterCache = require("novel.reader.chaptercache")
 local ChapterDownload = require("novel.reader.chapterdownload")
 local ChapterListing = require("novel.ui.chapters.listing")
@@ -472,6 +473,41 @@ end
 local function bookshelfTopActions(plugin, route, callbacks)
     local records = plugin and plugin.app
         and plugin.app:getBookshelfStore():list() or {}
+    local selection_mode = BookshelfSelection.isMode(plugin)
+    local selection = BookshelfSelection.state(plugin, records)
+    if selection_mode then
+        return {
+            {
+                key = "selected_actions",
+                icon = "check",
+                enabled = selection.selected_count > 0,
+                callback = function()
+                    require("novel.ui.bookshelf.flow").showSelectedActions(plugin)
+                end,
+            },
+            {
+                key = "cancel_selection",
+                icon = "x",
+                callback = function()
+                    BookshelfSelection.setMode(plugin, false)
+                    callbacks.replace(route or ShellRoutes.bookshelf())
+                end,
+            },
+            {
+                key = "select_all",
+                icon = selection.all_selected and "square-check" or "square",
+                enabled = #records > 0,
+                callback = function()
+                    BookshelfSelection.setAll(plugin, records, not selection.all_selected)
+                    callbacks.replace(route or ShellRoutes.bookshelf())
+                end,
+                hold_callback = function()
+                    BookshelfSelection.setAll(plugin, records, true)
+                    callbacks.replace(route or ShellRoutes.bookshelf())
+                end,
+            },
+        }
+    end
     return {
         {
             key = "refresh_bookshelf",
@@ -491,6 +527,20 @@ local function bookshelfTopActions(plugin, route, callbacks)
                         })
                     end
                 )
+            end,
+        },
+        {
+            key = "select",
+            icon = "square",
+            enabled = #records > 0,
+            callback = function()
+                BookshelfSelection.setMode(plugin, true)
+                callbacks.replace(route or ShellRoutes.bookshelf())
+            end,
+            hold_callback = function()
+                BookshelfSelection.setMode(plugin, true)
+                BookshelfSelection.setAll(plugin, records, true)
+                callbacks.replace(route or ShellRoutes.bookshelf())
             end,
         },
     }

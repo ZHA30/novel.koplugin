@@ -84,6 +84,9 @@ msgstr "书籍"
 msgid "Remove book from bookshelf?"
 msgstr "从书架移除这本书？"
 
+msgid "Remove %d books from bookshelf?"
+msgstr "从书架移除 %d 本书？"
+
 msgid "Remove"
 msgstr "移除"
 
@@ -113,6 +116,9 @@ msgstr "已取消。"
 
 msgid "Removed from bookshelf."
 msgstr "已从书架移除。"
+
+msgid "Removed %d books from bookshelf."
+msgstr "已从书架移除 %d 本书。"
 
 msgid "Added to bookshelf."
 msgstr "已加入书架。"
@@ -275,6 +281,9 @@ msgstr "刷新已取消。成功：%d。失败：%d。"
 
 msgid "Refresh %d books?"
 msgstr "刷新 %d 本书？"
+
+msgid "Selected %d books"
+msgstr "已选择 %d 本书"
 
 msgid "Close"
 msgstr "关闭"

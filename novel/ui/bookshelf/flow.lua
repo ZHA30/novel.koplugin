@@ -1,9 +1,11 @@
 local _ = require("novel.i18n")
 local BookshelfLifecycle = require("novel.bookshelflifecycle")
 local BookRefresh = require("novel.bookshelfrefresh")
+local BookshelfSelection = require("novel.ui.bookshelf.selection")
 local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
 local ChapterCache = require("novel.reader.chaptercache")
 local ChapterDownload = require("novel.reader.chapterdownload")
+local DownloadQueue = require("novel.reader.downloadqueue")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DetailFlow = require("novel.ui.detail.flow")
 local Dialog = require("novel.ui.widget.dialog")
@@ -44,6 +46,99 @@ local function confirmRemove(plugin, record)
         end,
     }
     Dialog.showWidget(plugin, "bookshelf_confirm_dialog", confirm_dialog)
+end
+
+local function selectedRecords(plugin)
+    local records = plugin and plugin.app
+        and plugin.app:getBookshelfStore():list() or {}
+    return BookshelfSelection.records(plugin, records)
+end
+
+local function leaveSelection(plugin)
+    BookshelfSelection.setMode(plugin, false)
+end
+
+local function refreshSelected(plugin, records)
+    RefreshFlow.refreshBookshelf(plugin, records, {
+        on_done = function()
+            leaveSelection(plugin)
+            BookshelfFlow.show(plugin)
+        end,
+    })
+end
+
+local function manifestForRecord(plugin, record)
+    local source = BookRefresh.findCurrentSource(plugin, record)
+    return Manifest:new():loadByBook(source, record.book)
+end
+
+local function recordsMissingManifest(plugin, records)
+    local missing = {}
+    for index = 1, #records do
+        local record = records[index]
+        local manifest = manifestForRecord(plugin, record)
+        if not manifest or #(manifest.chapters or {}) == 0 then
+            table.insert(missing, record)
+        end
+    end
+    return missing
+end
+
+local function enqueueSelectedDownloads(plugin, records)
+    local queued = 0
+    for index = 1, #records do
+        local record = records[index]
+        local manifest = manifestForRecord(plugin, record)
+        local positions = {}
+        for position = 1, #(manifest and manifest.chapters or {}) do
+            table.insert(positions, position)
+        end
+        local download_positions = ChapterCache.cacheablePositions(manifest, positions)
+        if #download_positions > 0 then
+            local summary = DownloadQueue.enqueue(plugin, manifest, download_positions)
+            queued = queued + (summary.queued or 0)
+        end
+    end
+    if queued > 0 then
+        Dialog.message(string.format(_("Queued %d chapters for download."), queued))
+    else
+        Dialog.message(_("Selected chapters are already in the download queue."))
+    end
+end
+
+local function downloadSelected(plugin, records)
+    local function finishDownload()
+        enqueueSelectedDownloads(plugin, records)
+        leaveSelection(plugin)
+        BookshelfFlow.show(plugin)
+    end
+
+    local missing_records = recordsMissingManifest(plugin, records)
+    if #missing_records == 0 then
+        finishDownload()
+        return
+    end
+    RefreshFlow.refreshBookshelf(plugin, missing_records, {
+        message = false,
+        on_done = finishDownload,
+    })
+end
+
+local function removeSelected(plugin, records)
+    Dialog.confirm(
+        string.format(_("Remove %d books from bookshelf?"), #records),
+        _("Remove"),
+        function()
+            local removed = BookshelfLifecycle.removeMany(plugin, records)
+            leaveSelection(plugin)
+            BookshelfFlow.show(plugin)
+            if removed > 0 then
+                Dialog.message(string.format(_("Removed %d books from bookshelf."), removed))
+            else
+                Dialog.message(Dialog.failureMessage())
+            end
+        end
+    )
 end
 
 local function resumeRecord(plugin, record)
@@ -182,12 +277,54 @@ function BookshelfFlow.resume(plugin, record)
     resumeRecord(plugin, record)
 end
 
+function BookshelfFlow.toggleSelected(plugin, record)
+    if not plugin or not record then
+        return
+    end
+    BookshelfSelection.toggle(plugin, record)
+    BookshelfFlow.show(plugin)
+end
+
+function BookshelfFlow.showSelectedActions(plugin)
+    local records = selectedRecords(plugin)
+    if #records == 0 then
+        return
+    end
+    UIManager:show(ChapterActionDialog:new{
+        title = string.format(_("Selected %d books"), #records),
+        actions = {
+            {
+                icon = "rotate-cw",
+                text = _("Refresh"),
+                callback = function()
+                    refreshSelected(plugin, records)
+                end,
+            },
+            {
+                icon = "arrow-down-to-line",
+                text = _("Download"),
+                callback = function()
+                    downloadSelected(plugin, records)
+                end,
+            },
+            {
+                icon = "trash-2",
+                text = _("Remove"),
+                callback = function()
+                    removeSelected(plugin, records)
+                end,
+            },
+        },
+    })
+end
+
 function BookshelfFlow.close(plugin)
     RefreshFlow.close(plugin)
     Dialog.closeKeys(plugin, {
         "bookshelf_confirm_dialog",
     })
     DetailFlow.close(plugin)
+    BookshelfSelection.setMode(plugin, false)
 end
 
 function BookshelfFlow.show(plugin)

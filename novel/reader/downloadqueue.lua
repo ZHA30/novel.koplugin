@@ -520,8 +520,7 @@ local function startItem(plugin, item)
         return false
     end
     DownloadItem.bind(item, chapter, position)
-    if Manifest.chapterFileExists(manifest, position)
-        and ChapterDoc.contentIsCurrent(manifest, chapter) then
+    if Manifest.chapterFileExists(manifest, position) then
         finishItem(plugin, item, true)
         return true
     end

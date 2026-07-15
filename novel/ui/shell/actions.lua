@@ -1,6 +1,6 @@
 local _ = require("novel.i18n")
-local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
 local BookshelfLifecycle = require("novel.bookshelflifecycle")
+local ActionDialog = require("novel.ui.widget.actiondialog")
 local BookshelfSelection = require("novel.ui.bookshelf.selection")
 local ChapterCache = require("novel.reader.chaptercache")
 local ChapterDownload = require("novel.reader.chapterdownload")
@@ -222,7 +222,7 @@ local function showSelectedChapterActions(plugin, route, callbacks, manifest, fi
             keep_file = ChapterCache.currentFile(),
         }
     )
-    UIManager:show(ChapterActionDialog:new{
+    UIManager:show(ActionDialog:new{
         title = string.format(_("Selected %d items"), #selected_positions),
         actions = {
             {

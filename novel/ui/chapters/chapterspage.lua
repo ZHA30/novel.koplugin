@@ -1,7 +1,7 @@
 local _ = require("novel.i18n")
 local ChapterCache = require("novel.reader.chaptercache")
 local ChapterDownload = require("novel.reader.chapterdownload")
-local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
+local ActionDialog = require("novel.ui.widget.actiondialog")
 local ChapterListing = require("novel.ui.chapters.listing")
 local ContentBuilder = require("novel.ui.contentbuilder")
 local ChapterOpen = require("novel.reader.chapteropen")
@@ -100,7 +100,7 @@ local function showActions(plugin, route, runtime, manifest, row)
         row_positions, {
             keep_file = ChapterCache.currentFile(),
         })
-    UIManager:show(ChapterActionDialog:new{
+    UIManager:show(ActionDialog:new{
         title = row.title,
         actions = {
             {

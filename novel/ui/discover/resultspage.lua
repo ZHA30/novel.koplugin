@@ -1,5 +1,5 @@
 local _ = require("novel.i18n")
-local BookActions = require("novel.ui.widget.bookactions")
+local BookActions = require("novel.ui.bookactions")
 local ContentBuilder = require("novel.ui.contentbuilder")
 local DetailVisits = require("novel.ui.detail.detailvisits")
 local Dialog = require("novel.ui.widget.dialog")

@@ -2,11 +2,10 @@ local _ = require("novel.i18n")
 local BookshelfLifecycle = require("novel.bookshelflifecycle")
 local BookRefresh = require("novel.bookshelfrefresh")
 local BookshelfSelection = require("novel.ui.bookshelf.selection")
-local ChapterActionDialog = require("novel.ui.chapters.actiondialog")
+local ActionDialog = require("novel.ui.widget.actiondialog")
+local BookActions = require("novel.ui.bookactions")
 local ChapterCache = require("novel.reader.chaptercache")
-local ChapterDownload = require("novel.reader.chapterdownload")
 local DownloadQueue = require("novel.reader.downloadqueue")
-local ConfirmBox = require("ui/widget/confirmbox")
 local DetailFlow = require("novel.ui.detail.flow")
 local Dialog = require("novel.ui.widget.dialog")
 local ChaptersFlow = require("novel.ui.chapters.flow")
@@ -16,37 +15,6 @@ local Shell = require("novel.ui.shell")
 local UIManager = require("ui/uimanager")
 
 local BookshelfFlow = {}
-
-local function bookTitle(book)
-    if book and book.name and book.name ~= "" then
-        return book.name
-    end
-    return book and book.bookUrl or _("Book")
-end
-
-local function confirmRemove(plugin, record)
-    Dialog.closeWidget(plugin, "bookshelf_confirm_dialog")
-    local confirm_dialog
-    confirm_dialog = ConfirmBox:new{
-        text = _("Remove book from bookshelf?"),
-        ok_text = _("Remove"),
-        ok_callback = function()
-            local removed = BookshelfLifecycle.remove(plugin, record.source,
-                record.book)
-            Dialog.clearIfOwned(plugin, "bookshelf_confirm_dialog", confirm_dialog)
-            if not removed then
-                Dialog.message(Dialog.failureMessage())
-                return
-            end
-            BookshelfFlow.show(plugin)
-            Dialog.message(_("Removed from bookshelf."))
-        end,
-        cancel_callback = function()
-            Dialog.clearIfOwned(plugin, "bookshelf_confirm_dialog", confirm_dialog)
-        end,
-    }
-    Dialog.showWidget(plugin, "bookshelf_confirm_dialog", confirm_dialog)
-end
 
 local function selectedRecords(plugin)
     local records = plugin and plugin.app
@@ -152,111 +120,17 @@ local function resumeRecord(plugin, record)
     ChaptersFlow.resume(plugin, source, record.book, chapter_position)
 end
 
-local function refreshRecord(plugin, record)
-    local source = BookRefresh.findCurrentSource(plugin, record)
-    RefreshFlow.refreshBook(plugin, source, record.book, {
-        require_bookshelf = true,
-        on_done = function()
-            BookshelfFlow.show(plugin)
-        end,
-    })
-end
-
-local function showBookIntro(plugin, record)
-    local source = BookRefresh.findCurrentSource(plugin, record)
-    DetailFlow.show(plugin, source, record.book, { tab = "bookshelf" })
-end
-
-local function enqueueBookDownload(plugin, manifest)
-    local positions = {}
-    for position = 1, #(manifest and manifest.chapters or {}) do
-        table.insert(positions, position)
-    end
-    local download_positions = ChapterCache.cacheablePositions(manifest, positions)
-    if #download_positions == 0 then
-        Dialog.message(_("No chapters to download."))
-        return
-    end
-
-    Dialog.confirm(
-        string.format(_("Download %d chapters?"), #download_positions),
-        _("Download"),
-        function()
-            ChapterDownload.enqueue(plugin, manifest, download_positions, {
-                on_done = function()
-                    if plugin.app then
-                        BookshelfFlow.show(plugin)
-                    end
-                end,
-            })
-        end
-    )
-end
-
-local function downloadRecord(plugin, record)
-    local source = BookRefresh.findCurrentSource(plugin, record)
-    local manifest = Manifest:new():loadByBook(source, record.book)
-    if manifest and #(manifest.chapters or {}) > 0 then
-        enqueueBookDownload(plugin, manifest)
-        return
-    end
-
-    RefreshFlow.refreshBook(plugin, source, record.book, {
-        message = false,
-        require_bookshelf = true,
-        on_done = function(applied)
-            enqueueBookDownload(plugin, applied and applied.manifest)
-        end,
-    })
-end
-
-local function showActions(plugin, record)
-    UIManager:show(ChapterActionDialog:new{
-        title = bookTitle(record and record.book),
-        actions = {
-            {
-                icon = "rotate-cw",
-                text = _("Refresh"),
-                callback = function()
-                    refreshRecord(plugin, record)
-                end,
-            },
-            {
-                icon = "info",
-                text = _("Intro"),
-                callback = function()
-                    showBookIntro(plugin, record)
-                end,
-            },
-            {
-                icon = "arrow-down-to-line",
-                text = _("Download"),
-                callback = function()
-                    downloadRecord(plugin, record)
-                end,
-            },
-            {
-                icon = "trash-2",
-                text = _("Remove"),
-                callback = function()
-                    confirmRemove(plugin, record)
-                end,
-            },
-            {
-                icon = "x",
-                text = _("Close"),
-                callback = function()
-                end,
-            },
-        },
-    })
-end
-
 function BookshelfFlow.showDetails(plugin, record)
     if not plugin or not record then
         return
     end
-    showActions(plugin, record)
+    local source = BookRefresh.findCurrentSource(plugin, record)
+    BookActions.showMenu(plugin, source, record.book, record, {
+        tab = "bookshelf",
+        on_bookshelf_changed = function()
+            BookshelfFlow.show(plugin)
+        end,
+    })
 end
 
 function BookshelfFlow.resume(plugin, record)
@@ -279,7 +153,7 @@ function BookshelfFlow.showSelectedActions(plugin)
     if #records == 0 then
         return
     end
-    UIManager:show(ChapterActionDialog:new{
+    UIManager:show(ActionDialog:new{
         title = string.format(_("Selected %d books"), #records),
         actions = {
             {

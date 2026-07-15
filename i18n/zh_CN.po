@@ -99,6 +99,9 @@ msgstr "Novel 尚未就绪。"
 msgid "Book"
 msgstr "书籍"
 
+msgid "Add to bookshelf"
+msgstr "加入书架"
+
 msgid "Remove book from bookshelf?"
 msgstr "从书架移除这本书？"
 
@@ -118,6 +121,9 @@ msgid "Chapters: "
 msgstr "章节数："
 
 msgid "Chapters"
+msgstr "目录"
+
+msgid "Table of contents"
 msgstr "目录"
 
 msgid "Chapter %d"
@@ -140,9 +146,6 @@ msgstr "已从书架移除 %d 本书。"
 
 msgid "Added to bookshelf."
 msgstr "已加入书架。"
-
-msgid "Add to bookshelf"
-msgstr "加入书架"
 
 msgid "Unsupported rules"
 msgstr "不支持的规则"
@@ -308,9 +311,6 @@ msgstr "刷新 %d 本书？"
 
 msgid "Selected %d books"
 msgstr "已选择 %d 本书"
-
-msgid "Close"
-msgstr "关闭"
 
 msgid "Filter"
 msgstr "筛选"

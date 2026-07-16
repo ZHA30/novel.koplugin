@@ -20,7 +20,9 @@ local function parsePO(path)
     end
 
     local function unescape(text)
-        return text:gsub("\\n", "\n"):gsub("\\t", "\t"):gsub('\\"', '"'):gsub("\\\\", "\\")
+        local unescaped = text:gsub("\\n", "\n"):gsub("\\t", "\t")
+            :gsub('\\"', '"'):gsub("\\\\", "\\")
+        return unescaped
     end
 
     for raw_line in file:lines() do

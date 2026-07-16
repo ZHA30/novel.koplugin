@@ -1,3 +1,4 @@
+local ActionBarPlacement = require("novel.ui.actionbarplacement")
 local Blitbuffer = require("ffi/blitbuffer")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local Device = require("device")
@@ -12,6 +13,7 @@ local InputContainer = require("ui/widget/container/inputcontainer")
 local LeftContainer = require("ui/widget/container/leftcontainer")
 local LineWidget = require("ui/widget/linewidget")
 local RightContainer = require("ui/widget/container/rightcontainer")
+local ShellActionBar = require("novel.ui.widget.shellactionbar")
 local Size = require("ui/size")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
@@ -22,7 +24,6 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local Screen = Device.screen
 local Input = Device.input
 
-local BOTTOM_BAR_HEIGHT = Screen:scaleBySize(72)
 local TOP_BAR_HEIGHT = Screen:scaleBySize(56)
 local TOP_BAR_PADDING_H = Size.padding.large
 local TOP_TITLE_SIZE = 26
@@ -32,128 +33,7 @@ local TOP_TITLE_MULTILINE_LINES = 2
 local TOP_ACTION_SIZE = TOP_BAR_HEIGHT
 local CONTENT_ICON_SIZE = Screen:scaleBySize(72)
 local ACTION_ICON_SIZE = Screen:scaleBySize(24)
-local ACTION_LABEL_SIZE = 14
 local CONTENT_LABEL_SIZE = 28
-
-local ShellActionButton = InputContainer:extend{
-    key = nil,
-    text = "",
-    icon = nil,
-    active = false,
-    dim = false,
-    enabled = true,
-    width = 0,
-    height = BOTTOM_BAR_HEIGHT,
-    callback = nil,
-    hold_callback = nil,
-}
-
-function ShellActionButton:init()
-    local enabled = self.enabled ~= false
-    local dim = not enabled or self.dim == true
-    local icon = Icons.widget(self.icon, {
-        size = ACTION_ICON_SIZE,
-        dim = dim,
-    })
-    local fgcolor = dim and Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_BLACK
-    local label = TextWidget:new{
-        text = self.text,
-        face = Font:getFace("smallinfofont", ACTION_LABEL_SIZE),
-        fgcolor = fgcolor,
-        bold = self.active and enabled,
-    }
-    local indicator_h = Screen:scaleBySize(3)
-    local indicator = LineWidget:new{
-        dimen = Geom:new{
-            w = math.max(self.width - Screen:scaleBySize(24), Screen:scaleBySize(16)),
-            h = indicator_h,
-        },
-        background = self.active and enabled
-            and Blitbuffer.COLOR_BLACK
-            or Blitbuffer.COLOR_WHITE,
-    }
-
-    self.dimen = Geom:new{
-        x = 0,
-        y = 0,
-        w = self.width,
-        h = self.height,
-    }
-    self[1] = FrameContainer:new{
-        background = Blitbuffer.COLOR_WHITE,
-        bordersize = 0,
-        padding = 0,
-        margin = 0,
-        CenterContainer:new{
-            dimen = self.dimen:copy(),
-            VerticalGroup:new{
-                align = "center",
-                CenterContainer:new{
-                    dimen = Geom:new{
-                        w = self.width,
-                        h = indicator_h,
-                    },
-                    indicator,
-                },
-                VerticalSpan:new{
-                    width = Screen:scaleBySize(10),
-                },
-                CenterContainer:new{
-                    dimen = Geom:new{
-                        w = self.width,
-                        h = ACTION_ICON_SIZE,
-                    },
-                    icon,
-                },
-                VerticalSpan:new{
-                    width = Screen:scaleBySize(4),
-                },
-                CenterContainer:new{
-                    dimen = Geom:new{
-                        w = self.width,
-                        h = label:getSize().h,
-                    },
-                    label,
-                },
-            },
-        },
-    }
-
-    self.ges_events = {
-        TapSelect = {
-            GestureRange:new{
-                ges = "tap",
-                range = function()
-                    return self.dimen
-                end,
-            },
-        },
-    }
-    if self.hold_callback then
-        self.ges_events.HoldSelect = {
-            GestureRange:new{
-                ges = "hold",
-                range = function()
-                    return self.dimen
-                end,
-            },
-        }
-    end
-end
-
-function ShellActionButton:onTapSelect()
-    if self.enabled ~= false and self.callback then
-        self.callback(self.key)
-    end
-    return true
-end
-
-function ShellActionButton:onHoldSelect()
-    if self.enabled ~= false and self.hold_callback then
-        self.hold_callback(self.key)
-    end
-    return true
-end
 
 local ShellTopActionButton = InputContainer:extend{
     key = nil,
@@ -237,6 +117,8 @@ local HomeShell = InputContainer:extend{
     next_page_callback = nil,
     bottom_actions = nil,
     bottom_actions_builder = nil,
+    action_bar_placement = ActionBarPlacement.BOTTOM,
+    action_side = ActionBarPlacement.RIGHT,
     top_actions = nil,
     top_actions_builder = nil,
     content_builder = nil,
@@ -257,7 +139,9 @@ local function activeTabSpec(self)
 end
 
 function HomeShell:buildTopActions()
-    local group = HorizontalGroup:new{}
+    local group = HorizontalGroup:new{
+        allow_mirroring = false,
+    }
     for index = 1, #(self.top_actions or {}) do
         local action = self.top_actions[index]
         table.insert(group, ShellTopActionButton:new{
@@ -325,8 +209,7 @@ function HomeShell:buildTopTitle(width)
     }
 end
 
-function HomeShell:buildTopBar()
-    local width = self.dimen.w
+function HomeShell:buildTopBar(width)
     if type(self.top_actions_builder) == "function" then
         self.top_actions = self.top_actions_builder(self)
     end
@@ -345,6 +228,61 @@ function HomeShell:buildTopBar()
         table.insert(title_group, title)
     end
 
+    local title_area = LeftContainer:new{
+        dimen = Geom:new{
+            w = title_area_width,
+            h = TOP_BAR_HEIGHT,
+        },
+        title_group,
+    }
+    local action_group
+    if self.action_side == ActionBarPlacement.LEFT then
+        action_group = HorizontalGroup:new{
+            allow_mirroring = false,
+            HorizontalSpan:new{
+                width = TOP_BAR_PADDING_H,
+            },
+            actions,
+        }
+    else
+        action_group = HorizontalGroup:new{
+            allow_mirroring = false,
+            actions,
+            HorizontalSpan:new{
+                width = TOP_BAR_PADDING_H,
+            },
+        }
+    end
+    local action_area = self.action_side == ActionBarPlacement.LEFT
+        and LeftContainer:new{
+            dimen = Geom:new{
+                w = action_area_width,
+                h = TOP_BAR_HEIGHT,
+            },
+            action_group,
+        }
+        or RightContainer:new{
+            dimen = Geom:new{
+                w = action_area_width,
+                h = TOP_BAR_HEIGHT,
+            },
+            action_group,
+        }
+    local top_row
+    if self.action_side == ActionBarPlacement.LEFT then
+        top_row = HorizontalGroup:new{
+            allow_mirroring = false,
+            action_area,
+            title_area,
+        }
+    else
+        top_row = HorizontalGroup:new{
+            allow_mirroring = false,
+            title_area,
+            action_area,
+        }
+    end
+
     return FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
         bordersize = 0,
@@ -352,27 +290,7 @@ function HomeShell:buildTopBar()
         margin = 0,
         VerticalGroup:new{
             align = "left",
-            HorizontalGroup:new{
-                LeftContainer:new{
-                    dimen = Geom:new{
-                        w = title_area_width,
-                        h = TOP_BAR_HEIGHT,
-                    },
-                    title_group,
-                },
-                RightContainer:new{
-                    dimen = Geom:new{
-                        w = action_area_width,
-                        h = TOP_BAR_HEIGHT,
-                    },
-                    HorizontalGroup:new{
-                        actions,
-                        HorizontalSpan:new{
-                            width = TOP_BAR_PADDING_H,
-                        },
-                    },
-                },
-            },
+            top_row,
             LineWidget:new{
                 dimen = Geom:new{
                     w = width,
@@ -414,7 +332,7 @@ function HomeShell:buildContent()
         align = "center",
         CenterContainer:new{
             dimen = Geom:new{
-                w = self.dimen.w,
+                w = self.body_width,
                 h = CONTENT_ICON_SIZE,
             },
             icon,
@@ -424,60 +342,10 @@ function HomeShell:buildContent()
         },
         CenterContainer:new{
             dimen = Geom:new{
-                w = self.dimen.w,
+                w = self.body_width,
                 h = title:getSize().h,
             },
             title,
-        },
-    }
-end
-
-function HomeShell:buildBottomBar()
-    local width = self.dimen.w
-    local actions = self.bottom_actions or {}
-    local count = math.max(#actions, 1)
-    local action_width = math.floor(width / count)
-    local group = HorizontalGroup:new{}
-
-    for index = 1, #actions do
-        local action = actions[index]
-        local current_width = index == #actions
-            and width - action_width * (#actions - 1)
-            or action_width
-        table.insert(group, ShellActionButton:new{
-            key = action.key,
-            text = action.text,
-            icon = action.icon,
-            active = action.active == true,
-            dim = action.dim == true,
-            enabled = action.enabled ~= false,
-            width = current_width,
-            callback = function()
-                if action.callback then
-                    action.callback(action.key)
-                end
-            end,
-            hold_callback = action.hold_callback and function()
-                action.hold_callback(action.key)
-            end or nil,
-        })
-    end
-
-    return FrameContainer:new{
-        background = Blitbuffer.COLOR_WHITE,
-        bordersize = 0,
-        padding = 0,
-        margin = 0,
-        VerticalGroup:new{
-            align = "left",
-            LineWidget:new{
-                dimen = Geom:new{
-                    w = width,
-                    h = Size.line.thin,
-                },
-                background = Blitbuffer.COLOR_DARK_GRAY,
-            },
-            group,
         },
     }
 end
@@ -490,19 +358,74 @@ function HomeShell:init()
         h = Screen:getHeight(),
     }
 
-    local title_bar = self:buildTopBar()
+    self.action_bar_placement = ActionBarPlacement.normalize(
+        self.action_bar_placement
+    )
+    self.action_side = self.action_side == ActionBarPlacement.LEFT
+        and ActionBarPlacement.LEFT or ActionBarPlacement.RIGHT
+    local side_bar = self.action_bar_placement ~= ActionBarPlacement.BOTTOM
+    local action_bar_thickness = ShellActionBar.thickness(
+        self.action_bar_placement
+    )
+    local content_width = side_bar
+        and math.max(self.dimen.w - action_bar_thickness, 0)
+        or self.dimen.w
+    local title_bar = self:buildTopBar(self.dimen.w)
     self.title_bar = title_bar
 
-    local bottom_bar_height = BOTTOM_BAR_HEIGHT + Size.line.thin
     local body_height = math.max(
-        self.dimen.h - title_bar:getSize().h - bottom_bar_height,
+        self.dimen.h - title_bar:getSize().h
+            - (side_bar and 0 or action_bar_thickness),
         0
     )
-    self.body_width = self.dimen.w
+    self.body_width = content_width
     self.body_height = body_height
     local content = self:buildContent()
     if type(self.bottom_actions_builder) == "function" then
         self.bottom_actions = self.bottom_actions_builder(self)
+    end
+
+    local action_bar = ShellActionBar:new{
+        placement = self.action_bar_placement,
+        actions = self.bottom_actions,
+        width = side_bar and action_bar_thickness or self.dimen.w,
+        height = side_bar and body_height or action_bar_thickness,
+    }
+    local body = CenterContainer:new{
+        dimen = Geom:new{
+            w = content_width,
+            h = body_height,
+        },
+        content,
+    }
+    local layout
+    if self.action_bar_placement == ActionBarPlacement.LEFT then
+        layout = VerticalGroup:new{
+            align = "left",
+            title_bar,
+            HorizontalGroup:new{
+                allow_mirroring = false,
+                action_bar,
+                body,
+            },
+        }
+    elseif self.action_bar_placement == ActionBarPlacement.RIGHT then
+        layout = VerticalGroup:new{
+            align = "left",
+            title_bar,
+            HorizontalGroup:new{
+                allow_mirroring = false,
+                body,
+                action_bar,
+            },
+        }
+    else
+        layout = VerticalGroup:new{
+            align = "left",
+            title_bar,
+            body,
+            action_bar,
+        }
     end
 
     self[1] = FrameContainer:new{
@@ -511,18 +434,7 @@ function HomeShell:init()
         padding = 0,
         margin = 0,
         radius = 0,
-        VerticalGroup:new{
-            align = "left",
-            title_bar,
-            CenterContainer:new{
-                dimen = Geom:new{
-                    w = self.dimen.w,
-                    h = body_height,
-                },
-                content,
-            },
-            self:buildBottomBar(),
-        },
+        layout,
     }
 
     if Device:hasKeys() then

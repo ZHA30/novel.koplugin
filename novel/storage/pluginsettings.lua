@@ -30,6 +30,10 @@ PluginSettings.defaults = {
         detail_visited = {},
     },
     ui = {
+        action_bar = {
+            placement = "bottom",
+            follow_side = true,
+        },
         intro = {
             font_size = 22,
             vertical_margin = 16,

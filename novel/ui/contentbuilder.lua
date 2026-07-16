@@ -76,6 +76,7 @@ function ContentBuilder.buildList(shell, items, options)
             h = shell.body_height,
         },
         show_parent = shell,
+        action_side = shell.action_side,
         items = items,
         item_count = options.item_count,
         item_at = options.item_at,

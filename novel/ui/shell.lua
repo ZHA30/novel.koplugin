@@ -1,3 +1,4 @@
+local ActionBarPlacement = require("novel.ui.actionbarplacement")
 local ChapterListing = require("novel.ui.chapters.listing")
 local Dialog = require("novel.ui.widget.dialog")
 local DownloadQueue = require("novel.reader.downloadqueue")
@@ -112,6 +113,8 @@ function Shell.show(plugin, options)
         bottom_actions_builder = function(shell_widget)
             return ShellActions.bottom(plugin, page, shell_widget, callbacks)
         end,
+        action_bar_placement = ActionBarPlacement.get(plugin),
+        action_side = ActionBarPlacement.actionSide(plugin),
         top_actions_builder = function()
             return ShellActions.top(plugin, page, callbacks)
         end,

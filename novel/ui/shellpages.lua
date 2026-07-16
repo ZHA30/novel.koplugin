@@ -18,6 +18,9 @@ local ENTRIES = {
     settings_list = {
         module = "novel.ui.settings.listpage",
     },
+    interface_settings = {
+        module = "novel.ui.settings.interfacepage",
+    },
     reading_settings = {
         module = "novel.ui.settings.readingpage",
     },

@@ -30,6 +30,33 @@ msgstr "简介"
 msgid "Settings"
 msgstr "设置"
 
+msgid "Interface"
+msgstr "界面"
+
+msgid "Action bar position"
+msgstr "操作栏位置"
+
+msgid "Place the action bar near the hand holding the device."
+msgstr "将操作栏放在靠近持握手的一侧。"
+
+msgid "Move the main controls for easier one-handed use."
+msgstr "移动主要操作按钮，便于单手使用。"
+
+msgid "Bottom"
+msgstr "底部"
+
+msgid "Left"
+msgstr "左侧"
+
+msgid "Right"
+msgstr "右侧"
+
+msgid "Follow action bar side"
+msgstr "其他控件跟随操作栏"
+
+msgid "When the action bar is on the left, move other controls to the left."
+msgstr "操作栏位于左侧时，将其他操作控件移至左侧。"
+
 msgid "Reading"
 msgstr "阅读"
 

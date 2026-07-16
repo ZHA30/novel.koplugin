@@ -38,6 +38,7 @@ local HomeListItem = InputContainer:extend{
     item = nil,
     width = 0,
     row_height = nil,
+    action_side = "right",
     callback = nil,
     leading_action_callback = nil,
     leading_action_ref = nil,
@@ -127,6 +128,7 @@ function HomeListItem:init()
                 width = self.width,
                 height = row_height,
                 action_refs = self.action_refs,
+                action_side = self.action_side,
             }),
         }
 
@@ -201,19 +203,24 @@ function HomeListItem:init()
         end
     end
 
+    local actions_on_left = self.action_side == "left"
+    local indent_width = (tonumber(item.indent) or 0) * ROW_INDENT
+    local left_padding = ROW_HORIZONTAL_PADDING + indent_width
+    local right_padding = ROW_HORIZONTAL_PADDING
+    local left_actions_width = actions_on_left and trailing_actions_width or 0
+    local left_actions_gap = actions_on_left and #trailing_icons > 0
+        and ROW_ICON_GAP or 0
     local right_content_width = mandatory_width
-    if mandatory_widget and #trailing_icons > 0 then
+    if not actions_on_left and mandatory_widget and #trailing_icons > 0 then
         right_content_width = right_content_width + ROW_ICON_GAP
     end
-    if #trailing_icons > 0 then
+    if not actions_on_left and #trailing_icons > 0 then
         right_content_width = right_content_width + trailing_actions_width
     end
-
-    local left_padding = ROW_HORIZONTAL_PADDING + (tonumber(item.indent) or 0) * ROW_INDENT
-    local right_padding = ROW_HORIZONTAL_PADDING
     local text_width = math.max(
         Screen:scaleBySize(80),
-        self.width - left_padding - right_padding - icon_width - right_content_width
+        self.width - left_padding - right_padding - icon_width
+            - left_actions_width - left_actions_gap - right_content_width
     )
 
     local title_widget = TextBoxWidget:new{
@@ -264,7 +271,7 @@ function HomeListItem:init()
     }
     if self.leading_action_callback then
         self.leading_action_ref = {
-            x = left_padding,
+            x = left_padding + left_actions_width + left_actions_gap,
             y = 0,
             w = icon_width,
             h = row_height,
@@ -273,17 +280,31 @@ function HomeListItem:init()
 
     local trailing_group
     if #trailing_icons > 0 then
-        trailing_group = HorizontalGroup:new{}
-        local trailing_x = self.width - right_padding - trailing_actions_width
+        trailing_group = HorizontalGroup:new{
+            allow_mirroring = false,
+        }
+        local trailing_x = actions_on_left
+            and ROW_HORIZONTAL_PADDING
+            or self.width - right_padding - trailing_actions_width
         for action_index = 1, #trailing_icons do
             local action = trailing_icons[action_index]
             if type(action.callback) == "function" then
                 table.insert(self.trailing_action_callbacks, action.callback)
+                local ref_x = trailing_x
+                local ref_width = ROW_ICON_SIZE
+                if actions_on_left and action_index == 1 then
+                    ref_x = 0
+                    ref_width = ref_width + ROW_HORIZONTAL_PADDING
+                end
+                if action_index < #trailing_icons then
+                    ref_width = ref_width + ROW_ICON_GAP
+                elseif not actions_on_left then
+                    ref_width = ref_width + right_padding
+                end
                 table.insert(self.trailing_action_refs, {
-                    x = trailing_x,
+                    x = ref_x,
                     y = 0,
-                    w = ROW_ICON_SIZE + (action_index == #trailing_icons
-                        and right_padding or ROW_ICON_GAP),
+                    w = ref_width,
                     h = row_height,
                 })
             end
@@ -305,10 +326,22 @@ function HomeListItem:init()
     end
 
     local left_group = HorizontalGroup:new{
+        allow_mirroring = false,
         HorizontalSpan:new{
-            width = left_padding,
+            width = ROW_HORIZONTAL_PADDING,
         },
     }
+    if actions_on_left and trailing_group then
+        table.insert(left_group, trailing_group)
+        table.insert(left_group, HorizontalSpan:new{
+            width = ROW_ICON_GAP,
+        })
+    end
+    if indent_width > 0 then
+        table.insert(left_group, HorizontalSpan:new{
+            width = indent_width,
+        })
+    end
     if icon_widget then
         table.insert(left_group, icon_widget)
         table.insert(left_group, HorizontalSpan:new{
@@ -324,17 +357,19 @@ function HomeListItem:init()
             left_group,
         },
     }
-    if mandatory_widget or trailing_group then
-        local right_group = HorizontalGroup:new{}
+    if mandatory_widget or (trailing_group and not actions_on_left) then
+        local right_group = HorizontalGroup:new{
+            allow_mirroring = false,
+        }
         if mandatory_widget then
             table.insert(right_group, mandatory_widget)
         end
-        if mandatory_widget and trailing_group then
+        if mandatory_widget and trailing_group and not actions_on_left then
             table.insert(right_group, HorizontalSpan:new{
                 width = ROW_ICON_GAP,
             })
         end
-        if trailing_group then
+        if trailing_group and not actions_on_left then
             table.insert(right_group, trailing_group)
         end
         table.insert(right_group, HorizontalSpan:new{
@@ -504,8 +539,8 @@ local function entryHeightFor(item)
     return rowHeightFor(item) + Size.line.thin
 end
 
-local function buildEntries(get_item, item_count, content_width, start_index,
-    end_index, row_height_at, omit_last_separator)
+local function buildEntries(get_item, item_count, content_width, action_side,
+    start_index, end_index, row_height_at, omit_last_separator)
     local entries = {}
     start_index = math.max(1, tonumber(start_index) or 1)
     end_index = math.min(item_count, tonumber(end_index) or item_count)
@@ -515,6 +550,7 @@ local function buildEntries(get_item, item_count, content_width, start_index,
             item = item,
             width = content_width,
             row_height = row_height_at and row_height_at(index),
+            action_side = action_side,
             callback = item.callback,
         }
         local separator
@@ -652,6 +688,7 @@ function HomeList.new(_, args)
             return items[index]
         end
     local paginate = args.paginate == true
+    local action_side = args.action_side == "left" and "left" or "right"
     local content_width = paginate
         and dimen.w
         or dimen.w - ScrollableContainer:getScrollbarWidth()
@@ -660,7 +697,12 @@ function HomeList.new(_, args)
     }
 
     if not paginate then
-        local entries = buildEntries(get_item, item_count, content_width)
+        local entries = buildEntries(
+            get_item,
+            item_count,
+            content_width,
+            action_side
+        )
         appendEntries(content, entries)
         local widget = ScrollableContainer:new{
             dimen = dimen,
@@ -697,7 +739,7 @@ function HomeList.new(_, args)
         fixed_layout)
     local row_height_at = fixedRowHeightAt(fixed_layout, page)
     local omit_last_separator = pageItemCount(page) >= fixed_layout.items_per_page
-    local entries = buildEntries(get_item, item_count, content_width,
+    local entries = buildEntries(get_item, item_count, content_width, action_side,
         page.first, page.last, row_height_at, omit_last_separator)
     appendEntries(content, entries)
 

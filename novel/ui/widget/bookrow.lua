@@ -10,7 +10,7 @@ local HorizontalSpan = require("ui/widget/horizontalspan")
 local LeftContainer = require("ui/widget/container/leftcontainer")
 local Icons = require("novel.icons")
 local OverlapGroup = require("ui/widget/overlapgroup")
-local RightContainer = require("ui/widget/container/rightcontainer")
+local RenderText = require("ui/rendertext")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
 local VerticalGroup = require("ui/widget/verticalgroup")
@@ -21,13 +21,17 @@ local BookRow = {}
 
 local ROW_BASE_HEIGHT = 64
 local RIGHT_METADATA_MAX_WIDTH_RATIO = 0.36
+local MAIN_CONTENT_MIN_WIDTH_RATIO = 0.65
+local RIGHT_METADATA_MIN_WIDTH = Screen:scaleBySize(100)
 local SCALE_BY_SIZE = Screen:scaleBySize(1000000) * (1 / 1000000)
 local ACTION_ICON_SIZE = Screen:scaleBySize(32)
 local ACTION_BUTTON_PADDING = Screen:scaleBySize(6)
 local ACTION_BUTTON_GAP = Screen:scaleBySize(6)
 local ACTION_HIT_WIDTH = Screen:scaleBySize(60)
 local ACTION_COLUMN_METADATA_GAP = Screen:scaleBySize(10)
-local ACTION_COLUMN_RIGHT_PADDING = Screen:scaleBySize(10)
+local ACTION_COLUMN_OUTER_PADDING = Screen:scaleBySize(10)
+local CONTENT_OUTER_PADDING = Screen:scaleBySize(10)
+local CONTENT_METADATA_GAP = Screen:scaleBySize(10)
 local SUBTITLE_ICON_TEXT_GAP = Screen:scaleBySize(4)
 local SUBTITLE_SEGMENT_GAP = Screen:scaleBySize(12)
 
@@ -58,14 +62,22 @@ local function lineHeight(face)
     return height
 end
 
-local function textWidth(text, face)
+local function textWidth(text, face, bold)
     local widget = TextWidget:new{
         text = text,
         face = face,
+        bold = bold,
     }
     local width = widget:getSize().w
     widget:free()
     return width
+end
+
+local function minimumTextBoxWidth(face, bold)
+    return math.max(
+        Screen:scaleBySize(20),
+        RenderText:getEllipsisWidth(face, bold) + 1
+    )
 end
 
 local function textBox(text, face, width, height, options)
@@ -73,7 +85,7 @@ local function textBox(text, face, width, height, options)
     return TextBoxWidget:new{
         text = text,
         face = face,
-        width = math.max(Screen:scaleBySize(20), width),
+        width = math.max(minimumTextBoxWidth(face, options.bold), width),
         height = height,
         height_adjust = true,
         height_overflow_show_ellipsis = true,
@@ -247,7 +259,7 @@ local function fixedSegmentWidth(segment, face, height)
     end
     if segment.text ~= "" then
         width = width + math.max(
-            Screen:scaleBySize(20),
+            minimumTextBoxWidth(face),
             textWidth(segment.text, face)
         )
     end
@@ -265,7 +277,7 @@ local function buildIconSubtitle(segments, face, width, height, options)
         ) + SUBTITLE_SEGMENT_GAP
     end
     local last_width = math.max(
-        Screen:scaleBySize(20),
+        minimumTextBoxWidth(face),
         width - fixed_width
     )
     local items = {}
@@ -300,6 +312,29 @@ local function buildIconSubtitle(segments, face, width, height, options)
         },
         HorizontalGroup:new(items),
     }
+end
+
+local function subtitleContentWidth(segments, text, face, height)
+    -- Keep the subtitle's full content in the main column when the row can
+    -- accommodate it; the side metadata is the flexible, truncated column.
+    if segments then
+        local width = 0
+        for segment_index = 1, #segments do
+            width = width + fixedSegmentWidth(
+                segments[segment_index],
+                face,
+                height
+            )
+            if segment_index < #segments then
+                width = width + SUBTITLE_SEGMENT_GAP
+            end
+        end
+        return width
+    end
+    if text ~= "" then
+        return textWidth(text, face)
+    end
+    return 0
 end
 
 local function fontSize(height, nominal, maximum)
@@ -369,74 +404,20 @@ local function buildActionColumn(entry, height, action_buttons, refs)
             dimen = Geom:new{ w = row_width, h = row_height },
             (table.unpack or unpack)(row_items),
         },
-    }, row_width, ACTION_COLUMN_RIGHT_PADDING
+    }, row_width, ACTION_COLUMN_OUTER_PADDING
 end
 
 function BookRow.build(entry, args)
     args = args or {}
     local width = math.max(Screen:scaleBySize(40), tonumber(args.width) or 0)
     local height = math.max(Screen:scaleBySize(40), tonumber(args.height) or 0)
+    local actions_on_left = args.action_side == "left"
     local fgcolor = entry.dim and Blitbuffer.COLOR_DARK_GRAY or nil
     local metadata_fgcolor = fgcolor
     local fontsize_info = fontSize(height, 14, 18)
     local right_face = Font:getFace("cfont", fontsize_info)
     local right_line_height = lineHeight(right_face)
     local side_lines, side_seen = bookSideMetadata(entry)
-    local action_column, action_width, action_right_padding = buildActionColumn(
-        entry,
-        height,
-        entry.action_buttons,
-        args.action_refs
-    )
-    if args.action_refs and action_width > 0 then
-        local action_origin_x = width - action_right_padding - action_width
-        for action_index = 1, #args.action_refs do
-            local ref = args.action_refs[action_index]
-            if ref then
-                ref.x = action_origin_x + ref.x
-            end
-        end
-    end
-
-    local wright
-    local wright_width = 0
-    local wright_right_padding = 0
-    if hasText(side_lines) then
-        local reserved_right_width = action_width + action_right_padding
-        local max_right_width = math.floor((width - reserved_right_width) * RIGHT_METADATA_MAX_WIDTH_RATIO)
-        for line_index = 1, #side_lines do
-            wright_width = math.max(wright_width,
-                textWidth(side_lines[line_index], right_face))
-        end
-        wright_width = math.min(max_right_width, wright_width)
-        wright_width = math.max(wright_width, Screen:scaleBySize(20))
-        local function rightLine(text)
-            return textBox(BD.auto(text), right_face, wright_width, right_line_height, {
-                alignment = "right",
-                fgcolor = metadata_fgcolor,
-            })
-        end
-        local right_items = { align = "right" }
-        for line_index = 1, #side_lines do
-            table.insert(right_items, rightLine(side_lines[line_index]))
-        end
-        wright = CenterContainer:new{
-            dimen = Geom:new{ w = wright_width, h = height },
-            VerticalGroup:new(right_items),
-        }
-        if action_column then
-            wright_right_padding = ACTION_COLUMN_METADATA_GAP
-        else
-            wright_right_padding = Screen:scaleBySize(10)
-        end
-    end
-
-    local wmain_left_padding = Screen:scaleBySize(10)
-    local wmain_right_padding = Screen:scaleBySize(10)
-    local wmain_width = math.max(Screen:scaleBySize(40),
-        width - wmain_left_padding - wmain_right_padding
-        - wright_width - wright_right_padding
-        - action_width - action_right_padding)
     local fontsize_title = fontSize(height, 20, 24)
     local fontsize_metadata = fontSize(height, 18, 22)
     local title_face = Font:getFace("cfont", fontsize_title)
@@ -457,6 +438,93 @@ function BookRow.build(entry, args)
             subtitle_height = 0
         end
     end
+    local action_column, action_width, action_outer_padding = buildActionColumn(
+        entry,
+        height,
+        entry.action_buttons,
+        args.action_refs
+    )
+    if args.action_refs and action_width > 0 then
+        local action_origin_x = actions_on_left
+            and action_outer_padding
+            or width - action_outer_padding - action_width
+        for action_index = 1, #args.action_refs do
+            local ref = args.action_refs[action_index]
+            if ref then
+                ref.x = action_origin_x + ref.x
+            end
+        end
+    end
+
+    local left_outer_padding = actions_on_left and action_column
+        and action_outer_padding or CONTENT_OUTER_PADDING
+    local left_action_gap = actions_on_left and action_column
+        and ACTION_COLUMN_METADATA_GAP or 0
+    local right_outer_padding = not actions_on_left and action_column
+        and action_outer_padding or CONTENT_OUTER_PADDING
+    local right_action_gap = not actions_on_left and action_column
+        and ACTION_COLUMN_METADATA_GAP or 0
+    local main_width_without_metadata = width - left_outer_padding
+        - left_action_gap - right_action_gap - right_outer_padding
+        - (actions_on_left and action_width or 0)
+        - (not actions_on_left and action_width or 0)
+
+    local wright
+    local wright_width = 0
+    if hasText(side_lines) then
+        local reserved_action_width = action_width + action_outer_padding
+        local subtitle_width = subtitleContentWidth(
+            subtitle_segments,
+            subtitle,
+            metadata_face,
+            subtitle_height
+        )
+        local main_min_width = math.floor(
+            main_width_without_metadata * MAIN_CONTENT_MIN_WIDTH_RATIO
+        )
+        local title_width = textWidth(title, title_face, true)
+        local main_content_width = math.max(title_width, subtitle_width)
+        local main_width_for_content = math.max(
+            main_min_width,
+            main_content_width
+        )
+        local right_width_for_main = main_width_without_metadata
+            - main_width_for_content - CONTENT_METADATA_GAP
+        local max_right_width = math.floor(
+            (width - reserved_action_width) * RIGHT_METADATA_MAX_WIDTH_RATIO
+        )
+        max_right_width = math.min(
+            max_right_width,
+            right_width_for_main
+        )
+        for line_index = 1, #side_lines do
+            wright_width = math.max(wright_width,
+                textWidth(side_lines[line_index], right_face))
+        end
+        if max_right_width >= RIGHT_METADATA_MIN_WIDTH then
+            wright_width = math.min(max_right_width, wright_width)
+            local function rightLine(text)
+                return textBox(BD.auto(text), right_face, wright_width, right_line_height, {
+                    alignment = "right",
+                    fgcolor = metadata_fgcolor,
+                })
+            end
+            local right_items = { align = "right" }
+            for line_index = 1, #side_lines do
+                table.insert(right_items, rightLine(side_lines[line_index]))
+            end
+            wright = CenterContainer:new{
+                dimen = Geom:new{ w = wright_width, h = height },
+                VerticalGroup:new(right_items),
+            }
+        end
+    end
+
+    local wmain_width = main_width_without_metadata
+    if wright then
+        wmain_width = wmain_width - CONTENT_METADATA_GAP - wright_width
+    end
+    wmain_width = math.max(Screen:scaleBySize(40), wmain_width)
     local title_height = math.max(title_line_height, height - subtitle_height)
 
     local wtitle = TextBoxWidget:new{
@@ -499,44 +567,49 @@ function BookRow.build(entry, args)
     if wsubtitle then
         table.insert(main_items, wsubtitle)
     end
-    local wmain = HorizontalGroup:new{
-        HorizontalSpan:new{ width = wmain_left_padding },
-        LeftContainer:new{
-            dimen = Geom:new{ w = width, h = height },
-            VerticalGroup:new(main_items),
-        },
+    local row_items = {
+        allow_mirroring = false,
     }
-    local widget = OverlapGroup:new{
-        dimen = Geom:new{ w = width, h = height },
-        LeftContainer:new{
-            dimen = Geom:new{ w = width, h = height },
-            wmain,
-        },
-    }
-    if wright or action_column then
-        local right_group = HorizontalGroup:new{}
-        if wright then
-            table.insert(right_group, wright)
-            if wright_right_padding > 0 then
-                table.insert(right_group, HorizontalSpan:new{
-                    width = wright_right_padding,
-                })
-            end
-        end
-        if action_column then
-            table.insert(right_group, action_column)
-            if action_right_padding > 0 then
-                table.insert(right_group, HorizontalSpan:new{
-                    width = action_right_padding,
-                })
-            end
-        end
-        table.insert(widget, RightContainer:new{
-            dimen = Geom:new{ w = width, h = height },
-            right_group,
+    if actions_on_left and action_column then
+        table.insert(row_items, HorizontalSpan:new{
+            width = left_outer_padding,
+        })
+        table.insert(row_items, action_column)
+        table.insert(row_items, HorizontalSpan:new{
+            width = left_action_gap,
+        })
+    else
+        table.insert(row_items, HorizontalSpan:new{
+            width = left_outer_padding,
         })
     end
-    return widget
+
+    table.insert(row_items, LeftContainer:new{
+        dimen = Geom:new{ w = wmain_width, h = height },
+        VerticalGroup:new(main_items),
+    })
+
+    if wright then
+        table.insert(row_items, HorizontalSpan:new{
+            width = CONTENT_METADATA_GAP,
+        })
+        table.insert(row_items, wright)
+    end
+
+    if not actions_on_left and action_column then
+        table.insert(row_items, HorizontalSpan:new{
+            width = right_action_gap,
+        })
+        table.insert(row_items, action_column)
+    end
+    table.insert(row_items, HorizontalSpan:new{
+        width = right_outer_padding,
+    })
+
+    return LeftContainer:new{
+        dimen = Geom:new{ w = width, h = height },
+        HorizontalGroup:new(row_items),
+    }
 end
 
 return BookRow

@@ -72,6 +72,14 @@ function ShellRoutes.readingSettings(args)
     }
 end
 
+function ShellRoutes.interfaceSettings(args)
+    args = args or {}
+    return {
+        key = "interface_settings",
+        tab = args.tab or "settings",
+    }
+end
+
 function ShellRoutes.introSettings(args)
     args = args or {}
     return {
@@ -235,6 +243,9 @@ function ShellRoutes.title(route)
     end
     if route and route.key == "reading_settings" then
         return _("Reading")
+    end
+    if route and route.key == "interface_settings" then
+        return _("Interface")
     end
     if route and route.key == "intro_settings" then
         return _("Intro")

@@ -1,4 +1,5 @@
 local _ = require("novel.i18n")
+local ActionDialog = require("novel.ui.widget.actiondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
 local UIManager = require("ui/uimanager")
@@ -39,6 +40,21 @@ end
 function Dialog.message(message)
     UIManager:show(InfoMessage:new{
         text = message,
+    })
+end
+
+function Dialog.retry(message, callback)
+    UIManager:show(ActionDialog:new{
+        title = _("Loading failed"),
+        message = tostring(message or _("Failed")),
+        actions = {
+            {
+                icon = "rotate-ccw",
+                text = _("Retry"),
+                horizontal = true,
+                callback = callback,
+            },
+        },
     })
 end
 
@@ -91,6 +107,34 @@ function Dialog.failureMessage(reason, fallback)
         return _("Failed")
     end
     return _("Failed: ") .. detail
+end
+
+local function firstLine(text)
+    text = tostring(text or ""):match("^[^\n]+") or ""
+    if #text > 80 then
+        text = text:sub(1, 77) .. "..."
+    end
+    return text
+end
+
+function Dialog.failureSummary(reason, fallback)
+    local detail
+    if type(reason) == "table" then
+        if reason.error then
+            detail = reason.error.message or reason.error.kind
+        end
+        if (not detail or detail == "") and reason.response then
+            detail = reason.response.status
+                and ("HTTP " .. tostring(reason.response.status))
+        end
+    else
+        detail = reason
+    end
+    detail = firstLine(detail)
+    if detail == "" then
+        return fallback or _("Failed")
+    end
+    return detail
 end
 
 function Dialog.canceledMessage()

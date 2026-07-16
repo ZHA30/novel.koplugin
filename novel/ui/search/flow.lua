@@ -76,7 +76,11 @@ function SearchFlow.showResults(plugin, source, keyword, result, options)
             current_page = page,
             no_more_source_pages = true,
             error = Dialog.failureMessage(result),
+            error_summary = Dialog.failureSummary(result),
         })
+        Dialog.retry(Dialog.failureSummary(result), function()
+            SearchFlow.retry(plugin)
+        end)
         return
     end
 
@@ -92,6 +96,24 @@ function SearchFlow.loadNextPage(plugin)
         return false
     end
     return SearchFlow.loadPage(plugin, (tonumber(route.current_page) or 1) + 1)
+end
+
+function SearchFlow.retry(plugin)
+    local route = currentResultsRoute(plugin)
+    if not route or not route.error then
+        return false
+    end
+    if #(route.books or {}) == 0 then
+        SearchFlow.start(plugin, route.source, route.keyword, {
+            tab = route.tab,
+        })
+        return true
+    end
+    return SearchFlow.loadPage(plugin, (tonumber(route.current_page) or 1) + 1, {
+        list_page = route.list_page,
+        list_page_anchor = route.list_page_anchor,
+        list_item_anchor = route.list_item_anchor,
+    })
 end
 
 function SearchFlow.loadPage(plugin, page, options)
@@ -176,6 +198,7 @@ function SearchFlow.loadPage(plugin, page, options)
                 current_page = current_page,
                 no_more_source_pages = current.no_more_source_pages == true,
                 error = Dialog.canceledMessage(),
+                error_summary = Dialog.canceledMessage(),
             })
             return
         end
@@ -192,7 +215,11 @@ function SearchFlow.loadPage(plugin, page, options)
                 current_page = current_page,
                 no_more_source_pages = current.no_more_source_pages == true,
                 error = Dialog.failureMessage(result),
+                error_summary = Dialog.failureSummary(result),
             })
+            Dialog.retry(Dialog.failureSummary(result), function()
+                SearchFlow.retry(plugin)
+            end)
             return
         end
 
@@ -278,6 +305,7 @@ function SearchFlow.start(plugin, source, keyword, options)
                 keyword = keyword,
                 no_more_source_pages = true,
                 error = Dialog.canceledMessage(),
+                error_summary = Dialog.canceledMessage(),
             })
             return
         end

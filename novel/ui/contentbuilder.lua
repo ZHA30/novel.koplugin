@@ -68,6 +68,20 @@ function ContentBuilder.buildStatusContent(shell, title, message)
     )
 end
 
+function ContentBuilder.buildSingleStatusContent(shell, message)
+    local text = TextWidget:new{
+        text = message,
+        face = Font:getFace("cfont", 30),
+    }
+    return CenterContainer:new{
+        dimen = Geom:new{
+            w = shell.body_width,
+            h = text:getSize().h,
+        },
+        text,
+    }
+end
+
 function ContentBuilder.buildList(shell, items, options)
     options = options or {}
     return HomeList:new{

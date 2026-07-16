@@ -17,7 +17,7 @@ end
 
 function DiscoverResultsPage.build(shell, plugin, route, runtime)
     if route.error and #(route.books or {}) == 0 then
-        return ContentBuilder.buildStatusContent(shell, _("Failed"), tostring(route.error))
+        return ContentBuilder.buildEmptyState(shell)
     end
 
     local items = {}
@@ -49,14 +49,6 @@ function DiscoverResultsPage.build(shell, plugin, route, runtime)
 
     if #items == 0 then
         return ContentBuilder.buildEmptyState(shell)
-    end
-
-    if route.error then
-        table.insert(items, {
-            title = _("Failed"),
-            subtitle = tostring(route.error),
-            dim = true,
-        })
     end
 
     return ContentBuilder.buildList(shell, items)

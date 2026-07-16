@@ -156,6 +156,12 @@ msgstr "空"
 msgid "Failed"
 msgstr "失败"
 
+msgid "Retry"
+msgstr "重试"
+
+msgid "Loading failed"
+msgstr "加载失败"
+
 msgid "Canceled."
 msgstr "已取消。"
 

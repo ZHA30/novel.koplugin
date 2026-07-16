@@ -73,6 +73,25 @@ function DiscoverFlow.loadNextPage(plugin)
     return DiscoverFlow.loadPage(plugin, (tonumber(route.current_page) or 1) + 1)
 end
 
+function DiscoverFlow.retry(plugin)
+    local route = currentResultsRoute(plugin)
+    if not route or not route.error then
+        return false
+    end
+    local page = tonumber(route.current_page) or 1
+    if #(route.books or {}) == 0 then
+        DiscoverFlow.start(plugin, route.source, route.group, page, {
+            tab = route.tab,
+        })
+        return true
+    end
+    return DiscoverFlow.loadPage(plugin, page + 1, {
+        list_page = route.list_page,
+        list_page_anchor = route.list_page_anchor,
+        list_item_anchor = route.list_item_anchor,
+    })
+end
+
 function DiscoverFlow.loadPage(plugin, page, options)
     if not plugin.app then
         return false
@@ -150,6 +169,7 @@ function DiscoverFlow.loadPage(plugin, page, options)
                 current_page = current_page,
                 no_more_source_pages = current.no_more_source_pages == true,
                 error = Dialog.canceledMessage(),
+                error_summary = Dialog.canceledMessage(),
             })
             return
         end
@@ -170,7 +190,11 @@ function DiscoverFlow.loadPage(plugin, page, options)
                 current_page = current_page,
                 no_more_source_pages = current.no_more_source_pages == true,
                 error = Dialog.failureMessage(result),
+                error_summary = Dialog.failureSummary(result),
             })
+            Dialog.retry(Dialog.failureSummary(result), function()
+                DiscoverFlow.retry(plugin)
+            end)
             return
         end
 
@@ -229,8 +253,13 @@ function DiscoverFlow.showResults(plugin, source, group, page, result, options)
             group = group,
             first_page = page,
             current_page = page,
+            no_more_source_pages = true,
             error = Dialog.failureMessage(result),
+            error_summary = Dialog.failureSummary(result),
         })
+        Dialog.retry(Dialog.failureSummary(result), function()
+            DiscoverFlow.retry(plugin)
+        end)
         return
     end
 
@@ -275,6 +304,7 @@ function DiscoverFlow.start(plugin, source, group, page, options)
                 first_page = page,
                 current_page = page,
                 error = Dialog.canceledMessage(),
+                error_summary = Dialog.canceledMessage(),
             })
             return
         end

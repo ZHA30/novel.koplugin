@@ -26,7 +26,7 @@ end
 
 function DetailPage.build(shell, plugin, route, runtime)
     if route.loading then
-        return ContentBuilder.buildStatusContent(shell, _("Loading"), _("Loading"))
+        return ContentBuilder.buildSingleStatusContent(shell, _("Loading"))
     end
     if route.error and not tostring(route.text or ""):match("%S") then
         return ContentBuilder.buildStatusContent(shell, _("Failed"), route.error)

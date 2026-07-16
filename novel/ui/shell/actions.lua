@@ -70,6 +70,24 @@ local function previousAction(plugin, route, callbacks)
 end
 
 local function nextAction(plugin, route, callbacks)
+    if route and route.error
+        and (route.key == "search_results" or route.key == "discover_results") then
+        return {
+            key = "retry",
+            text = _("Retry"),
+            icon = "rotate-ccw",
+            enabled = canRemotePage(route),
+            callback = function()
+                if route.key == "search_results" then
+                    local SearchFlow = require("novel.ui.search.flow")
+                    SearchFlow.retry(plugin)
+                else
+                    local DiscoverFlow = require("novel.ui.discover.flow")
+                    DiscoverFlow.retry(plugin)
+                end
+            end,
+        }
+    end
     return {
         key = "next",
         text = _("Next page"),

@@ -6,6 +6,7 @@ local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
+local HorizontalSpan = require("ui/widget/horizontalspan")
 local Icons = require("novel.icons")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LeftContainer = require("ui/widget/container/leftcontainer")
@@ -32,9 +33,15 @@ local CELL_TEXT_LINES = 2
 local GRID_SEPARATOR = Size.line.thin
 local ICON_SIZE = Screen:scaleBySize(22)
 local LAST_CELL_HEIGHT = Screen:scaleBySize(68)
+local HORIZONTAL_CELL_HEIGHT = Screen:scaleBySize(52)
 local TITLE_FONT_SIZE = 20
 local TITLE_PADDING_H = Screen:scaleBySize(14)
 local TITLE_ROW_HEIGHT = Screen:scaleBySize(36)
+local MESSAGE_FONT_SIZE = 18
+local MESSAGE_LINE_HEIGHT = 0.1
+local MESSAGE_LINES = 2
+local MESSAGE_TOP_GAP = Screen:scaleBySize(8)
+local MESSAGE_MIN_HEIGHT = Screen:scaleBySize(52)
 
 local ActionCell = InputContainer:extend{
     dialog = nil,
@@ -42,6 +49,7 @@ local ActionCell = InputContainer:extend{
     width = nil,
     icon = nil,
     text = nil,
+    horizontal = false,
     enabled = true,
     callback = nil,
 }
@@ -61,41 +69,60 @@ function ActionCell:init()
     local label_line_height = math.floor(
         (1 + CELL_TEXT_LINE_HEIGHT) * label_face.size + 0.5
     )
-    local label = TextBoxWidget:new{
-        text = tostring(self.text or ""),
-        width = label_width,
-        height = label_line_height * CELL_TEXT_LINES,
-        height_adjust = true,
-        face = label_face,
-        fgcolor = fgcolor,
-        line_height = CELL_TEXT_LINE_HEIGHT,
-        alignment = "center",
-        alignment_strict = true,
-        height_overflow_show_ellipsis = true,
-    }
-    local content = VerticalGroup:new{
-        align = "center",
-        CenterContainer:new{
-            dimen = Geom:new{
-                w = label_width,
-                h = ICON_SIZE,
-            },
-            Icons.widget(self.icon, {
-                size = ICON_SIZE,
-                dim = not enabled,
-            }),
-        },
-        VerticalSpan:new{
-            width = CELL_ICON_GAP,
-        },
-        CenterContainer:new{
-            dimen = Geom:new{
-                w = label_width,
-                h = label:getSize().h,
+    local label
+    local content
+    local icon = Icons.widget(self.icon, {
+        size = ICON_SIZE,
+        dim = not enabled,
+    })
+    if self.horizontal then
+        label = TextWidget:new{
+            text = tostring(self.text or ""),
+            face = label_face,
+            fgcolor = fgcolor,
+        }
+        content = HorizontalGroup:new{
+            align = "center",
+            icon,
+            HorizontalSpan:new{
+                width = CELL_ICON_GAP,
             },
             label,
-        },
-    }
+        }
+    else
+        label = TextBoxWidget:new{
+            text = tostring(self.text or ""),
+            width = label_width,
+            height = label_line_height * CELL_TEXT_LINES,
+            height_adjust = true,
+            face = label_face,
+            fgcolor = fgcolor,
+            line_height = CELL_TEXT_LINE_HEIGHT,
+            alignment = "center",
+            alignment_strict = true,
+            height_overflow_show_ellipsis = true,
+        }
+        content = VerticalGroup:new{
+            align = "center",
+            CenterContainer:new{
+                dimen = Geom:new{
+                    w = label_width,
+                    h = ICON_SIZE,
+                },
+                icon,
+            },
+            VerticalSpan:new{
+                width = CELL_ICON_GAP,
+            },
+            CenterContainer:new{
+                dimen = Geom:new{
+                    w = label_width,
+                    h = label:getSize().h,
+                },
+                label,
+            },
+        }
+    end
 
     self[1] = CenterContainer:new{
         dimen = self.dimen:copy(),
@@ -132,6 +159,7 @@ end
 local ActionDialog = InputContainer:extend{
     modal = true,
     title = nil,
+    message = nil,
     actions = nil,
 }
 
@@ -153,6 +181,7 @@ local function actionCell(dialog, width, action, height)
         width = width,
         icon = action.icon,
         text = action.text,
+        horizontal = action.horizontal,
         enabled = action.enabled,
         callback = action.callback,
     }
@@ -178,8 +207,12 @@ local function actionGrid(dialog, width, actions)
             })
         end
         if action_index == #actions then
+            local action = actions[action_index]
+            local height = action.horizontal
+                and HORIZONTAL_CELL_HEIGHT
+                or LAST_CELL_HEIGHT
             table.insert(group, actionCell(dialog, width, actions[action_index],
-                LAST_CELL_HEIGHT))
+                height))
             action_index = action_index + 1
         else
             table.insert(group, HorizontalGroup:new{
@@ -224,6 +257,44 @@ function ActionDialog:init()
             title,
         },
     }
+    local message_row
+    if tostring(self.message or ""):match("%S") then
+        local message_face = Font:getFace("smallinfofont", MESSAGE_FONT_SIZE)
+        local message_line_height = math.floor(
+            (1 + MESSAGE_LINE_HEIGHT) * message_face.size + 0.5
+        )
+        local message = TextBoxWidget:new{
+            text = tostring(self.message),
+            face = message_face,
+            width = title_width,
+            height = message_line_height * MESSAGE_LINES,
+            height_adjust = true,
+            height_overflow_show_ellipsis = true,
+            line_height = MESSAGE_LINE_HEIGHT,
+            alignment = "left",
+        }
+        local message_height = math.max(message:getSize().h,
+            MESSAGE_MIN_HEIGHT)
+        message_row = CenterContainer:new{
+            dimen = Geom:new{
+                w = width,
+                h = message_height,
+            },
+            LeftContainer:new{
+                dimen = Geom:new{
+                    w = title_width,
+                    h = message_height,
+                },
+                CenterContainer:new{
+                    dimen = Geom:new{
+                        w = title_width,
+                        h = message_height,
+                    },
+                    message,
+                },
+            },
+        }
+    end
     local content = VerticalGroup:new{
         align = "left",
         title_row,
@@ -234,8 +305,21 @@ function ActionDialog:init()
             },
             background = Blitbuffer.COLOR_GRAY_5,
         },
-        actionGrid(self, width, self.actions),
     }
+    if message_row then
+        table.insert(content, VerticalSpan:new{
+            width = MESSAGE_TOP_GAP,
+        })
+        table.insert(content, message_row)
+        table.insert(content, LineWidget:new{
+            dimen = Geom:new{
+                w = width,
+                h = Size.line.thin,
+            },
+            background = Blitbuffer.COLOR_GRAY_5,
+        })
+    end
+    table.insert(content, actionGrid(self, width, self.actions))
 
     self.movable = MovableContainer:new{
         FrameContainer:new{

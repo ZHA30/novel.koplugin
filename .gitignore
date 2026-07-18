@@ -16,7 +16,9 @@ AGENTS.md
 docs/
 spec/
 tests/
-/source/
+/source/*
+!/source/
+!/source/AGENTS.md
 
 # Generated Lua analysis artifacts
 *.luac

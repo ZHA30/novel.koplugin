@@ -205,6 +205,12 @@ local function fileSize(path)
     return 0
 end
 
+local function storageBytes()
+    return fileSize(Cache.db_path)
+        + fileSize(Cache.db_path .. "-wal")
+        + fileSize(Cache.db_path .. "-shm")
+end
+
 local function encode(codec, value)
     if value == nil then
         return nil, 0
@@ -288,11 +294,13 @@ local function setMeta(db, key, value)
         INSERT OR REPLACE INTO cache_meta (key, value) VALUES (?, ?);
     ]])
     stmt:reset():bind(key, value):step()
+    stmt:close()
 end
 
 local function getMeta(db, key)
     local stmt = db:prepare("SELECT value FROM cache_meta WHERE key = ?;")
     local row = stmt:reset():bind(key):step()
+    stmt:close()
     return row and row[1]
 end
 
@@ -385,6 +393,7 @@ function Cache:insertRecord(db, kind, key, record)
         tonumber(record.size_estimate) or estimateSize(record.value),
         value_size + owner_size + tags_size
     ):step()
+    stmt:close()
     return true
 end
 
@@ -666,6 +675,15 @@ function Cache:pruneExpired()
     end) or 0
 end
 
+function Cache.compactStorageDB(db)
+    -- Deleting rows only adds free pages to SQLite. Checkpoint and compact
+    -- before reporting or enforcing a physical cache-size limit.
+    db:exec("PRAGMA wal_checkpoint(TRUNCATE);")
+    db:exec("VACUUM;")
+    db:exec("PRAGMA wal_checkpoint(TRUNCATE);")
+    return storageBytes()
+end
+
 function Cache.pruneLRUDB(db, max_records, max_bytes)
     max_records = tonumber(max_records)
     max_bytes = tonumber(max_bytes)
@@ -674,10 +692,6 @@ function Cache.pruneLRUDB(db, max_records, max_bytes)
     end
 
     local removed = 0
-    local delete_stmt = db:prepare([[
-        DELETE FROM cache_records WHERE kind = ? AND key = ?;
-    ]])
-
     local function removeOldest()
         local select_stmt = db:prepare([[
             SELECT kind, key, blob_size FROM cache_records
@@ -685,12 +699,26 @@ function Cache.pruneLRUDB(db, max_records, max_bytes)
             LIMIT 1;
         ]])
         local row = select_stmt:reset():step()
+        select_stmt:close()
         if not row then
             return 0
         end
+        local delete_stmt = db:prepare([[
+            DELETE FROM cache_records WHERE kind = ? AND key = ?;
+        ]])
         delete_stmt:reset():bind(row[1], row[2]):step()
+        delete_stmt:close()
         removed = removed + 1
         return tonumber(row[3]) or 0
+    end
+
+    local function compactedStorageBytes()
+        local page_count = tonumber(db:rowexec("PRAGMA page_count;")) or 0
+        local page_size = tonumber(db:rowexec("PRAGMA page_size;")) or 0
+        local freelist_count = tonumber(db:rowexec("PRAGMA freelist_count;")) or 0
+        return math.max(0, page_count - freelist_count) * page_size
+            + fileSize(Cache.db_path .. "-wal")
+            + fileSize(Cache.db_path .. "-shm")
     end
 
     local record_count = tonumber(db:rowexec(
@@ -702,14 +730,14 @@ function Cache.pruneLRUDB(db, max_records, max_bytes)
         record_count = record_count - 1
     end
 
-    local total_bytes = tonumber(db:rowexec(
-        "SELECT COALESCE(SUM(blob_size), 0) FROM cache_records;")) or 0
-    while max_bytes and max_bytes > 0 and total_bytes > max_bytes do
-        local removed_bytes = removeOldest()
-        if removed_bytes <= 0 then
-            break
+    if max_bytes and max_bytes > 0 and storageBytes() > max_bytes then
+        Cache.compactStorageDB(db)
+        while compactedStorageBytes() > max_bytes do
+            if removeOldest() <= 0 then
+                break
+            end
         end
-        total_bytes = total_bytes - removed_bytes
+        Cache.compactStorageDB(db)
     end
 
     return removed
@@ -730,9 +758,7 @@ function Cache:stats()
             blob_bytes = tonumber(db:rowexec([[
                 SELECT COALESCE(SUM(blob_size), 0) FROM cache_records;
             ]])) or 0,
-            file_bytes = fileSize(Cache.db_path)
-                + fileSize(Cache.db_path .. "-wal")
-                + fileSize(Cache.db_path .. "-shm"),
+            file_bytes = storageBytes(),
         }
     end) or {
         record_count = 0,
@@ -749,11 +775,13 @@ function Cache:clear()
         local blob_bytes = tonumber(db:rowexec([[
             SELECT COALESCE(SUM(blob_size), 0) FROM cache_records;
         ]])) or 0
-        db:exec("DELETE FROM cache_records;")
         setMeta(db, "last_pruned_at", tostring(now()))
+        db:exec("DELETE FROM cache_records;")
+        Cache.compactStorageDB(db)
         return {
             records_removed = record_count,
             bytes_removed = blob_bytes,
+            file_bytes = storageBytes(),
         }
     end)
     return summary, err
@@ -764,16 +792,23 @@ function Cache.pruneIfDueDB(db, options)
     local timestamp = now()
     local interval = tonumber(options.prune_interval) or Cache.prune_interval
     local last_pruned = tonumber(getMeta(db, "last_pruned_at")) or 0
+    local max_records = maxRecordsForOptions(options)
+    local max_bytes = maxBytesForOptions(options)
+    local record_count = tonumber(db:rowexec(
+        "SELECT COUNT(*) FROM cache_records;")) or 0
+    local capacity_exceeded = (max_records and max_records > 0
+            and record_count > max_records)
+        or (max_bytes and max_bytes > 0 and storageBytes() > max_bytes)
     if options.prune ~= true
         and interval > 0
-        and timestamp - last_pruned < interval then
+        and timestamp - last_pruned < interval
+        and not capacity_exceeded then
         return 0
     end
 
     local removed = Cache.pruneExpiredDB(db)
-    removed = removed + Cache.pruneLRUDB(db, maxRecordsForOptions(options),
-        maxBytesForOptions(options))
     setMeta(db, "last_pruned_at", tostring(timestamp))
+    removed = removed + Cache.pruneLRUDB(db, max_records, max_bytes)
     return removed
 end
 

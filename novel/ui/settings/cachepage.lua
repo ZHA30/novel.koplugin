@@ -92,6 +92,7 @@ local function showCacheLimitDialog(plugin, route, runtime)
             if plugin.app and type(plugin.app.saveSettings) == "function" then
                 plugin.app:saveSettings()
             end
+            CacheCleanup.pruneMetadata(settings)
             refresh(plugin, route, runtime)
         end,
     })
